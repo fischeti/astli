@@ -164,24 +164,6 @@ impl Run {
     }
 }
 
-/// A fixture of its own for a runner that is given none.
-fn unowned() -> Fixture {
-    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let n = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    Fixture::new(&format!("unowned-{n}"))
-}
-
-fn astli<I, S>(args: I) -> Output
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<std::ffi::OsStr>,
-{
-    let own = unowned();
-    driver(&own)
-        .dir(std::env::current_dir().expect("a working directory"))
-        .args(args)
-}
-
 fn stdout(output: &Output) -> String {
     String::from_utf8(output.stdout.clone()).expect("utf-8 on stdout")
 }
@@ -195,7 +177,7 @@ fn lex_prints_kinds_and_round_trips() {
     let fixture = Fixture::new("lex");
     let file = fixture.file("tiny.sv", TINY);
 
-    let output = astli(["lex".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["lex".as_ref(), file.as_os_str()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -208,7 +190,7 @@ fn lex_without_trivia_hides_whitespace() {
     let fixture = Fixture::new("lex-no-trivia");
     let file = fixture.file("tiny.sv", TINY);
 
-    let output = astli(["lex".as_ref(), file.as_os_str(), "--no-trivia".as_ref()]);
+    let output = driver(&fixture).args(["lex".as_ref(), file.as_os_str(), "--no-trivia".as_ref()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -221,7 +203,7 @@ fn preprocess_expands_a_macro() {
     let fixture = Fixture::new("pp");
     let file = fixture.file("uses_macro.sv", USES_MACRO);
 
-    let output = astli(["preprocess".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["preprocess".as_ref(), file.as_os_str()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -239,7 +221,7 @@ fn preprocess_follows_an_include_found_on_the_search_path() {
         "`define SHOUT initial $display(\"hi\");\n",
     );
 
-    let output = astli([
+    let output = driver(&fixture).args([
         "pp".as_ref(),
         file.as_os_str(),
         "-I".as_ref(),
@@ -256,7 +238,7 @@ fn a_command_line_define_is_used_like_any_other() {
     let fixture = Fixture::new("pp-define");
     let file = fixture.file("top.sv", "localparam int W = `WIDTH;\n");
 
-    let output = astli(["pp".as_ref(), file.as_os_str(), "-DWIDTH=16".as_ref()]);
+    let output = driver(&fixture).args(["pp".as_ref(), file.as_os_str(), "-DWIDTH=16".as_ref()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -268,7 +250,7 @@ fn a_command_line_define_is_in_the_table_and_says_where_it_came_from() {
     let fixture = Fixture::new("pp-table");
     let file = fixture.file("tiny.sv", TINY);
 
-    let output = astli([
+    let output = driver(&fixture).args([
         "pp".as_ref(),
         file.as_os_str(),
         "-DSYNTHESIS".as_ref(),
@@ -295,7 +277,7 @@ fn the_table_holds_what_an_include_defined_and_not_only_the_named_file() {
         "`include \"defs.svh\"\nmodule top; `FROM_HEADER(q, d); endmodule\n",
     );
 
-    let output = astli([
+    let output = driver(&fixture).args([
         "pp".as_ref(),
         file.as_os_str(),
         "-I".as_ref(),
@@ -325,8 +307,8 @@ fn an_include_path_tells_parse_an_arity_it_would_otherwise_guess_at() {
          endmodule\n",
     );
 
-    let guessed = stdout(&astli(["parse".as_ref(), file.as_os_str()]));
-    let told = stdout(&astli([
+    let guessed = stdout(&driver(&fixture).args(["parse".as_ref(), file.as_os_str()]));
+    let told = stdout(&driver(&fixture).args([
         "parse".as_ref(),
         file.as_os_str(),
         "-I".as_ref(),
@@ -346,8 +328,8 @@ fn parse_names_the_expansion_only_when_one_ran() {
     let fixture = Fixture::new("parse-seed");
     let file = fixture.file("tiny.sv", TINY);
 
-    let bare = stdout(&astli(["parse".as_ref(), "-q".as_ref(), file.as_os_str()]));
-    let built = stdout(&astli([
+    let bare = stdout(&driver(&fixture).args(["parse".as_ref(), "-q".as_ref(), file.as_os_str()]));
+    let built = stdout(&driver(&fixture).args([
         "parse".as_ref(),
         "-q".as_ref(),
         file.as_os_str(),
@@ -366,7 +348,7 @@ fn parse_expand_parses_what_the_macros_write() {
         "`define INST(t) t u_i ();\nmodule top;\n  `INST(core)\nendmodule\n",
     );
 
-    let output = astli(["parse".as_ref(), "--expand".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["parse".as_ref(), "--expand".as_ref(), file.as_os_str()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -380,7 +362,7 @@ fn parse_prints_a_tree_that_round_trips() {
     let fixture = Fixture::new("parse");
     let file = fixture.file("tiny.sv", TINY);
 
-    let output = astli(["parse".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["parse".as_ref(), file.as_os_str()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -395,7 +377,7 @@ fn the_summary_is_one_line_over_the_run_and_quiet_prints_only_it() {
     let a = fixture.file("a.sv", "module a; endmodule\n");
     let b = fixture.file("b.sv", "module b; endmodule\n");
 
-    let output = astli(["lex".as_ref(), a.as_os_str(), b.as_os_str()]);
+    let output = driver(&fixture).args(["lex".as_ref(), a.as_os_str(), b.as_os_str()]);
     let text = stdout(&output);
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(text.contains("MODULE_KW"), "{text}");
@@ -408,7 +390,7 @@ fn the_summary_is_one_line_over_the_run_and_quiet_prints_only_it() {
     for argv in [["lex", "-q"], ["-q", "lex"]] {
         let mut args: Vec<&std::ffi::OsStr> = argv.iter().map(std::ffi::OsStr::new).collect();
         args.extend([a.as_os_str(), b.as_os_str()]);
-        let output = astli(args);
+        let output = driver(&fixture).args(args);
         let text = stdout(&output);
         assert!(output.status.success(), "{}", stderr(&output));
         assert!(!text.contains("==="), "{argv:?}: {text}");
@@ -422,7 +404,8 @@ fn the_summary_is_one_line_over_the_run_and_quiet_prints_only_it() {
 
 #[test]
 fn a_file_that_is_not_there_is_reported_with_its_path() {
-    let output = astli(["parse", "no-such-file.sv"]);
+    let fixture = Fixture::new("a-file-that-is-not-there-is-reported-with-its-path");
+    let output = driver(&fixture).args(["parse", "no-such-file.sv"]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(stdout(&output).is_empty());
@@ -438,7 +421,7 @@ fn fmt_writes_a_file_in_place() {
     let fixture = Fixture::new("fmt-write");
     let file = fixture.file("tiny.sv", &TINY.replace("  assign", "      assign"));
 
-    let output = astli(["fmt".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["fmt".as_ref(), file.as_os_str()]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).is_empty(), "{}", stdout(&output));
@@ -453,9 +436,9 @@ fn fmt_check_counts_the_files_not_formatted_in_agreement() {
     let one = fixture.file("one.sv", &messy);
     let two = fixture.file("two.sv", &messy);
 
-    let clean = astli(["fmt".as_ref(), "--check".as_ref(), tidy.as_os_str()]);
-    let single = astli(["fmt".as_ref(), "--check".as_ref(), one.as_os_str()]);
-    let both = astli([
+    let clean = driver(&fixture).args(["fmt".as_ref(), "--check".as_ref(), tidy.as_os_str()]);
+    let single = driver(&fixture).args(["fmt".as_ref(), "--check".as_ref(), one.as_os_str()]);
+    let both = driver(&fixture).args([
         "fmt".as_ref(),
         "--check".as_ref(),
         one.as_os_str(),
@@ -476,7 +459,7 @@ fn fmt_diff_is_a_patch_that_formats_the_file() {
     let tidy = fixture.file("tidy.sv", TINY);
     let messy = fixture.file("messy.sv", &TINY.replace("  assign", "      assign"));
 
-    let output = astli([
+    let output = driver(&fixture).args([
         "fmt".as_ref(),
         "--diff".as_ref(),
         tidy.as_os_str(),
@@ -503,21 +486,6 @@ fn fmt_diff_is_a_patch_that_formats_the_file() {
     );
 }
 
-/// Runs the driver on `file` with `env` alone of the variables that decide
-/// colour.
-fn astli_coloured(args: &[&str], file: &Path, env: &[(&str, &str)]) -> Output {
-    let own = unowned();
-    let mut driver = driver(&own).dir(std::env::current_dir().expect("a working directory"));
-    for (name, value) in env {
-        driver = driver.env(name, value);
-    }
-    driver.args(
-        args.iter()
-            .map(AsRef::<std::ffi::OsStr>::as_ref)
-            .chain([file.as_os_str()]),
-    )
-}
-
 #[test]
 fn colour_is_the_flags_then_the_environments() {
     let fixture = Fixture::new("colour");
@@ -526,11 +494,29 @@ fn colour_is_the_flags_then_the_environments() {
 
     // A diff on stdout, and a diagnostic on stderr.
     let diff = |color: &str, env: &[(&str, &str)]| {
-        let output = astli_coloured(&["--color", color, "fmt", "--diff"], &messy, env);
+        let output = (env.iter())
+            .fold(driver(&fixture), |driver, (name, value)| {
+                driver.env(name, value)
+            })
+            .args(
+                ["--color", color, "fmt", "--diff"]
+                    .map(std::ffi::OsStr::new)
+                    .into_iter()
+                    .chain([messy.as_os_str()]),
+            );
         output.stdout.contains(&b'\x1b')
     };
     let parse = |color: &str, env: &[(&str, &str)]| {
-        let output = astli_coloured(&["--color", color, "parse"], &unparsed, env);
+        let output = (env.iter())
+            .fold(driver(&fixture), |driver, (name, value)| {
+                driver.env(name, value)
+            })
+            .args(
+                ["--color", color, "parse"]
+                    .map(std::ffi::OsStr::new)
+                    .into_iter()
+                    .chain([unparsed.as_os_str()]),
+            );
         output.stderr.contains(&b'\x1b')
     };
 
@@ -573,7 +559,7 @@ fn what_did_not_parse_fails_only_the_commands_that_read_a_design() {
     ] {
         let mut argv: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
         argv.extend(["--diag".as_ref(), "short".as_ref(), file.as_os_str()]);
-        let output = astli(argv);
+        let output = driver(&fixture).args(argv);
         let text = stderr(&output);
         assert_eq!(output.status.success(), succeeds, "{args:?}: {text}");
         assert!(text.contains(said), "{args:?}: {text}");
@@ -597,7 +583,7 @@ fn check_reports_an_elaboration_error_only_where_a_top_builds_it() {
             vec!["check".as_ref(), "--diag".as_ref(), "short".as_ref()];
         args.extend(top.iter().map(std::ffi::OsStr::new));
         args.push(file.as_os_str());
-        astli(args)
+        driver(&fixture).args(args)
     };
 
     let output = check(&["--top", "m"]);
@@ -615,7 +601,8 @@ fn check_reports_an_elaboration_error_only_where_a_top_builds_it() {
 
 #[test]
 fn fmt_keeps_what_it_did_not_parse_without_a_word() {
-    let output = astli_with_stdin(["fmt", "-"], UNPARSED);
+    let fixture = Fixture::new("fmt-keeps-what-it-did-not-parse-without-a-word");
+    let output = driver(&fixture).stdin(UNPARSED).args(["fmt", "-"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), UNPARSED);
@@ -624,7 +611,10 @@ fn fmt_keeps_what_it_did_not_parse_without_a_word() {
 
 #[test]
 fn fmt_reports_a_file_that_ends_inside_a_module() {
-    let output = astli_with_stdin(["fmt", "-"], "module m;\n  logic q;\n");
+    let fixture = Fixture::new("fmt-reports-a-file-that-ends-inside-a-module");
+    let output = driver(&fixture)
+        .stdin("module m;\n  logic q;\n")
+        .args(["fmt", "-"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let said = stderr(&output);
@@ -632,27 +622,16 @@ fn fmt_reports_a_file_that_ends_inside_a_module() {
     assert!(!said.contains("not-parsed"), "{said}");
 }
 
-fn astli_with_stdin<I, S>(args: I, stdin: &str) -> Output
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<std::ffi::OsStr>,
-{
-    let own = unowned();
-    driver(&own)
-        .dir(std::env::current_dir().expect("a working directory"))
-        .stdin(stdin)
-        .args(args)
-}
-
 #[test]
 fn fmt_formats_stdin_to_stdout() {
+    let fixture = Fixture::new("fmt-formats-stdin-to-stdout");
     let messy = TINY.replace("  assign", "      assign");
 
-    let output = astli_with_stdin(["fmt", "-"], &messy);
+    let output = driver(&fixture).stdin(&messy).args(["fmt", "-"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), TINY);
 
-    let output = astli_with_stdin(["fmt", "--check", "-"], &messy);
+    let output = driver(&fixture).stdin(&messy).args(["fmt", "--check", "-"]);
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(stdout(&output), "<stdin>\n");
 }
@@ -662,7 +641,10 @@ fn fmt_formats_stdin_on_its_own() {
     let fixture = Fixture::new("fmt-stdin-alone");
     let file = fixture.file("tiny.sv", TINY);
 
-    let output = astli_with_stdin(["fmt".as_ref(), "-".as_ref(), file.as_os_str()], TINY);
+    let output =
+        driver(&fixture)
+            .stdin(TINY)
+            .args(["fmt".as_ref(), "-".as_ref(), file.as_os_str()]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(stdout(&output).is_empty());
@@ -670,14 +652,17 @@ fn fmt_formats_stdin_on_its_own() {
 
 #[test]
 fn fmt_takes_no_define_so_that_its_output_depends_on_the_file_alone() {
-    let output = astli(["fmt", "-D", "X", "anything.sv"]);
+    let fixture = Fixture::new("fmt-takes-no-define-so-that-its-output-depends-on-the-file-alone");
+    let output = driver(&fixture).args(["fmt", "-D", "X", "anything.sv"]);
 
     assert_eq!(output.status.code(), Some(2));
 }
 
 #[test]
 fn a_command_line_that_is_wrong_exits_differently_from_a_file_that_is() {
-    let output = astli(["parse", "--no-such-flag"]);
+    let fixture =
+        Fixture::new("a-command-line-that-is-wrong-exits-differently-from-a-file-that-is");
+    let output = driver(&fixture).args(["parse", "--no-such-flag"]);
 
     assert_eq!(output.status.code(), Some(2));
     assert!(
@@ -705,7 +690,7 @@ fn a_filelist_supplies_the_sources_and_the_build() {
     );
 
     // -F resolves relative paths against the directory containing the filelist.
-    let output = astli(["pp".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let output = driver(&fixture).args(["pp".as_ref(), "-F".as_ref(), list.as_os_str()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -724,7 +709,7 @@ fn a_hash_comments_out_the_rest_of_a_filelist_line() {
         "# generated, $UNSET\nrtl/a#1.sv # rtl/c.sv\n  #rtl/d.sv\nrtl/b.sv\n",
     );
 
-    let output = astli(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let output = driver(&fixture).args(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -738,7 +723,7 @@ fn a_flag_beats_a_filelist_for_the_same_name() {
     fixture.file("rtl/top.sv", "localparam int W = `WIDTH;\n");
     let list = fixture.file("design.f", "+define+WIDTH=32\nrtl/top.sv\n");
 
-    let output = astli([
+    let output = driver(&fixture).args([
         "pp".as_ref(),
         "-F".as_ref(),
         list.as_os_str(),
@@ -758,7 +743,7 @@ fn one_filelist_names_another() {
     fixture.file("more.f", "rtl/b.sv\n");
     let list = fixture.file("design.f", "rtl/a.sv\n-F more.f\n");
 
-    let output = astli(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let output = driver(&fixture).args(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
     let text = stdout(&output);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -768,7 +753,7 @@ fn one_filelist_names_another() {
     // One that is missing is reported at the line that names it.
     let outer = fixture.file("outer.f", "-F inner.f\n");
     fixture.file("inner.f", "rtl/a.sv\n-F missing.f\n");
-    let output = astli(["lex".as_ref(), "-F".as_ref(), outer.as_os_str()]);
+    let output = driver(&fixture).args(["lex".as_ref(), "-F".as_ref(), outer.as_os_str()]);
     let text = stderr(&output);
 
     assert_eq!(output.status.code(), Some(1));
@@ -781,7 +766,7 @@ fn a_filelist_that_names_itself_is_caught() {
     let fixture = Fixture::new("flist-cycle");
     let list = fixture.file("design.f", "-F design.f\n");
 
-    let output = astli(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let output = driver(&fixture).args(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
@@ -796,7 +781,7 @@ fn an_option_a_filelist_may_not_carry_is_rejected_by_name() {
     let fixture = Fixture::new("flist-unknown");
     let list = fixture.file("design.f", "rtl/a.sv\n-y lib/\n");
 
-    let output = astli(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
+    let output = driver(&fixture).args(["lex".as_ref(), "-F".as_ref(), list.as_os_str()]);
     let text = stderr(&output);
 
     assert_eq!(output.status.code(), Some(1));
@@ -811,7 +796,9 @@ fn a_manifest_that_does_not_parse_is_shown_where_it_goes_wrong() {
     fixture.file("ip/astli.toml", "[package]\nname = \"ip\"\nsources = 3\n");
     fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
 
-    let output = astli_in(&fixture.path().join("ip"), &["files", "--diag", "short"]);
+    let output = driver(&fixture)
+        .dir(fixture.path().join("ip"))
+        .args(["files", "--diag", "short"]);
 
     assert!(!output.status.success());
     let said = stderr(&output);
@@ -827,12 +814,12 @@ fn several_files_are_separated_by_a_heading_that_expanded_source_can_hold() {
     let a = fixture.file("a.sv", "module a; endmodule\n");
     let b = fixture.file("b.sv", "module b; endmodule\n");
 
-    let trees = astli(["parse".as_ref(), a.as_os_str(), b.as_os_str()]);
+    let trees = driver(&fixture).args(["parse".as_ref(), a.as_os_str(), b.as_os_str()]);
     assert!(trees.status.success(), "{}", stderr(&trees));
     assert!(stdout(&trees).contains("=== "), "{}", stdout(&trees));
 
     // File headings in expanded output are formatted as comments to remain valid SystemVerilog.
-    let text = astli(["pp".as_ref(), a.as_os_str(), b.as_os_str()]);
+    let text = driver(&fixture).args(["pp".as_ref(), a.as_os_str(), b.as_os_str()]);
     assert!(text.status.success(), "{}", stderr(&text));
     for line in stdout(&text).lines().filter(|line| line.contains("=== ")) {
         assert!(line.starts_with("// "), "{line}");
@@ -850,7 +837,7 @@ fn a_file_that_cannot_be_read_fails_the_run_and_not_the_files_after_it() {
     let run = |args: &[&str]| {
         let mut argv: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
         argv.extend([a.as_os_str(), "no-such-file.sv".as_ref(), b.as_os_str()]);
-        let output = astli(argv);
+        let output = driver(&fixture).args(argv);
         assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
         (stdout(&output), stderr(&output))
     };
@@ -875,7 +862,7 @@ fn a_file_that_cannot_be_read_fails_the_run_and_not_the_files_after_it() {
     assert!(text.contains("u_lost: lost, declared nowhere"), "{text}");
     assert!(said.ends_with("1 of 3 files failed\n"), "{said}");
     // On its own, the file's problem is all there is to say.
-    let output = astli(["check", "no-such-file.sv"]);
+    let output = driver(&fixture).args(["check", "no-such-file.sv"]);
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(stderr(&output).lines().count(), 1, "{}", stderr(&output));
 }
@@ -897,7 +884,7 @@ fn the_output_is_the_order_the_files_were_named_whatever_the_threads_did() {
     let headings = |jobs: &str| {
         let mut argv = vec!["lex".as_ref(), "-j".as_ref(), jobs.as_ref()];
         argv.extend(args.iter().copied());
-        let output = astli(argv);
+        let output = driver(&fixture).args(argv);
         assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
         stdout(&output)
             .lines()
@@ -916,7 +903,8 @@ fn the_output_is_the_order_the_files_were_named_whatever_the_threads_did() {
 
 #[test]
 fn nothing_to_read_says_so() {
-    let output = astli(["parse"]);
+    let fixture = Fixture::new("nothing-to-read-says-so");
+    let output = driver(&fixture).args(["parse"]);
 
     assert_eq!(output.status.code(), Some(1));
     assert!(
@@ -946,7 +934,7 @@ fn the_plus_separated_spellings_carry_a_whole_build() {
         fixture.path().join("inc").display(),
         fixture.path().join("inc2").display()
     );
-    let output = astli([
+    let output = driver(&fixture).args([
         "pp".as_ref(),
         file.as_os_str(),
         incdir.as_ref(),
@@ -966,7 +954,7 @@ fn a_plus_separated_option_may_sit_anywhere_among_the_files() {
     let a = fixture.file("a.sv", "localparam int W = `WIDTH;\n");
     let b = fixture.file("b.sv", "module b; endmodule\n");
 
-    let output = astli([
+    let output = driver(&fixture).args([
         "pp".as_ref(),
         a.as_os_str(),
         "+define+WIDTH=8".as_ref(),
@@ -989,7 +977,7 @@ fn the_dash_spelling_is_the_later_one_whatever_the_order() {
         ["+define+WIDTH=32", "-DWIDTH=64"],
         ["-DWIDTH=64", "+define+WIDTH=32"],
     ] {
-        let output = astli([
+        let output = driver(&fixture).args([
             "pp".as_ref(),
             file.as_os_str(),
             argv[0].as_ref(),
@@ -1007,7 +995,7 @@ fn a_plus_separated_option_nothing_takes_is_not_read_as_a_file() {
     let fixture = Fixture::new("plusargs-unknown");
     let file = fixture.file("top.sv", TINY);
 
-    let output = astli(["pp".as_ref(), file.as_os_str(), "+libext+.sv".as_ref()]);
+    let output = driver(&fixture).args(["pp".as_ref(), file.as_os_str(), "+libext+.sv".as_ref()]);
     let text = stderr(&output);
 
     assert_eq!(output.status.code(), Some(1));
@@ -1028,7 +1016,7 @@ fn diagnostics_go_to_stderr_and_leave_the_output_alone() {
     let fixture = Fixture::new("diag-streams");
     let file = fixture.file("wrong.sv", WRONG);
 
-    let output = astli(["preprocess".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["preprocess".as_ref(), file.as_os_str()]);
 
     // Output on stdout is preserved while diagnostics are sent to stderr.
     let text = stdout(&output);
@@ -1051,13 +1039,14 @@ fn a_file_with_errors_fails_the_run_and_is_counted() {
     let wrong = fixture.file("wrong.sv", WRONG);
     let fine = fixture.file("tiny.sv", TINY);
 
-    let output = astli(["preprocess".as_ref(), fine.as_os_str(), wrong.as_os_str()]);
+    let output =
+        driver(&fixture).args(["preprocess".as_ref(), fine.as_os_str(), wrong.as_os_str()]);
     assert!(!output.status.success());
     let said = stderr(&output);
     assert!(said.contains("1 of 2 files has errors"), "{said}");
 
     // Nothing a worker reports is lost on the parallel path.
-    let output = astli([
+    let output = driver(&fixture).args([
         "preprocess".as_ref(),
         "-j4".as_ref(),
         fine.as_os_str(),
@@ -1069,7 +1058,7 @@ fn a_file_with_errors_fails_the_run_and_is_counted() {
     assert_eq!(said.matches("[include-not-found]").count(), 2, "{said}");
     assert!(said.contains("2 of 4 files have errors"), "{said}");
 
-    let output = astli(["preprocess".as_ref(), fine.as_os_str()]);
+    let output = driver(&fixture).args(["preprocess".as_ref(), fine.as_os_str()]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stderr(&output).is_empty(), "{}", stderr(&output));
 }
@@ -1084,7 +1073,7 @@ fn one_file_shows_only_so_many_and_says_how_many_it_did_not() {
     text.push_str("endmodule\n");
     let file = fixture.file("many.sv", &text);
 
-    let said = stderr(&astli(["preprocess".as_ref(), file.as_os_str()]));
+    let said = stderr(&driver(&fixture).args(["preprocess".as_ref(), file.as_os_str()]));
 
     assert_eq!(said.matches("[undefined-macro]").count(), 20, "{said}");
     assert!(said.contains("30 errors; the first 20 shown"), "{said}");
@@ -1100,7 +1089,7 @@ fn short_diagnostics_are_one_line_each_and_not_capped() {
     text.push_str("endmodule\n");
     let file = fixture.file("many.sv", &text);
 
-    let said = stderr(&astli([
+    let said = stderr(&driver(&fixture).args([
         "preprocess".as_ref(),
         "--diag=short".as_ref(),
         file.as_os_str(),
@@ -1119,7 +1108,7 @@ fn github_diagnostics_are_workflow_commands_with_their_properties_escaped() {
     let fixture = Fixture::new("diag-github");
     fixture.file("a,b.sv", "`define BAD `NOPE\nassign y = `BAD;\n");
 
-    let output = astli_in(fixture.path(), &["preprocess", "--diag=github", "a,b.sv"]);
+    let output = driver(&fixture).args(["preprocess", "--diag=github", "a,b.sv"]);
 
     expect_test::expect![[r#"
         ::error title=undefined-macro,file=a%2Cb.sv,line=2,col=12,endLine=2,endColumn=16::a,b.sv:2:12: error[undefined-macro]: `NOPE is not defined
@@ -1132,7 +1121,7 @@ fn json_diagnostics_are_a_line_each_with_the_calls_they_came_through() {
     let fixture = Fixture::new("diag-json");
     fixture.file("macro.sv", "`define BAD `NOPE\nlogic q = `BAD;\n");
 
-    let output = astli_in(fixture.path(), &["preprocess", "--diag=json", "macro.sv"]);
+    let output = driver(&fixture).args(["preprocess", "--diag=json", "macro.sv"]);
 
     expect_test::expect![[r#"
         {"severity":"error","code":"undefined-macro","message":"`NOPE is not defined","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32},"label":"not defined here","labels":[],"notes":["the reference stands as written"],"help":[],"spelled":{"path":"macro.sv","start":{"line":1,"column":13,"offset":12},"end":{"line":1,"column":18,"offset":17}},"expansion":[{"macro":"`BAD","path":"macro.sv","start":{"line":2,"column":11,"offset":28},"end":{"line":2,"column":15,"offset":32}}],"included_from":[],"fix":[]}
@@ -1145,7 +1134,7 @@ fn json_diagnostics_carry_their_fix() {
     let fixture = Fixture::new("diag-json-fix");
     fixture.file("top.sv", "module top;\n  reg q;\nendmodule\n");
 
-    let output = astli_in(fixture.path(), &["lint", "--diag=json", "top.sv"]);
+    let output = driver(&fixture).args(["lint", "--diag=json", "top.sv"]);
 
     let said = stderr(&output);
     assert!(
@@ -1162,7 +1151,7 @@ fn json_leaves_stderr_to_the_records() {
 
     // Neither the tally of the files with errors nor a status is a record,
     // and a problem with no place is one with its place null.
-    let said = stderr(&astli([
+    let said = stderr(&driver(&fixture).args([
         "preprocess".as_ref(),
         "--diag=json".as_ref(),
         "--color=always".as_ref(),
@@ -1191,10 +1180,7 @@ fn gitlab_is_one_report_with_a_fingerprint_for_each_finding() {
     fixture.file("fine.sv", TINY);
 
     // Alike findings are told apart by which comes first, not by their line.
-    let output = astli_in(
-        fixture.path(),
-        &["preprocess", "--diag=gitlab", "twice.sv", "fine.sv"],
-    );
+    let output = driver(&fixture).args(["preprocess", "--diag=gitlab", "twice.sv", "fine.sv"]);
     expect_test::expect![[r#"
         [
         {"description":"[undefined-macro] `W is not defined","check_name":"undefined-macro","fingerprint":"f579ae42b464d564","severity":"major","location":{"path":"twice.sv","lines":{"begin":1}}},
@@ -1204,7 +1190,7 @@ fn gitlab_is_one_report_with_a_fingerprint_for_each_finding() {
     .assert_eq(&stderr(&output));
     assert!(!output.status.success());
 
-    let output = astli_in(fixture.path(), &["preprocess", "--diag=gitlab", "fine.sv"]);
+    let output = driver(&fixture).args(["preprocess", "--diag=gitlab", "fine.sv"]);
     assert_eq!(stderr(&output), "[]\n");
     assert!(output.status.success());
 }
@@ -1215,7 +1201,7 @@ fn parse_reports_what_the_seeding_pass_found() {
     let file = fixture.file("wrong.sv", WRONG);
 
     // Macro definitions passed to parse trigger a seeding pass that reports preprocessor errors.
-    let output = astli([
+    let output = driver(&fixture).args([
         "parse".as_ref(),
         "--quiet".as_ref(),
         "-D".as_ref(),
@@ -1250,21 +1236,14 @@ fn design(fixture: &Fixture) -> PathBuf {
     )
 }
 
-fn files_in(fixture: &Fixture, args: &[&str]) -> Output {
-    driver(fixture).args(["files"].iter().chain(args))
-}
-
 #[test]
 fn files_keeps_what_the_top_needs_in_dependency_order() {
     let fixture = Fixture::new("files-top");
     design(&fixture);
 
-    let output = files_in(
-        &fixture,
-        &[
-            "-f", "design.f", "--top", "top", "--order", "--diag", "short",
-        ],
-    );
+    let output = driver(&fixture).args([
+        "files", "-f", "design.f", "--top", "top", "--order", "--diag", "short",
+    ]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
@@ -1282,18 +1261,15 @@ fn files_keeps_what_the_top_needs_in_dependency_order() {
 
     // A string definition is written with its quotes escaped, as a
     // simulator reads them back.
-    let output = files_in(&fixture, &["-f", "design.f", "--top", "top", "-DS=\"s\""]);
+    let output = driver(&fixture).args(["files", "-f", "design.f", "--top", "top", "-DS=\"s\""]);
     let text = stdout(&output);
     assert!(text.contains("+define+S=\\\"s\\\"\n"), "{text}");
 
     // A directory the filelist and a flag both give is searched, and so
     // written, once.
-    let output = files_in(
-        &fixture,
-        &[
-            "-f", "design.f", "-I", "inc", "-I", "inc", "--emit", "incdirs",
-        ],
-    );
+    let output = driver(&fixture).args([
+        "files", "-f", "design.f", "-I", "inc", "-I", "inc", "--emit", "incdirs",
+    ]);
     assert_eq!(stdout(&output), "+incdir+inc\n+incdir+unused\n");
 }
 
@@ -1304,7 +1280,7 @@ fn files_refuses_a_name_declared_twice_that_is_used() {
     fixture.file("ff.sv", "module regfile;\nendmodule\n");
     fixture.file("latch.sv", "module regfile;\nendmodule\n");
 
-    let output = files_in(&fixture, &["top.sv", "ff.sv", "latch.sv"]);
+    let output = driver(&fixture).args(["files", "top.sv", "ff.sv", "latch.sv"]);
 
     assert!(!output.status.success());
     let said = stderr(&output);
@@ -1321,9 +1297,13 @@ fn files_refuses_a_name_declared_twice_that_is_used() {
     // A line for a tool holds no style, whatever colour stderr takes.
     let files = ["top.sv", "ff.sv", "latch.sv"];
     for (format, starts) in [("short", "ff.sv:1:8: "), ("github", "::error ")] {
-        let output = files_in(
-            &fixture,
-            &[&["--color", "always", "--diag", format], &files[..]].concat(),
+        let output = driver(&fixture).args(
+            [
+                &["files"][..],
+                &["--color", "always", "--diag", format],
+                &files[..],
+            ]
+            .concat(),
         );
         let said = stderr(&output);
         let line = said.lines().find(|line| line.starts_with(starts));
@@ -1339,8 +1319,8 @@ fn files_warns_of_a_name_declared_twice_that_nothing_uses() {
     fixture.file("a/tb_top.sv", "module tb_top;\nendmodule\n");
     fixture.file("b/tb_top.sv", "module tb_top;\nendmodule\n");
 
-    let unused = files_in(&fixture, &["a/tb_top.sv", "b/tb_top.sv"]);
-    let as_top = files_in(&fixture, &["a/tb_top.sv", "b/tb_top.sv", "--top", "tb_top"]);
+    let unused = driver(&fixture).args(["files", "a/tb_top.sv", "b/tb_top.sv"]);
+    let as_top = driver(&fixture).args(["files", "a/tb_top.sv", "b/tb_top.sv", "--top", "tb_top"]);
 
     assert!(unused.status.success(), "{}", stderr(&unused));
     assert!(stderr(&unused).contains("`tb_top` is declared 2 times and used nowhere"));
@@ -1353,7 +1333,7 @@ fn files_without_a_top_keeps_every_file() {
     let fixture = Fixture::new("files-all");
     design(&fixture);
 
-    let output = files_in(&fixture, &["-f", "design.f", "--emit", "files"]);
+    let output = driver(&fixture).args(["files", "-f", "design.f", "--emit", "files"]);
     assert_eq!(
         stdout(&output),
         "top.sv\ncore.sv\nalu.sv\ncfg_pkg.sv\nspare.sv\n"
@@ -1365,7 +1345,7 @@ fn files_lists_what_could_be_a_top() {
     let fixture = Fixture::new("files-tops");
     design(&fixture);
 
-    let output = files_in(&fixture, &["-f", "design.f", "--emit", "tops"]);
+    let output = driver(&fixture).args(["files", "-f", "design.f", "--emit", "tops"]);
     assert_eq!(stdout(&output), "top\nspare\n");
 }
 
@@ -1374,10 +1354,8 @@ fn files_says_why_a_top_needs_a_file() {
     let fixture = Fixture::new("files-why");
     design(&fixture);
 
-    let output = files_in(
-        &fixture,
-        &["-f", "design.f", "--top", "top", "--why", "alu.sv"],
-    );
+    let output =
+        driver(&fixture).args(["files", "-f", "design.f", "--top", "top", "--why", "alu.sv"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
@@ -1386,10 +1364,9 @@ fn files_says_why_a_top_needs_a_file() {
          alu.sv: declares `alu`, used at core.sv:4:3\n"
     );
 
-    let output = files_in(
-        &fixture,
-        &["-f", "design.f", "--top", "top", "--why", "spare.sv"],
-    );
+    let output = driver(&fixture).args([
+        "files", "-f", "design.f", "--top", "top", "--why", "spare.sv",
+    ]);
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("the tops do not need it"),
@@ -1403,7 +1380,7 @@ fn files_fails_on_a_top_no_file_declares() {
     let fixture = Fixture::new("files-unknown");
     design(&fixture);
 
-    let output = files_in(&fixture, &["-f", "design.f", "--top", "tpo"]);
+    let output = driver(&fixture).args(["files", "-f", "design.f", "--top", "tpo"]);
     assert!(!output.status.success());
     assert!(
         stderr(&output).contains("no file declares the top `tpo`"),
@@ -1420,7 +1397,7 @@ fn files_fails_and_writes_no_list_when_a_file_it_keeps_does_not_parse() {
     fixture.file("lone.sv", "module lone; endmodule\n");
     fixture.file("needy.sv", "module needy; gone u(); endmodule\n");
 
-    let output = files_in(&fixture, &["--top", "top", "top.sv", "sub.sv"]);
+    let output = driver(&fixture).args(["files", "--top", "top", "top.sv", "sub.sv"]);
     assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
     assert!(stdout(&output).is_empty(), "{}", stdout(&output));
     assert!(stderr(&output).contains("sub.sv"), "{}", stderr(&output));
@@ -1431,7 +1408,7 @@ fn files_fails_and_writes_no_list_when_a_file_it_keeps_does_not_parse() {
     );
 
     // A list of one file ends at what it says, as a run of one file does.
-    let output = files_in(&fixture, &["--top", "sub", "sub.sv", "--diag", "short"]);
+    let output = driver(&fixture).args(["files", "--top", "sub", "sub.sv", "--diag", "short"]);
     assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
     assert_eq!(
         stderr(&output),
@@ -1440,27 +1417,27 @@ fn files_fails_and_writes_no_list_when_a_file_it_keeps_does_not_parse() {
 
     // One the top does not reach cannot shorten the list, as `check` does
     // not report it either...
-    let output = files_in(&fixture, &["--top", "lone", "lone.sv", "sub.sv"]);
+    let output = driver(&fixture).args(["files", "--top", "lone", "lone.sv", "sub.sv"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "lone.sv\n");
     assert!(!stderr(&output).contains("sub.sv"), "{}", stderr(&output));
     // A Code Quality report holds what the run tells, and only that.
-    let output = files_in(
-        &fixture,
-        &["--top", "lone", "lone.sv", "sub.sv", "--diag=gitlab"],
-    );
+    let output = driver(&fixture).args([
+        "files",
+        "--top",
+        "lone",
+        "lone.sv",
+        "sub.sv",
+        "--diag=gitlab",
+    ]);
     assert_eq!(stderr(&output), "[]\n");
 
     // ...unless the top uses a name no file declares, which the region
     // that did not parse may.
-    let output = files_in(&fixture, &["--top", "needy", "needy.sv", "sub.sv"]);
+    let output = driver(&fixture).args(["files", "--top", "needy", "needy.sv", "sub.sv"]);
     assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
     assert!(stdout(&output).is_empty(), "{}", stdout(&output));
     assert!(stderr(&output).contains("sub.sv"), "{}", stderr(&output));
-}
-
-fn pickle_in(fixture: &Fixture, args: &[&str]) -> Output {
-    driver(fixture).args(["pickle"].iter().chain(args))
 }
 
 #[test]
@@ -1468,21 +1445,19 @@ fn pickle_writes_what_the_top_needs_expanded_and_renamed() {
     let fixture = Fixture::new("pickle-top");
     design(&fixture);
 
-    let output = pickle_in(
-        &fixture,
-        &[
-            "-f",
-            "design.f",
-            "--top",
-            "top",
-            "--order",
-            "--expand",
-            "--prefix",
-            "p_",
-            "--exclude-rename",
-            "top",
-        ],
-    );
+    let output = driver(&fixture).args([
+        "pickle",
+        "-f",
+        "design.f",
+        "--top",
+        "top",
+        "--order",
+        "--expand",
+        "--prefix",
+        "p_",
+        "--exclude-rename",
+        "top",
+    ]);
     assert!(output.status.success(), "{}", stderr(&output));
     // What a macro wrote is renamed, and `gone`, which no file declares, is
     // not.
@@ -1503,7 +1478,7 @@ fn pickle_keeps_the_directives_a_compiler_needs() {
         "`timescale 1ns/1ps\n`default_nettype none\nmodule top;\nendmodule\n`default_nettype wire\n",
     );
 
-    let output = astli(["pickle".as_ref(), "--expand".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["pickle".as_ref(), "--expand".as_ref(), file.as_os_str()]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
@@ -1516,7 +1491,7 @@ fn raw_pickle_inlines_headers_and_starts_each_file_afresh() {
     let fixture = Fixture::new("pickle-raw");
     design(&fixture);
 
-    let output = pickle_in(&fixture, &["-f", "design.f", "--top", "top", "--order"]);
+    let output = driver(&fixture).args(["pickle", "-f", "design.f", "--top", "top", "--order"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
         stdout(&output),
@@ -1538,7 +1513,7 @@ fn raw_pickle_inlines_a_header_in_a_branch_the_build_does_not_take() {
         "`ifdef SIM\n`include \"sim.svh\"\n`else\n`include \"syn.svh\"\n`endif\nmodule top;\nendmodule\n",
     );
 
-    let output = astli([
+    let output = driver(&fixture).args([
         "pickle".as_ref(),
         "-I".as_ref(),
         fixture.path().as_os_str(),
@@ -1562,7 +1537,7 @@ fn raw_pickle_warns_of_an_include_it_leaves_as_a_directive() {
         "`define H \"x.svh\"\n`include `H\n`include \"loop.svh\"\nmodule top;\nendmodule\n",
     );
     let run = |diag: &str| {
-        astli([
+        driver(&fixture).args([
             "--diag".as_ref(),
             diag.as_ref(),
             "pickle".as_ref(),
@@ -1608,7 +1583,7 @@ fn pickle_fails_on_a_file_with_errors_as_files_does() {
     fixture.file("ok.sv", "module ok;\nendmodule\n");
     for diag in ["pretty", "json"] {
         let run = |command: &str| {
-            astli([
+            driver(&fixture).args([
                 "--diag".as_ref(),
                 diag.as_ref(),
                 command.as_ref(),
@@ -1628,7 +1603,7 @@ fn raw_pickle_renames_nothing() {
     let fixture = Fixture::new("pickle-raw-rename");
     design(&fixture);
 
-    let output = pickle_in(&fixture, &["-f", "design.f", "--prefix", "p_"]);
+    let output = driver(&fixture).args(["pickle", "-f", "design.f", "--prefix", "p_"]);
     assert!(!output.status.success());
     assert!(stderr(&output).contains("--expand"), "{}", stderr(&output));
 }
@@ -1651,17 +1626,15 @@ fn files_keeps_an_encrypted_file_and_what_it_needs() {
     let fixture = Fixture::new("files-encrypted");
     encrypted(&fixture);
 
-    let output = files_in(
-        &fixture,
-        &[
-            "top.sv",
-            "vendor_ip.sv",
-            "ip_pkg.sv",
-            "spare.sv",
-            "--top",
-            "top",
-        ],
-    );
+    let output = driver(&fixture).args([
+        "files",
+        "top.sv",
+        "vendor_ip.sv",
+        "ip_pkg.sv",
+        "spare.sv",
+        "--top",
+        "top",
+    ]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "top.sv\nvendor_ip.sv\nip_pkg.sv\n");
     assert!(
@@ -1692,7 +1665,8 @@ fn files_leaves_out_a_stub_for_cells_a_library_supplies() {
     let files = ["top.sv", "cells.sv", "mixed.sv"];
 
     for top in [&["--top", "top"][..], &[]] {
-        let output = files_in(&fixture, &[&files[..], top, &["--emit", "files"]].concat());
+        let output =
+            driver(&fixture).args([&["files"][..], &files[..], top, &["--emit", "files"]].concat());
         assert!(output.status.success(), "{}", stderr(&output));
         assert_eq!(stdout(&output), "top.sv\nmixed.sv\n");
         assert!(
@@ -1702,7 +1676,8 @@ fn files_leaves_out_a_stub_for_cells_a_library_supplies() {
             stderr(&output)
         );
     }
-    let quiet = files_in(&fixture, &[&files[..], &["-q", "--top", "top"]].concat());
+    let quiet =
+        driver(&fixture).args([&["files"][..], &files[..], &["-q", "--top", "top"]].concat());
     assert_eq!(stdout(&quiet), "top.sv\nmixed.sv\n");
     assert!(stderr(&quiet).is_empty(), "{}", stderr(&quiet));
 
@@ -1711,10 +1686,8 @@ fn files_leaves_out_a_stub_for_cells_a_library_supplies() {
         "and2.sv",
         "module AND2_X1 (.*);\n  assign Y = A & B;\nendmodule\n",
     );
-    let output = files_in(
-        &fixture,
-        &[&files[..], &["and2.sv", "--emit", "files"]].concat(),
-    );
+    let output = driver(&fixture)
+        .args([&["files"][..], &files[..], &["and2.sv", "--emit", "files"]].concat());
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "top.sv\ncells.sv\nmixed.sv\nand2.sv\n");
 }
@@ -1724,19 +1697,17 @@ fn pickle_writes_an_envelope_back_as_it_is_and_renames_nothing_in_it() {
     let fixture = Fixture::new("pickle-encrypted");
     encrypted(&fixture);
 
-    let output = pickle_in(
-        &fixture,
-        &[
-            "top.sv",
-            "vendor_ip.sv",
-            "ip_pkg.sv",
-            "--top",
-            "top",
-            "--expand",
-            "--prefix",
-            "p_",
-        ],
-    );
+    let output = driver(&fixture).args([
+        "pickle",
+        "top.sv",
+        "vendor_ip.sv",
+        "ip_pkg.sv",
+        "--top",
+        "top",
+        "--expand",
+        "--prefix",
+        "p_",
+    ]);
     assert!(output.status.success(), "{}", stderr(&output));
     let envelope = std::fs::read_to_string(fixture.path().join("vendor_ip.sv")).unwrap();
     let envelope = envelope.replace("import ip_pkg", "import p_ip_pkg");
@@ -1764,7 +1735,7 @@ fn lint_passes_a_clean_file_without_a_word() {
     let fixture = Fixture::new("lint-clean");
     let file = fixture.file("tiny.sv", TINY);
 
-    let output = astli(["lint".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["lint".as_ref(), file.as_os_str()]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).is_empty() && stderr(&output).is_empty());
@@ -1775,7 +1746,7 @@ fn lint_fails_on_a_denied_rule_and_names_it() {
     let fixture = Fixture::new("lint-deny");
     let file = fixture.file("flop.sv", BLOCKING_FLOP);
 
-    let output = astli(["lint".as_ref(), file.as_os_str()]);
+    let output = driver(&fixture).args(["lint".as_ref(), file.as_os_str()]);
 
     assert!(!output.status.success());
     assert!(
@@ -1790,7 +1761,7 @@ fn a_rule_named_alone_wins_over_its_group() {
     let fixture = Fixture::new("lint-levels");
     let file = fixture.file("flop.sv", BLOCKING_FLOP);
 
-    let warned = astli(
+    let warned = driver(&fixture).args(
         [
             "lint",
             "--deny",
@@ -1802,7 +1773,7 @@ fn a_rule_named_alone_wins_over_its_group() {
         .into_iter()
         .chain([file.as_os_str()]),
     );
-    let allowed = astli(
+    let allowed = driver(&fixture).args(
         [
             "lint",
             "--allow",
@@ -1823,7 +1794,8 @@ fn a_rule_named_alone_wins_over_its_group() {
 
 #[test]
 fn lint_refuses_a_name_that_is_no_rule() {
-    let output = astli(["lint", "--allow", "no-such-rule", "-"]);
+    let fixture = Fixture::new("lint-refuses-a-name-that-is-no-rule");
+    let output = driver(&fixture).args(["lint", "--allow", "no-such-rule", "-"]);
 
     assert!(!output.status.success());
     assert!(
@@ -1835,7 +1807,8 @@ fn lint_refuses_a_name_that_is_no_rule() {
 
 #[test]
 fn lint_list_names_every_rule_with_its_group_and_options() {
-    let output = astli(["lint", "--list"]);
+    let fixture = Fixture::new("lint-list-names-every-rule-with-its-group-and-options");
+    let output = driver(&fixture).args(["lint", "--list"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let listed = stdout(&output);
@@ -1880,9 +1853,9 @@ fn lint_reads_what_the_top_builds_only_given_it() {
     let fixture = Fixture::new("lint-top");
     fixture.file("top.sv", WIDTHS);
 
-    let built = lint_in(fixture.path(), &["top.sv", "--top", "top"]);
-    let alone = lint_in(fixture.path(), &["top.sv"]);
-    let missing = lint_in(fixture.path(), &["top.sv", "--top", "tpo"]);
+    let built = driver(&fixture).args(["lint", "top.sv", "--top", "top"]);
+    let alone = driver(&fixture).args(["lint", "top.sv"]);
+    let missing = driver(&fixture).args(["lint", "top.sv", "--top", "tpo"]);
 
     assert!(built.status.success(), "{}", stderr(&built));
     assert!(
@@ -1912,7 +1885,7 @@ fn lint_with_a_top_judges_only_what_it_reaches_by_the_design() {
         "module tb_b;\n  logic unread = 1'b0;\nendmodule\n",
     );
 
-    let output = lint_in(fixture.path(), &["--diag", "short"]);
+    let output = driver(&fixture).args(["lint", "--diag", "short"]);
 
     let said = stderr(&output);
     // A file's findings are one list in line order, whichever rules read
@@ -1929,19 +1902,15 @@ fn lint_with_a_top_judges_only_what_it_reaches_by_the_design() {
     );
 }
 
-/// Runs `astli lint` in `dir`, where it looks for `astli.toml` first.
-fn lint_in(dir: &Path, args: &[&str]) -> Output {
-    let own = unowned();
-    driver(&own).dir(dir).args(["lint"].iter().chain(args))
-}
-
 #[test]
 fn astli_toml_sets_levels_found_from_a_directory_below_it() {
     let fixture = Fixture::new("lint-config");
     fixture.file("astli.toml", "[lint]\nwarn = [\"correctness\"]\n");
     fixture.file("rtl/flop.sv", BLOCKING_FLOP);
 
-    let output = lint_in(&fixture.path().join("rtl"), &["flop.sv"]);
+    let output = driver(&fixture)
+        .dir(fixture.path().join("rtl"))
+        .args(["lint", "flop.sv"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stderr(&output).contains("Warning"), "{}", stderr(&output));
@@ -1956,16 +1925,16 @@ fn a_flag_wins_over_a_path_in_astli_toml() {
     fixture.file("vendor/ip/flop.sv", BLOCKING_FLOP);
     fixture.file("rtl/flop.sv", BLOCKING_FLOP);
 
-    let vendored = lint_in(fixture.path(), &["vendor/ip/flop.sv"]);
-    let denied = lint_in(
-        fixture.path(),
-        &["--deny", "always-ff-non-blocking", "vendor/ip/flop.sv"],
-    );
-    let own = lint_in(fixture.path(), &["rtl/flop.sv"]);
-    let allowed = lint_in(
-        fixture.path(),
-        &["--allow", "always-ff-non-blocking", "rtl/flop.sv"],
-    );
+    let vendored = driver(&fixture).args(["lint", "vendor/ip/flop.sv"]);
+    let denied = driver(&fixture).args([
+        "lint",
+        "--deny",
+        "always-ff-non-blocking",
+        "vendor/ip/flop.sv",
+    ]);
+    let own = driver(&fixture).args(["lint", "rtl/flop.sv"]);
+    let allowed =
+        driver(&fixture).args(["lint", "--allow", "always-ff-non-blocking", "rtl/flop.sv"]);
 
     assert!(vendored.status.success(), "{}", stderr(&vendored));
     assert!(stderr(&vendored).is_empty(), "{}", stderr(&vendored));
@@ -1982,7 +1951,7 @@ fn a_config_named_on_the_command_line_is_the_one_read() {
     fixture.file("lax.toml", "[lint]\nallow = [\"correctness\"]\n");
     fixture.file("flop.sv", BLOCKING_FLOP);
 
-    let output = lint_in(fixture.path(), &["--config", "lax.toml", "flop.sv"]);
+    let output = driver(&fixture).args(["lint", "--config", "lax.toml", "flop.sv"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stderr(&output).is_empty(), "{}", stderr(&output));
@@ -1996,22 +1965,14 @@ const PREFIXED_PORTS: &str =
 /// What says ports are named by a prefix.
 const PREFIX_STYLE: &str = "[lint.rules.port-name-suffix]\ninput = [\"i_*\"]\noutput = [\"o_*\"]\n";
 
-/// Runs `astli lint` in `dir`, with a dependency cache of the fixture's own.
-fn lint_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    driver(fixture)
-        .dir(dir)
-        .cache()
-        .args(["lint"].iter().chain(args))
-}
-
 #[test]
 fn astli_toml_sets_a_rules_options() {
     let fixture = Fixture::new("lint-config-options");
     fixture.file("top.sv", PREFIXED_PORTS);
 
-    let lowrisc = lint_in(fixture.path(), &["top.sv"]);
+    let lowrisc = driver(&fixture).args(["lint", "top.sv"]);
     fixture.file("astli.toml", PREFIX_STYLE);
-    let prefixed = lint_in(fixture.path(), &["top.sv"]);
+    let prefixed = driver(&fixture).args(["lint", "top.sv"]);
 
     assert!(
         stderr(&lowrisc).contains("port-name-suffix"),
@@ -2042,7 +2003,10 @@ fn a_style_a_dev_dependency_holds_is_extended() {
 
     // Found among the package's dependencies, or resolved for files named.
     for args in [&[][..], &["top.sv"]] {
-        let output = lint_with_cache(&fixture, &root, args);
+        let output = driver(&fixture)
+            .dir(&root)
+            .cache()
+            .args(["lint"].iter().chain(args));
         assert!(output.status.success(), "{}", stderr(&output));
         assert!(
             !stderr(&output).contains("port-name-suffix"),
@@ -2065,7 +2029,7 @@ fn a_project_sets_over_the_style_it_extends() {
     );
     fixture.file("top.sv", PREFIXED_PORTS);
 
-    let output = lint_in(fixture.path(), &["top.sv"]);
+    let output = driver(&fixture).args(["lint", "top.sv"]);
 
     // The style's level and its `input`, the project's `output`.
     assert!(!output.status.success());
@@ -2093,8 +2057,13 @@ fn a_style_that_is_a_dependency_or_sets_paths_is_refused() {
     fixture.file("other/astli.toml", "[lint]\nextends = \"../paths.toml\"\n");
     fixture.file("other/top.sv", PREFIXED_PORTS);
 
-    let dependency = lint_with_cache(&fixture, &fixture.path().join("root"), &["top.sv"]);
-    let paths = lint_in(&fixture.path().join("other"), &["top.sv"]);
+    let dependency = driver(&fixture)
+        .dir(fixture.path().join("root"))
+        .cache()
+        .args(["lint", "top.sv"]);
+    let paths = driver(&fixture)
+        .dir(fixture.path().join("other"))
+        .args(["lint", "top.sv"]);
 
     assert!(!dependency.status.success());
     assert!(
@@ -2116,7 +2085,7 @@ fn lint_fix_rewrites_what_it_can_and_reports_the_rest() {
     let source = "module top (\n  input logic a_i\n);\n  reg q;\n  always_ff @(posedge a_i) q = 1'b0;\nendmodule\n";
     fixture.file("top.sv", source);
 
-    let output = lint_in(fixture.path(), &["--fix", "top.sv"]);
+    let output = driver(&fixture).args(["lint", "--fix", "top.sv"]);
 
     let written = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
     assert_eq!(written, source.replace("reg q", "logic q"));
@@ -2136,8 +2105,8 @@ fn a_finding_with_a_fix_says_lint_fix_applies_it() {
     fixture.file("top.sv", "module top;\n  reg q;\nendmodule\n");
     fixture.file("broken.sv", "module broken;\n  reg q;\n");
 
-    let output = lint_in(fixture.path(), &["top.sv"]);
-    let broken = lint_in(fixture.path(), &["broken.sv"]);
+    let output = driver(&fixture).args(["lint", "top.sv"]);
+    let broken = driver(&fixture).args(["lint", "broken.sv"]);
 
     let said = stderr(&output);
     assert!(
@@ -2154,7 +2123,7 @@ fn lint_fix_leaves_a_file_it_did_not_parse_whole() {
     let source = "module top;\n  reg q;\n";
     fixture.file("top.sv", source);
 
-    let output = lint_in(fixture.path(), &["--fix", "top.sv"]);
+    let output = driver(&fixture).args(["lint", "--fix", "top.sv"]);
 
     assert!(!output.status.success());
     let written = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
@@ -2169,23 +2138,14 @@ fn lint_fix_applies_no_fix_of_a_rule_allowed_or_waived() {
         "module top;\n  (* astli_allow = \"forbid-reg\" *)\n  reg p;\n  reg q;\nendmodule\n";
     fixture.file("top.sv", source);
 
-    let allowed = lint_in(
-        fixture.path(),
-        &["--fix", "--allow", "forbid-reg", "top.sv"],
-    );
+    let allowed = driver(&fixture).args(["lint", "--fix", "--allow", "forbid-reg", "top.sv"]);
     let unchanged = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
-    let waived = lint_in(fixture.path(), &["--fix", "top.sv"]);
+    let waived = driver(&fixture).args(["lint", "--fix", "top.sv"]);
     let written = std::fs::read_to_string(fixture.path().join("top.sv")).unwrap();
 
     assert!(allowed.status.success() && waived.status.success());
     assert_eq!(unchanged, source);
     assert_eq!(written, source.replace("reg q", "logic q"));
-}
-
-/// Runs `astli fmt` in `dir`, where it looks for `astli.toml` first.
-fn fmt_in(dir: &Path, args: &[&str]) -> Output {
-    let own = unowned();
-    driver(&own).dir(dir).args(["fmt"].iter().chain(args))
 }
 
 #[test]
@@ -2194,7 +2154,9 @@ fn astli_toml_sets_the_layout_found_from_a_directory_below_it() {
     fixture.file("astli.toml", "[fmt]\nindent = 4\n");
     fixture.file("rtl/m.sv", "module m;\nlogic q;\nendmodule\n");
 
-    let output = fmt_in(&fixture.path().join("rtl"), &["m.sv"]);
+    let output = driver(&fixture)
+        .dir(fixture.path().join("rtl"))
+        .args(["fmt", "m.sv"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let written = std::fs::read_to_string(fixture.path().join("rtl/m.sv")).unwrap();
@@ -2211,8 +2173,10 @@ fn a_file_astli_toml_excludes_is_left_alone_named_or_found() {
     fixture.file("rtl/m_old.sv", unformatted);
     fixture.file("rtl/m.sv", unformatted);
 
-    let found = fmt_in(fixture.path(), &["--check"]);
-    let named = fmt_in(&fixture.path().join("rtl"), &["--check", "m_old.sv"]);
+    let found = driver(&fixture).args(["fmt", "--check"]);
+    let named = driver(&fixture)
+        .dir(fixture.path().join("rtl"))
+        .args(["fmt", "--check", "m_old.sv"]);
 
     assert!(!found.status.success());
     let checked = stdout(&found);
@@ -2224,8 +2188,8 @@ fn a_file_astli_toml_excludes_is_left_alone_named_or_found() {
 
 #[test]
 fn an_astli_toml_a_command_cannot_read_is_refused_with_its_path() {
-    let lint = lint_in as fn(&Path, &[&str]) -> Output;
-    let fmt = fmt_in as fn(&Path, &[&str]) -> Output;
+    let lint = "lint";
+    let fmt = "fmt";
     for (run, config, named) in [
         (
             lint,
@@ -2244,7 +2208,7 @@ fn an_astli_toml_a_command_cannot_read_is_refused_with_its_path() {
         fixture.file("astli.toml", config);
         fixture.file("tiny.sv", TINY);
 
-        let output = run(fixture.path(), &["tiny.sv"]);
+        let output = driver(&fixture).args([run, "tiny.sv"]);
 
         assert!(!output.status.success(), "{config}");
         let said = stderr(&output);
@@ -2257,9 +2221,10 @@ fn an_astli_toml_a_command_cannot_read_is_refused_with_its_path() {
 
 #[test]
 fn the_command_spec_builds() {
+    let fixture = Fixture::new("the-command-spec-builds");
     // The site's command reference is generated from it, and building it is
     // where two flags answering to one name are found.
-    let output = astli(["__usage_spec__"]);
+    let output = driver(&fixture).args(["__usage_spec__"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).contains("lint"));
 }
@@ -2275,7 +2240,7 @@ fn lint_defines_with_d_as_check_does() {
         let mut all = vec!["lint", "--allow", "suspicious", "--allow", "lowrisc"];
         all.extend(args);
         all.push(path.to_str().unwrap());
-        astli(all)
+        driver(&fixture).args(all)
     };
     let output = undriven(&["--deny", "undriven-signal"]);
     assert!(
@@ -2288,17 +2253,11 @@ fn lint_defines_with_d_as_check_does() {
     assert!(output.status.success(), "{}", stderr(&output));
 }
 
-/// Runs `astli` in `dir` with `args`.
 /// What a run said on stderr, with `fixture`'s directory written `<dir>`
 /// and `/` between the parts of a path, as on every system.
 fn said_in(fixture: &Fixture, output: &Output) -> String {
     let dir = fixture.path().to_string_lossy().into_owned();
     stderr(output).replace(&dir, "<dir>").replace('\\', "/")
-}
-
-fn astli_in(dir: &Path, args: &[&str]) -> Output {
-    let own = unowned();
-    driver(&own).dir(dir).args(args)
 }
 
 /// A package with a unit, a header it includes by suffix, and a testbench.
@@ -2320,7 +2279,7 @@ fn files_with_nothing_named_reads_the_package() {
     let fixture = Fixture::new("discover-files");
     package(&fixture);
 
-    let output = astli_in(fixture.path(), &["files", "--top", "tb_core"]);
+    let output = driver(&fixture).args(["files", "--top", "tb_core"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     // Each path is as the current directory names it, which differs from the
@@ -2345,10 +2304,7 @@ fn files_names_the_directory_of_a_header_beside_its_file() {
     let fixture = Fixture::new("files-include-beside");
     include_beside(&fixture);
 
-    let output = astli_in(
-        fixture.path(),
-        &["files", "--top", "tb", "--emit", "incdirs"],
-    );
+    let output = driver(&fixture).args(["files", "--top", "tb", "--emit", "incdirs"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     // Found by suffix within the package, since no include directory holds
@@ -2389,7 +2345,7 @@ fn files_with_nothing_named_orders_the_package() {
     );
     fixture.file("rtl/z_pkg.sv", "package z_pkg;\nendpackage\n");
 
-    let output = astli_in(fixture.path(), &["files", "--emit", "files"]);
+    let output = driver(&fixture).args(["files", "--emit", "files"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let listed = stdout(&output);
@@ -2413,8 +2369,8 @@ fn check_with_nothing_named_checks_the_package() {
         "module tb_broken;\n  gone u ();\nendmodule\n",
     );
 
-    let output = astli_in(fixture.path(), &["check", "--diag", "short"]);
-    let full = astli_in(fixture.path(), &["check"]);
+    let output = driver(&fixture).args(["check", "--diag", "short"]);
+    let full = driver(&fixture).args(["check"]);
 
     assert!(!output.status.success());
     assert!(
@@ -2439,12 +2395,9 @@ fn check_with_a_top_reports_only_the_files_it_reaches() {
         "module tb_broken;\n  gone u ();\n  )\nendmodule\n",
     );
 
-    let core = astli_in(fixture.path(), &["check", "--top", "tb_core"]);
-    let broken = astli_in(
-        fixture.path(),
-        &["check", "--top", "tb_broken", "--diag", "short"],
-    );
-    let all = astli_in(fixture.path(), &["check", "--diag", "short"]);
+    let core = driver(&fixture).args(["check", "--top", "tb_core"]);
+    let broken = driver(&fixture).args(["check", "--top", "tb_broken", "--diag", "short"]);
+    let all = driver(&fixture).args(["check", "--diag", "short"]);
 
     // Neither what `tb_broken` instantiates nor what it fails to parse is
     // `tb_core`'s.
@@ -2478,9 +2431,15 @@ fn check_with_a_top_refuses_what_files_refuses_in_a_dependency() {
     );
     let root = fixture.path().join("root");
 
-    let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
-    let check = astli_with_cache(&fixture, &root, &["check", "--top", "top"]);
-    let without = astli_with_cache(&fixture, &root, &["check"]);
+    let files = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--top", "top"]);
+    let check = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["check", "--top", "top"]);
+    let without = driver(&fixture).dir(&root).cache().args(["check"]);
 
     for output in [&files, &check] {
         assert!(!output.status.success());
@@ -2513,9 +2472,15 @@ fn check_with_a_top_refuses_an_include_a_dependency_cannot_resolve() {
     );
     let root = fixture.path().join("root");
 
-    let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
-    let check = astli_with_cache(&fixture, &root, &["check", "--top", "top"]);
-    let without = astli_with_cache(&fixture, &root, &["check"]);
+    let files = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--top", "top"]);
+    let check = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["check", "--top", "top"]);
+    let without = driver(&fixture).dir(&root).cache().args(["check"]);
 
     // The list would lack the header, so neither passes.
     for output in [&files, &check] {
@@ -2563,12 +2528,12 @@ fn check_reports_a_dependency_on_disk_as_the_roots_own() {
             .chain(args)
             .copied()
             .collect();
-        astli_with_cache(&fixture, &root, &args)
+        driver(&fixture).dir(&root).cache().args(&args)
     };
 
     let top = check(&["--top", "top"]);
     let without = check(&[]);
-    let lint = astli_with_cache(&fixture, &root, &["lint"]);
+    let lint = driver(&fixture).dir(&root).cache().args(["lint"]);
 
     // Only a dependent builds `uart` with the value it fails under, so its
     // run is the one to tell, and a file no top reaches is not told.
@@ -2603,8 +2568,14 @@ fn files_notes_a_bind_from_a_dependency_without_a_manifest() {
     );
     let root = fixture.path().join("root");
 
-    let files = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
-    let check = astli_with_cache(&fixture, &root, &["check", "--top", "top"]);
+    let files = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--top", "top"]);
+    let check = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["check", "--top", "top"]);
 
     for output in [&files, &check] {
         assert!(output.status.success(), "{}", stderr(output));
@@ -2623,7 +2594,10 @@ fn files_notes_a_bind_from_a_dependency_without_a_manifest() {
         "root/astli.toml",
         "[dependencies]\nip = { path = '../ip' }\n\n[described.ip]\nexclude = ['formal/**']\n",
     );
-    let described = astli_with_cache(&fixture, &root, &["files", "--top", "top"]);
+    let described = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--top", "top"]);
     assert!(described.status.success(), "{}", stderr(&described));
     assert!(
         !stderr(&described).contains("binds into"),
@@ -2666,17 +2640,18 @@ fn files_warns_where_the_list_finds_another_header_than_check() {
     fixture.file("ip/include/defs.svh", "`define W 4\n");
     let root = fixture.path().join("root");
 
-    let files = astli_with_cache(
-        &fixture,
-        &root,
-        &["files", "--top", "top", "--diag", "short"],
-    );
-    let check = astli_with_cache(
-        &fixture,
-        &root,
-        &["check", "--top", "top", "--diag", "short"],
-    );
-    let whole = astli_with_cache(&fixture, &root, &["check", "--diag", "short"]);
+    let files = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--top", "top", "--diag", "short"]);
+    let check = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["check", "--top", "top", "--diag", "short"]);
+    let whole = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["check", "--diag", "short"]);
 
     // Each package found its own, but the list searches the root's first
     // for both, and the check of the tops warns of the list `files` writes,
@@ -2723,7 +2698,7 @@ fn verilator_build_and_test_warn_once_of_each_list() {
     let root = fixture.path().join("root");
 
     for args in [&["build", "--top", "tb_top[N=1]"][..], &["test"]] {
-        let output = astli_with_cache(&fixture, &root, args);
+        let output = driver(&fixture).dir(&root).cache().args(args);
         assert!(output.status.success(), "{args:?}: {}", stderr(&output));
         let said = stderr(&output).replace('\\', "/");
         assert!(
@@ -2753,8 +2728,8 @@ fn a_top_table_says_what_its_top_needs_defined() {
     let fixture = Fixture::new("top-table");
     needs_a_define(&fixture, "[top.tb_chip]\ndefines = { MY_FEATURE = true }\n");
 
-    let check = astli_in(fixture.path(), &["check", "--top", "tb_chip"]);
-    let files = astli_in(fixture.path(), &["files", "--top", "tb_chip"]);
+    let check = driver(&fixture).args(["check", "--top", "tb_chip"]);
+    let files = driver(&fixture).args(["files", "--top", "tb_chip"]);
 
     assert!(check.status.success(), "{}", stderr(&check));
     // A tool given the list builds what `check` checked.
@@ -2773,7 +2748,7 @@ fn a_top_table_can_name_the_module_it_builds() {
         "[top.chip]\ntop = 'tb_chip'\ndefines = { MY_FEATURE = true }\n",
     );
 
-    let output = astli_in(fixture.path(), &["check", "--top", "chip"]);
+    let output = driver(&fixture).args(["check", "--top", "chip"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
 }
@@ -2787,7 +2762,7 @@ fn a_top_table_named_as_another_module_is_refused() {
     );
     fixture.file("rtl/chip.sv", "module chip;\nendmodule\n");
 
-    let output = astli_in(fixture.path(), &["check", "--top", "chip"]);
+    let output = driver(&fixture).args(["check", "--top", "chip"]);
 
     assert!(!output.status.success());
     assert!(
@@ -2802,8 +2777,8 @@ fn without_a_top_the_only_table_is_the_default() {
     let fixture = Fixture::new("top-table-only");
     needs_a_define(&fixture, "[top.tb_chip]\ndefines = { MY_FEATURE = true }\n");
 
-    let check = astli_in(fixture.path(), &["check"]);
-    let files = astli_in(fixture.path(), &["files"]);
+    let check = driver(&fixture).args(["check"]);
+    let files = driver(&fixture).args(["files"]);
 
     assert!(check.status.success(), "{}", stderr(&check));
     assert!(
@@ -2833,17 +2808,17 @@ fn without_a_top_check_and_lint_cover_every_table_and_the_rest_need_one() {
         "`ifndef W\n`define W 4\n`endif\nmodule shared;\n  logic [`W-1:0] unread;\n  missing u_missing ();\nendmodule\n",
     );
 
-    let check = astli_in(fixture.path(), &["check", "--diag", "short"]);
-    let lint = lint_in(fixture.path(), &["--diag", "short"]);
-    let files = astli_in(fixture.path(), &["files"]);
-    let build = astli_in(fixture.path(), &["build"]);
-    let candidates = astli_in(fixture.path(), &["files", "--emit", "tops"]);
+    let check = driver(&fixture).args(["check", "--diag", "short"]);
+    let lint = driver(&fixture).args(["lint", "--diag", "short"]);
+    let files = driver(&fixture).args(["files"]);
+    let build = driver(&fixture).args(["build"]);
+    let candidates = driver(&fixture).args(["files", "--emit", "tops"]);
     fixture.file(
         "astli.toml",
         &format!("[package]\ndefault-top = 'tb_chip'\n\n{tables}"),
     );
-    let defaulted = astli_in(fixture.path(), &["files"]);
-    let defaulted_check = astli_in(fixture.path(), &["check", "--diag", "short"]);
+    let defaulted = driver(&fixture).args(["files"]);
+    let defaulted_check = driver(&fixture).args(["check", "--diag", "short"]);
 
     // Each table under its own defines, and what both find told once.
     assert!(!check.status.success());
@@ -2911,7 +2886,7 @@ fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
     let check = |args: &[&str]| {
         let mut all = vec!["check", "--diag", "short"];
         all.extend(args);
-        astli_in(fixture.path(), &all)
+        driver(&fixture).args(&all)
     };
 
     let plain = check(&[]);
@@ -2925,7 +2900,7 @@ fn check_tests_covers_every_point_of_each_test_and_a_point_is_a_top() {
     let swept = check(&["--tests", "-G", "Depth=4"]);
     let point_swept = check(&["--top", "tb_fifo[Depth=1]", "-G", "Depth=4"]);
     let undeclared = check(&["--tests", "-G", "N=1"]);
-    let files = astli_in(fixture.path(), &["files", "--top", "tb_fifo[Depth=16]"]);
+    let files = driver(&fixture).args(["files", "--top", "tb_fifo[Depth=16]"]);
 
     // Without `--tests`, a test is a module, and the package is checked
     // whole at its defaults.
@@ -3039,7 +3014,7 @@ fn build_needs_a_top() {
     fixture.file("astli.toml", "");
     fixture.file("rtl/core.sv", "module core;\nendmodule\n");
 
-    let output = astli_in(fixture.path(), &["build"]);
+    let output = driver(&fixture).args(["build"]);
 
     assert!(!output.status.success());
     assert!(
@@ -3054,7 +3029,7 @@ fn verilator_build_writes_the_file_list_and_the_executable() {
     let fixture = Fixture::new("verilator-build");
     adder(&fixture);
 
-    let output = astli_in(fixture.path(), &["build"]);
+    let output = driver(&fixture).args(["build"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).is_empty(), "{}", stdout(&output));
@@ -3085,7 +3060,7 @@ fn verilator_build_stops_at_what_check_finds() {
     let tb = std::fs::read_to_string(fixture.path().join("tb/tb.sv")).expect("the testbench");
     fixture.file("tb/tb.sv", &tb.replace("adder #", "addr #"));
 
-    let output = astli_in(fixture.path(), &["build"]);
+    let output = driver(&fixture).args(["build"]);
 
     assert!(!output.status.success());
     assert!(stderr(&output).contains("`addr`"), "{}", stderr(&output));
@@ -3105,7 +3080,7 @@ fn verilator_build_fails_on_an_elaboration_error() {
         ),
     );
 
-    let output = astli_in(fixture.path(), &["build"]);
+    let output = driver(&fixture).args(["build"]);
 
     assert!(!output.status.success());
     let said = stderr(&output);
@@ -3119,13 +3094,13 @@ fn verilator_build_is_fresh_until_what_it_reads_changes() {
     let fixture = Fixture::new("verilator-build-fresh");
     adder(&fixture);
 
-    let first = astli_in(fixture.path(), &["build"]);
-    let again = astli_in(fixture.path(), &["build", "-j", "2"]);
+    let first = driver(&fixture).args(["build"]);
+    let again = driver(&fixture).args(["build", "-j", "2"]);
     fixture.file("include/sum.svh", "`define SUM(a, b) (b + a)\n");
-    let header = astli_in(fixture.path(), &["build"]);
-    let define = astli_in(fixture.path(), &["build", "-D", "EXTRA"]);
-    let param = astli_in(fixture.path(), &["build", "-G", "B=50"]);
-    let trace = astli_in(fixture.path(), &["build", "-G", "B=50", "--trace"]);
+    let header = driver(&fixture).args(["build"]);
+    let define = driver(&fixture).args(["build", "-D", "EXTRA"]);
+    let param = driver(&fixture).args(["build", "-G", "B=50"]);
+    let trace = driver(&fixture).args(["build", "-G", "B=50", "--trace"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert!(
@@ -3162,7 +3137,7 @@ fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
     let fixture = Fixture::new("verilator-include-beside");
     include_beside(&fixture);
 
-    let output = astli_in(fixture.path(), &["run"]);
+    let output = driver(&fixture).args(["run"]);
     // As though the last build ended just now: what Verilator rewrites is
     // then no newer than the objects to a Make that compares whole seconds.
     let ahead = std::time::SystemTime::now() + std::time::Duration::from_millis(900);
@@ -3174,7 +3149,7 @@ fn verilator_run_finds_a_header_beside_the_file_that_includes_it() {
         file.unwrap().set_modified(ahead).unwrap();
     }
     fixture.file("tb/defs.svh", "`define VAL 8\n");
-    let changed = astli_in(fixture.path(), &["run"]);
+    let changed = driver(&fixture).args(["run"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(stdout(&output).contains("val 7"), "{}", stdout(&output));
@@ -3204,9 +3179,13 @@ fn verilator_reads_a_file_a_profile_names_from_the_manifest_and_rebuilds_when_it
 
     // From a directory below the manifest, which the path is not relative
     // to.
-    let first = astli_in(&fixture.path().join("tb"), &["run"]);
+    let first = driver(&fixture)
+        .dir(fixture.path().join("tb"))
+        .args(["run"]);
     fixture.file("model/model.cc", "extern \"C\" int f() { return 2; }\n");
-    let changed = astli_in(&fixture.path().join("tb"), &["run"]);
+    let changed = driver(&fixture)
+        .dir(fixture.path().join("tb"))
+        .args(["run"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert!(stdout(&first).contains("f 1"), "{}", stdout(&first));
@@ -3246,11 +3225,8 @@ fn verilator_run_passes_what_follows_and_exits_as_the_simulation_does() {
          endmodule\n",
     );
 
-    let passed = astli_in(fixture.path(), &["run", "--", "+N=3", "+define+X"]);
-    let failed = astli_in(
-        fixture.path(),
-        &["run", "--", "+N=9", "+verilator+rand+reset+0"],
-    );
+    let passed = driver(&fixture).args(["run", "--", "+N=3", "+define+X"]);
+    let failed = driver(&fixture).args(["run", "--", "+N=9", "+verilator+rand+reset+0"]);
 
     assert!(passed.status.success(), "{}", stderr(&passed));
     // A filelist's `+define+` after `--` is the simulation's plusarg.
@@ -3341,12 +3317,9 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     );
     let builds = fixture.path().join(".astli/build/verilator/dev/bench");
 
-    let all = astli_in(fixture.path(), &["test"]);
-    let seeded = astli_in(
-        fixture.path(),
-        &["test", "--seed", "1234", "--nocapture", "pass"],
-    );
-    let built = astli_in(fixture.path(), &["test", "--no-run"]);
+    let all = driver(&fixture).args(["test"]);
+    let seeded = driver(&fixture).args(["test", "--seed", "1234", "--nocapture", "pass"]);
+    let built = driver(&fixture).args(["test", "--no-run"]);
 
     assert!(!all.status.success());
     let said = said_in(&fixture, &all);
@@ -3423,20 +3396,17 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
     // define the failure needs. A shell reads the command back as the
     // words it repeats; running it would build with waveforms, which a
     // simulator's headers may not allow.
-    let args = astli_in(
-        fixture.path(),
-        &[
-            "test",
-            "--seed",
-            "7",
-            "-D",
-            "STOP=(2*2)",
-            "args",
-            "--",
-            "+BREAK",
-            "+a b",
-        ],
-    );
+    let args = driver(&fixture).args([
+        "test",
+        "--seed",
+        "7",
+        "-D",
+        "STOP=(2*2)",
+        "args",
+        "--",
+        "+BREAK",
+        "+a b",
+    ]);
     assert!(!args.status.success());
     let said = said_in(&fixture, &args);
     assert!(said.contains("`tb_args` failed"), "{said}");
@@ -3466,8 +3436,8 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
 
     // Three runs from one build, each named by its seed, each in its own
     // directory.
-    let seeds = astli_in(fixture.path(), &["test", "--seeds", "3", "pass"]);
-    let swept = astli_in(fixture.path(), &["test", "--seeds", "2", "sweep"]);
+    let seeds = driver(&fixture).args(["test", "--seeds", "3", "pass"]);
+    let swept = driver(&fixture).args(["test", "--seeds", "2", "sweep"]);
     assert!(seeds.status.success(), "{}", stderr(&seeds));
     let said = stderr(&seeds);
     assert!(!said.contains("Building"), "{said}");
@@ -3478,7 +3448,7 @@ fn verilator_test_runs_each_test_on_its_own_and_reports_each_failure() {
         .count();
     assert_eq!(runs, 5);
     // A seed the simulator cannot take is refused before anything runs.
-    let large = astli_in(fixture.path(), &["test", "--seed", "2147483648", "pass"]);
+    let large = driver(&fixture).args(["test", "--seed", "2147483648", "pass"]);
     assert!(!large.status.success());
     let said = stderr(&large);
     assert!(
@@ -3547,10 +3517,7 @@ fn verilator_test_passes_a_test_that_fails_with_the_text_it_should() {
     // A run past its timeout fails whatever it wrote.
     test("tb_hangs", "    $display(\"[OVF]\");\n    forever #1;\n");
 
-    let all = astli_in(
-        fixture.path(),
-        &["test", "--seeds", "2", "--junit", "report.xml"],
-    );
+    let all = driver(&fixture).args(["test", "--seeds", "2", "--junit", "report.xml"]);
 
     assert!(!all.status.success());
     let said = said_in(&fixture, &all);
@@ -3601,10 +3568,7 @@ fn verilator_test_runs_every_members_tests_in_one_summary() {
     );
     let report = fixture.path().join("report.xml");
 
-    let output = astli_in(
-        fixture.path(),
-        &["test", "--junit", report.to_str().unwrap()],
-    );
+    let output = driver(&fixture).args(["test", "--junit", report.to_str().unwrap()]);
 
     assert!(!output.status.success());
     let said = said_in(&fixture, &output);
@@ -3688,8 +3652,8 @@ fn clean_deletes_the_builds_and_keeps_the_patches() {
     fixture.file(".astli/patch.toml", "[patch]\n");
     fixture.file(".astli/build/verilator/dev/clean/tb/Vtb", "");
 
-    let output = astli_in(fixture.path(), &["clean"]);
-    let again = astli_in(fixture.path(), &["clean"]);
+    let output = driver(&fixture).args(["clean"]);
+    let again = driver(&fixture).args(["clean"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(!fixture.path().join(".astli/build").exists());
@@ -3711,10 +3675,7 @@ fn tops_defining_a_macro_two_ways_are_refused() {
     );
     fixture.file("tb/tb_other.sv", "module tb_other;\nendmodule\n");
 
-    let output = astli_in(
-        fixture.path(),
-        &["check", "--top", "tb_chip", "--top", "tb_other"],
-    );
+    let output = driver(&fixture).args(["check", "--top", "tb_chip", "--top", "tb_other"]);
 
     assert!(!output.status.success());
     assert!(
@@ -3757,7 +3718,7 @@ fn cuts(fixture: &Fixture) {
 fn a_top_table_sets_its_tops_parameters() {
     let fixture = Fixture::new("top-table-params");
     cuts(&fixture);
-    let check = |args: &[&str]| astli_in(fixture.path(), &[&["check"], args].concat());
+    let check = |args: &[&str]| driver(&fixture).args([&["check"], args].concat());
 
     let none = check(&["--top", "tb_cut_0"]);
     let three = check(&["--top", "tb_cut_3"]);
@@ -3766,20 +3727,17 @@ fn a_top_table_sets_its_tops_parameters() {
     let flagged = check(&["--top", "tb_cut_0", "-G", "NumCuts=2"]);
     // A flag one top declares is that top's.
     let one_declares = check(&["--top", "tb_cut_3", "--top", "cut", "-G", "N=2"]);
-    let lint = lint_in(fixture.path(), &["--top", "tb_cut_3"]);
-    let tree = astli_in(
-        fixture.path(),
-        &[
-            "elab",
-            "tb/tb_cut.sv",
-            "--top",
-            "tb_cut",
-            "-G",
-            "NumCuts=-1",
-            "-G",
-            "Name=\"x\"",
-        ],
-    );
+    let lint = driver(&fixture).args(["lint", "--top", "tb_cut_3"]);
+    let tree = driver(&fixture).args([
+        "elab",
+        "tb/tb_cut.sv",
+        "--top",
+        "tb_cut",
+        "-G",
+        "NumCuts=-1",
+        "-G",
+        "Name=\"x\"",
+    ]);
 
     assert!(!none.status.success());
     assert!(stderr(&none).contains("no cuts"), "{}", stderr(&none));
@@ -3835,7 +3793,7 @@ fn elab_writes_the_design_as_json() {
          endmodule\n",
     );
 
-    let output = astli_in(fixture.path(), &["elab", "d.sv", "--top", "top", "--json"]);
+    let output = driver(&fixture).args(["elab", "d.sv", "--top", "top", "--json"]);
 
     // The design is written whatever the files hold, and that it may
     // change is said beside it.
@@ -4151,7 +4109,7 @@ fn a_parameter_set_as_a_top_cannot_take_it_is_refused() {
         ),
         ("NumCuts", "`-G NumCuts` sets no value"),
     ] {
-        let output = astli_in(fixture.path(), &["check", "--top", "tb_cut_3", "-G", flag]);
+        let output = driver(&fixture).args(["check", "--top", "tb_cut_3", "-G", flag]);
 
         assert!(!output.status.success(), "{flag}");
         assert!(
@@ -4161,17 +4119,15 @@ fn a_parameter_set_as_a_top_cannot_take_it_is_refused() {
         );
     }
     // Of several tops, one none declares is a typo.
-    let none_declares = astli_in(
-        fixture.path(),
-        &["check", "--top", "tb_cut_3", "--top", "cut", "-G", "Nope=1"],
-    );
+    let none_declares =
+        driver(&fixture).args(["check", "--top", "tb_cut_3", "--top", "cut", "-G", "Nope=1"]);
     assert!(!none_declares.status.success());
     assert!(
         stderr(&none_declares).contains("`-G Nope=1` sets a parameter no top declares"),
         "{}",
         stderr(&none_declares)
     );
-    let no_top = astli_in(fixture.path(), &["lint", "tb/tb_cut.sv", "-G", "NumCuts=1"]);
+    let no_top = driver(&fixture).args(["lint", "tb/tb_cut.sv", "-G", "NumCuts=1"]);
     assert!(!no_top.status.success());
     assert!(
         stderr(&no_top)
@@ -4196,7 +4152,7 @@ fn a_dependency_keeps_its_tops_to_itself() {
     fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
     let root = fixture.path().join("root");
 
-    let output = astli_with_cache(&fixture, &root, &["files"]);
+    let output = driver(&fixture).dir(&root).cache().args(["files"]);
 
     // The root has no table, so it builds every file, and defines nothing.
     assert!(output.status.success(), "{}", stderr(&output));
@@ -4224,11 +4180,10 @@ fn files_lists_each_package_together_after_its_dependencies() {
     fixture.file("cells/cells.sv", "module cells;\nendmodule\n");
     let root = fixture.path().join("root");
     let files = |args: &[&str]| -> Vec<String> {
-        let output = astli_with_cache(
-            &fixture,
-            &root,
-            &[&["files", "--emit", "files"], args].concat(),
-        );
+        let output = driver(&fixture)
+            .dir(&root)
+            .cache()
+            .args([&["files", "--emit", "files"], args].concat());
         assert!(output.status.success(), "{}", stderr(&output));
         let listed = stdout(&output);
         let name = |line: &str| Path::new(line).file_name().unwrap_or_default().to_owned();
@@ -4254,7 +4209,7 @@ fn fmt_with_nothing_named_formats_headers_too() {
     let fixture = Fixture::new("discover-fmt");
     package(&fixture);
 
-    let output = astli_in(fixture.path(), &["fmt", "--check"]);
+    let output = driver(&fixture).args(["fmt", "--check"]);
 
     assert!(!output.status.success());
     let listed = stdout(&output);
@@ -4272,10 +4227,7 @@ fn features_select_the_packages_files() {
     fixture.file("astli.toml", "[features]\nvip = { sources = [\"vip\"] }\n");
     fixture.file("vip/core_vip.sv", "module core_vip;\nendmodule\n");
     let files = |args: &[&str]| -> Vec<String> {
-        let output = astli_in(
-            fixture.path(),
-            &[&["files", "--emit", "files"], args].concat(),
-        );
+        let output = driver(&fixture).args([&["files", "--emit", "files"], args].concat());
         assert!(output.status.success(), "{}", stderr(&output));
         let listed = stdout(&output);
         let name = |line: &str| Path::new(line).file_name().unwrap_or_default().to_owned();
@@ -4289,8 +4241,8 @@ fn features_select_the_packages_files() {
     assert_eq!(files(&["--no-features"]), ["core.sv", "tb_core.sv"]);
     assert_eq!(files(&["--no-features", "--features", "vip"]).len(), 3);
 
-    let unknown = astli_in(fixture.path(), &["files", "--features", "nope"]);
-    let named = astli_in(fixture.path(), &["files", "--no-features", "rtl/core.sv"]);
+    let unknown = driver(&fixture).args(["files", "--features", "nope"]);
+    let named = driver(&fixture).args(["files", "--no-features", "rtl/core.sv"]);
     assert!(
         stderr(&unknown).contains("enables `nope`"),
         "{}",
@@ -4308,7 +4260,7 @@ fn nothing_named_and_no_package_is_refused() {
     let fixture = Fixture::new("discover-none");
     fixture.file("lonely.sv", "module lonely;\nendmodule\n");
 
-    let output = astli_in(fixture.path(), &["check"]);
+    let output = driver(&fixture).args(["check"]);
 
     assert!(!output.status.success());
     assert!(
@@ -4363,13 +4315,10 @@ fn update_writes_the_lock_and_moves_only_what_it_names() {
     );
     let root = fixture.path().join("root");
     let update = |args: &[&str]| {
-        let output = Command::new(env!("CARGO_BIN_EXE_astli"))
-            .arg("update")
-            .args(args)
-            .current_dir(&root)
-            .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
-            .output()
-            .expect("the driver runs");
+        let output = driver(&fixture)
+            .dir(&root)
+            .cache()
+            .args(["update"].iter().chain(args));
         assert!(output.status.success(), "{}", stderr(&output));
         said_in(&fixture, &output)
     };
@@ -4412,7 +4361,7 @@ fn update_refuses_a_name_the_lock_does_not_hold() {
     fixture.file("astli.toml", "");
     fixture.file("astli.lock", "version = 1\n");
 
-    let output = astli_in(fixture.path(), &["update", "axi"]);
+    let output = driver(&fixture).args(["update", "axi"]);
 
     assert!(!output.status.success());
     assert!(
@@ -4441,14 +4390,6 @@ fn repository(fixture: &Fixture, name: &str) -> String {
     dir.display().to_string()
 }
 
-/// `astli files` in `dir`, with the cache under `fixture`.
-fn files_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    driver(fixture)
-        .dir(dir)
-        .cache()
-        .args(["files"].iter().chain(args))
-}
-
 #[test]
 fn a_package_command_reads_its_dependencies_and_writes_the_lock() {
     let fixture = Fixture::new("package-lock");
@@ -4467,10 +4408,16 @@ fn a_package_command_reads_its_dependencies_and_writes_the_lock() {
     fixture.file("root/vendor/ip/ip.sv", "module ip;\nendmodule\n");
     let root = fixture.path().join("root");
 
-    let first = files_with_cache(&fixture, &root, &[]);
-    let locked = files_with_cache(&fixture, &root, &["--locked"]);
+    let first = driver(&fixture).dir(&root).cache().args(["files"]);
+    let locked = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--locked"]);
     fixture.file("root/astli.toml", &manifest("2"));
-    let refused = files_with_cache(&fixture, &root, &["--locked"]);
+    let refused = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--locked"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     // Compared with `/`, which Windows prints as `\`.
@@ -4508,8 +4455,11 @@ fn a_package_only_bender_manages_gets_no_lock_unless_asked() {
     let root = fixture.path().join("root");
     git(&root, &["init", "--quiet", "--initial-branch=main"]);
 
-    let run = files_with_cache(&fixture, &root, &[]);
-    let refused = files_with_cache(&fixture, &root, &["--locked"]);
+    let run = driver(&fixture).dir(&root).cache().args(["files"]);
+    let refused = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--locked"]);
 
     assert!(run.status.success(), "{}", stderr(&run));
     assert!(stdout(&run).contains("cells.sv"), "{}", stdout(&run));
@@ -4535,8 +4485,11 @@ fn a_feature_brings_in_an_optional_dependency_and_dev_dependencies_are_the_roots
     fixture.file("verif/verif.sv", "module verif;\nendmodule\n");
     let root = fixture.path().join("root");
 
-    let all = files_with_cache(&fixture, &root, &[]);
-    let none = files_with_cache(&fixture, &root, &["--no-features"]);
+    let all = driver(&fixture).dir(&root).cache().args(["files"]);
+    let none = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--no-features"]);
 
     assert!(all.status.success(), "{}", stderr(&all));
     assert!(none.status.success(), "{}", stderr(&none));
@@ -4562,12 +4515,7 @@ fn after_fetch_a_run_needs_no_upstream() {
     );
     let root = fixture.path().join("root");
 
-    let fetched = Command::new(env!("CARGO_BIN_EXE_astli"))
-        .arg("fetch")
-        .current_dir(&root)
-        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
-        .output()
-        .expect("the driver runs");
+    let fetched = driver(&fixture).dir(&root).cache().args(["fetch"]);
     // Locked elsewhere at a release this cache never fetched.
     let upstream = fixture.path().join("cells");
     git(
@@ -4579,13 +4527,14 @@ fn after_fetch_a_run_needs_no_upstream() {
     let lock = root.join("astli.lock");
     let fetched_lock = std::fs::read_to_string(&lock).expect("a lock");
     let run = |cache: &str, args: &[&str], env: &[(&str, &str)]| {
-        Command::new(env!("CARGO_BIN_EXE_astli"))
+        (env.iter())
+            .fold(
+                driver(&fixture)
+                    .dir(&root)
+                    .env("ASTLI_CACHE_DIR", fixture.path().join(cache)),
+                |driver, (name, value)| driver.env(name, value),
+            )
             .args(args)
-            .current_dir(&root)
-            .env("ASTLI_CACHE_DIR", fixture.path().join(cache))
-            .envs(env.iter().copied())
-            .output()
-            .expect("the driver runs")
     };
     let elsewhere = run("elsewhere", &["update"], &[]);
     let newer_lock = std::fs::read_to_string(&lock).expect("a lock");
@@ -4600,7 +4549,10 @@ fn after_fetch_a_run_needs_no_upstream() {
     );
     let moved = run("cache", &["files"], &[("ASTLI_OFFLINE", "1")]);
     let moved_lock = std::fs::read_to_string(&lock).expect("a lock");
-    let offline = files_with_cache(&fixture, &root, &["--locked", "--offline"]);
+    let offline = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--locked", "--offline"]);
     let unmirrored = [
         run("empty", &["files", "--locked", "--offline"], &[]),
         run("empty", &["files", "--offline"], &[]),
@@ -4660,19 +4612,17 @@ fn a_dependency_asking_for_lfs_files_is_refused_without_git_lfs() {
     fixture.file("root/astli.toml", &manifest(""));
     fixture.file("root/top.sv", "module top;\nendmodule\n");
     let root = fixture.path().join("root");
-    let fetched = astli_with_cache(&fixture, &root, &["fetch"]);
+    let fetched = driver(&fixture).dir(&root).cache().args(["fetch"]);
     fixture.file("root/astli.toml", &manifest(", lfs = true"));
     // A `PATH` that finds no program, `git-lfs` among them.
     let nowhere = fixture.path().join("nowhere");
     std::fs::create_dir_all(&nowhere).expect("a directory");
 
-    let refused = Command::new(env!("CARGO_BIN_EXE_astli"))
-        .args(["files", "--offline"])
-        .current_dir(&root)
-        .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
+    let refused = driver(&fixture)
+        .dir(&root)
+        .cache()
         .env("PATH", &nowhere)
-        .output()
-        .expect("the driver runs");
+        .args(["files", "--offline"]);
 
     assert!(fetched.status.success(), "{}", stderr(&fetched));
     assert!(!refused.status.success());
@@ -4698,9 +4648,9 @@ fn a_git_lfs_pointer_is_refused_saying_what_fetches_it() {
     let root = fixture.path().join("root");
     git(&root, &["init", "--quiet", "--initial-branch=main"]);
 
-    let dependency = astli_with_cache(&fixture, &root, &["files"]);
+    let dependency = driver(&fixture).dir(&root).cache().args(["files"]);
     fixture.file("root/big.sv", LFS_POINTER);
-    let own = astli_with_cache(&fixture, &root, &["lint", "big.sv"]);
+    let own = driver(&fixture).dir(&root).cache().args(["lint", "big.sv"]);
     // Discovering the package's files reads past one it cannot read, which
     // the check then reports, checking the rest without it. A header is
     // refused as a unit is, by the `include that names it.
@@ -4709,7 +4659,7 @@ fn a_git_lfs_pointer_is_refused_saying_what_fetches_it() {
         "root/top.sv",
         "`include \"big.svh\"\nmodule top;\n  lost u_lost ();\nendmodule\n",
     );
-    let checked = astli_with_cache(&fixture, &root, &["check"]);
+    let checked = driver(&fixture).dir(&root).cache().args(["check"]);
 
     let pointer = "a Git LFS pointer, not the file it stands for, which was never fetched";
     assert!(!dependency.status.success());
@@ -4767,7 +4717,7 @@ fn a_path_of_a_dependency_in_a_submodule_not_checked_out_names_it() {
     );
     let root = fixture.path().join("root");
 
-    let refused = astli_with_cache(&fixture, &root, &["files"]);
+    let refused = driver(&fixture).dir(&root).cache().args(["files"]);
 
     assert!(!refused.status.success());
     assert!(
@@ -4779,11 +4729,6 @@ fn a_path_of_a_dependency_in_a_submodule_not_checked_out_names_it() {
         "{}",
         stderr(&refused)
     );
-}
-
-/// `astli` in `dir` with `args`, the cache under `fixture`.
-fn astli_with_cache(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    driver(fixture).dir(dir).cache().args(args)
 }
 
 /// A root under `fixture` depending on a `cells` repository.
@@ -4805,8 +4750,8 @@ fn path_prints_where_a_dependency_is_checked_out() {
     let fixture = Fixture::new("path");
     let root = depends_on_cells(&fixture);
 
-    let output = astli_with_cache(&fixture, &root, &["path", "cells"]);
-    let unknown = astli_with_cache(&fixture, &root, &["path", "axi"]);
+    let output = driver(&fixture).dir(&root).cache().args(["path", "cells"]);
+    let unknown = driver(&fixture).dir(&root).cache().args(["path", "axi"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let dir = PathBuf::from(stdout(&output).trim_end());
@@ -4854,7 +4799,7 @@ fn tree_lists_what_a_shared_dependency_needs_once() {
     );
     let root = fixture.path().join("root");
 
-    let output = astli_with_cache(&fixture, &root, &["tree", "-q"]);
+    let output = driver(&fixture).dir(&root).cache().args(["tree", "-q"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(
@@ -4894,17 +4839,26 @@ fn a_dependency_without_a_manifest_is_read_as_the_root_describes_it() {
     );
     let root = fixture.path().join("root");
 
-    let files = astli_with_cache(&fixture, &root, &["files", "--emit", "files"]);
-    let quiet = astli_with_cache(&fixture, &root, &["files", "--emit", "files", "-q"]);
-    let tree = astli_with_cache(&fixture, &root, &["tree", "-q"]);
-    let check = astli_with_cache(&fixture, &root, &["check"]);
+    let files = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--emit", "files"]);
+    let quiet = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--emit", "files", "-q"]);
+    let tree = driver(&fixture).dir(&root).cache().args(["tree", "-q"]);
+    let check = driver(&fixture).dir(&root).cache().args(["check"]);
     // Upstream takes the description as its own manifest.
     fixture.file("tcells/astli.toml", &format!("[package]\n{description}"));
     git(&upstream, &["add", "--all"]);
     git(&upstream, &["commit", "--quiet", "--message", "two"]);
     git(&upstream, &["tag", "v1.1.0"]);
-    let updated = astli_with_cache(&fixture, &root, &["update", "-q"]);
-    let after = astli_with_cache(&fixture, &root, &["files", "--emit", "files"]);
+    let updated = driver(&fixture).dir(&root).cache().args(["update", "-q"]);
+    let after = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--emit", "files"]);
 
     assert!(files.status.success(), "{}", stderr(&files));
     let listed = stdout(&files).replace('\\', "/");
@@ -4972,12 +4926,10 @@ fn a_cache_dir_named_through_dot_dot_reads_its_checkouts() {
     );
     let root = fixture.path().join("root");
     let files = |cache: &Path| {
-        Command::new(env!("CARGO_BIN_EXE_astli"))
-            .args(["files", "--emit", "files", "-q"])
-            .current_dir(&root)
+        driver(&fixture)
+            .dir(&root)
             .env("ASTLI_CACHE_DIR", cache)
-            .output()
-            .expect("the driver runs")
+            .args(["files", "--emit", "files", "-q"])
     };
 
     // Checked out the first time, and read from the store the second, the
@@ -5002,8 +4954,8 @@ fn init_names_the_package_after_its_directory_and_writes_once() {
     fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
     let dir = fixture.path().join("ip");
 
-    let first = astli_in(&dir, &["init"]);
-    let again = astli_in(&dir, &["init"]);
+    let first = driver(&fixture).dir(&dir).args(["init"]);
+    let again = driver(&fixture).dir(&dir).args(["init"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert_eq!(stderr(&first), "     Created astli.toml for `ip`\n");
@@ -5033,13 +4985,13 @@ fn init_leaves_the_dependencies_of_a_bender_yml_to_import() {
     );
     let manifest = fixture.path().join("astli.toml");
 
-    let left = astli_in(fixture.path(), &["init"]);
+    let left = driver(&fixture).args(["init"]);
     let named = std::fs::read_to_string(&manifest).expect("a manifest");
-    let copied = astli_in(fixture.path(), &["bender", "import"]);
+    let copied = driver(&fixture).args(["bender", "import"]);
     let into = std::fs::read_to_string(&manifest).expect("a manifest");
-    let again = astli_in(fixture.path(), &["bender", "import"]);
+    let again = driver(&fixture).args(["bender", "import"]);
     std::fs::remove_file(&manifest).expect("the manifest removed");
-    let created = astli_in(fixture.path(), &["bender", "import"]);
+    let created = driver(&fixture).args(["bender", "import"]);
 
     assert!(left.status.success(), "{}", stderr(&left));
     assert!(
@@ -5120,7 +5072,7 @@ fn bender_export_writes_the_bender_yml_astli_toml_says() {
     let fixture = exported("bender-export");
     let soc = fixture.path().join("soc");
 
-    let output = astli_in(&soc, &["bender", "export"]);
+    let output = driver(&fixture).dir(&soc).args(["bender", "export"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(
@@ -5161,7 +5113,7 @@ fn bender_export_lists_a_replacement_before_what_uses_it() {
     );
     fixture.file("soc/src/cell.sv", "module gate;\nendmodule\n");
 
-    let output = astli_in(&soc, &["bender", "export"]);
+    let output = driver(&fixture).dir(&soc).args(["bender", "export"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let written = std::fs::read_to_string(soc.join("Bender.yml")).expect("a Bender.yml");
@@ -5190,12 +5142,18 @@ fn bender_export_check_fails_once_the_package_changes() {
     let fixture = exported("bender-export-check");
     let soc = fixture.path().join("soc");
 
-    let missing = astli_in(&soc, &["bender", "export", "--check"]);
+    let missing = driver(&fixture)
+        .dir(&soc)
+        .args(["bender", "export", "--check"]);
     let unwritten = !soc.join("Bender.yml").exists();
-    let written = astli_in(&soc, &["bender", "export"]);
-    let checked = astli_in(&soc, &["bender", "export", "--check"]);
+    let written = driver(&fixture).dir(&soc).args(["bender", "export"]);
+    let checked = driver(&fixture)
+        .dir(&soc)
+        .args(["bender", "export", "--check"]);
     fixture.file("soc/src/more.sv", "module more;\nendmodule\n");
-    let stale = astli_in(&soc, &["bender", "export", "--check"]);
+    let stale = driver(&fixture)
+        .dir(&soc)
+        .args(["bender", "export", "--check"]);
 
     assert!(!missing.status.success());
     assert!(unwritten);
@@ -5223,24 +5181,24 @@ fn bender_export_refuses_what_bender_would_build_differently() {
         &manifest.replace("features = [\"x\"]", "default-features = false"),
     );
 
-    let defaults = astli_in(&soc, &["bender", "export"]);
+    let defaults = driver(&fixture).dir(&soc).args(["bender", "export"]);
     fixture.file(
         "soc/astli.toml",
         &format!("{manifest}\n[overrides]\ncells = [\"gate\"]\n"),
     );
     fixture.file("soc/src/my_cell.sv", "module gate;\nendmodule\n");
-    let renamed = astli_in(&soc, &["bender", "export"]);
+    let renamed = driver(&fixture).dir(&soc).args(["bender", "export"]);
     std::fs::remove_file(soc.join("src/my_cell.sv")).expect("the replacement removed");
     fixture.file("soc/src/cell.sv", "module gate;\nendmodule\n");
     fixture.file("model/cell.sv", "module other;\nendmodule\n");
-    let clashing = astli_in(&soc, &["bender", "export"]);
+    let clashing = driver(&fixture).dir(&soc).args(["bender", "export"]);
     std::fs::remove_file(fixture.path().join("model/cell.sv")).expect("the clash removed");
     fixture.file("soc/src/soc.svh", "`define SOC\n");
     fixture.file(
         "soc/src/cell.sv",
         "`include \"soc.svh\"\nmodule gate;\nendmodule\n",
     );
-    let including = astli_in(&soc, &["bender", "export"]);
+    let including = driver(&fixture).dir(&soc).args(["bender", "export"]);
 
     assert!(!defaults.status.success());
     assert!(
@@ -5279,7 +5237,7 @@ fn bender_export_refuses_a_root_whose_bender_yml_lists_its_dependencies() {
     fixture.file("Bender.yml", "package:\n  name: soc\n");
     let before = std::fs::read_to_string(fixture.path().join("Bender.yml")).expect("a Bender.yml");
 
-    let output = astli_in(fixture.path(), &["bender", "export"]);
+    let output = driver(&fixture).args(["bender", "export"]);
 
     assert!(!output.status.success());
     assert_eq!(stderr(&output), FROM_BENDER.replace("{who}", "the root"));
@@ -5293,12 +5251,12 @@ fn bender_export_refuses_a_root_whose_bender_yml_lists_its_dependencies() {
 fn a_file_put_into_a_checkout_by_hand_is_refused() {
     let fixture = Fixture::new("stray");
     let root = depends_on_cells(&fixture);
-    let path = astli_with_cache(&fixture, &root, &["path", "cells"]);
+    let path = driver(&fixture).dir(&root).cache().args(["path", "cells"]);
     let dir = PathBuf::from(stdout(&path).trim_end());
 
     std::fs::write(dir.join("generated.sv"), "module generated;\nendmodule\n")
         .expect("a directory of a checkout stays writable");
-    let output = files_with_cache(&fixture, &root, &[]);
+    let output = driver(&fixture).dir(&root).cache().args(["files"]);
 
     assert!(!output.status.success());
     assert!(
@@ -5314,12 +5272,12 @@ fn cache_clean_deletes_the_checkouts_and_a_run_fetches_again() {
     let root = depends_on_cells(&fixture);
     let cache = fixture.path().join("cache");
 
-    let dir = astli_with_cache(&fixture, &root, &["cache", "dir"]);
-    let fetched = astli_with_cache(&fixture, &root, &["fetch"]);
-    let cleaned = astli_with_cache(&fixture, &root, &["cache", "clean"]);
+    let dir = driver(&fixture).dir(&root).cache().args(["cache", "dir"]);
+    let fetched = driver(&fixture).dir(&root).cache().args(["fetch"]);
+    let cleaned = driver(&fixture).dir(&root).cache().args(["cache", "clean"]);
     let gone = !cache.exists();
-    let again = astli_with_cache(&fixture, &root, &["cache", "clean"]);
-    let refetched = files_with_cache(&fixture, &root, &[]);
+    let again = driver(&fixture).dir(&root).cache().args(["cache", "clean"]);
+    let refetched = driver(&fixture).dir(&root).cache().args(["files"]);
 
     assert_eq!(stdout(&dir).trim_end(), cache.display().to_string());
     assert!(fetched.status.success(), "{}", stderr(&fetched));
@@ -5342,17 +5300,23 @@ fn cache_clean_deletes_the_checkouts_and_a_run_fetches_again() {
 fn a_patch_reads_a_dependency_from_a_clone_and_leaves_the_lock_alone() {
     let fixture = Fixture::new("patch");
     let root = depends_on_cells(&fixture);
-    let first = files_with_cache(&fixture, &root, &[]);
+    let first = driver(&fixture).dir(&root).cache().args(["files"]);
     let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
 
-    let patched = astli_with_cache(&fixture, &root, &["patch", "cells"]);
+    let patched = driver(&fixture).dir(&root).cache().args(["patch", "cells"]);
     let clone = root.join(".astli/patch/cells");
     std::fs::write(clone.join("fifo.sv"), "module fifo;\nendmodule\n").expect("a clone to edit");
-    let run = files_with_cache(&fixture, &root, &[]);
-    let locked = files_with_cache(&fixture, &root, &["--locked"]);
-    let update = astli_with_cache(&fixture, &root, &["update"]);
-    let removed = astli_with_cache(&fixture, &root, &["patch", "--remove", "cells"]);
-    let after = files_with_cache(&fixture, &root, &[]);
+    let run = driver(&fixture).dir(&root).cache().args(["files"]);
+    let locked = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--locked"]);
+    let update = driver(&fixture).dir(&root).cache().args(["update"]);
+    let removed = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["patch", "--remove", "cells"]);
+    let after = driver(&fixture).dir(&root).cache().args(["files"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert!(patched.status.success(), "{}", stderr(&patched));
@@ -5422,10 +5386,16 @@ fn a_patch_points_at_a_directory_given() {
         "module vip;\n  gone u ();\nendmodule\n",
     );
 
-    let patched = astli_with_cache(&fixture, &root, &["clone", "cells", "../work/cells"]);
-    let run = files_with_cache(&fixture, &root, &[]);
-    let check = astli_with_cache(&fixture, &root, &["check"]);
-    let unknown = astli_with_cache(&fixture, &root, &["patch", "axi", "../work/cells"]);
+    let patched = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["clone", "cells", "../work/cells"]);
+    let run = driver(&fixture).dir(&root).cache().args(["files"]);
+    let check = driver(&fixture).dir(&root).cache().args(["check"]);
+    let unknown = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["patch", "axi", "../work/cells"]);
 
     assert!(patched.status.success(), "{}", stderr(&patched));
     assert!(stdout(&run).contains("cdc.sv"), "{}", stdout(&run));
@@ -5464,16 +5434,22 @@ fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
     fixture.file("root/top.sv", "module top;\nendmodule\n");
     let root = fixture.path().join("root");
     let clone = root.join(".astli/patch/cells");
-    let first = astli_with_cache(&fixture, &root, &["patch", "cells"]);
+    let first = driver(&fixture).dir(&root).cache().args(["patch", "cells"]);
 
     fixture.file(
         "root/.astli/patch/cells/fifo.sv",
         "module fifo;\nendmodule\n",
     );
-    let dirty = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
+    let dirty = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["snapshot", "cells"]);
     git(&clone, &["add", "--all"]);
     git(&clone, &["commit", "--quiet", "--message", "fifo"]);
-    let unpushed = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
+    let unpushed = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["snapshot", "cells"]);
     git(
         &clone,
         &["push", "--quiet", "origin", "HEAD:refs/heads/fifo"],
@@ -5488,11 +5464,20 @@ fn a_snapshot_requires_the_pushed_commit_of_a_clone() {
         std::fs::set_permissions(&lock, permissions).expect("permissions to change");
     };
     readonly(true);
-    let unwritable = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
+    let unwritable = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["snapshot", "cells"]);
     readonly(false);
     let kept = ["astli.toml", "astli.lock", ".astli/patch.toml"].map(written);
-    let snapshot = astli_with_cache(&fixture, &root, &["snapshot", "cells"]);
-    let after = files_with_cache(&fixture, &root, &["--locked"]);
+    let snapshot = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["snapshot", "cells"]);
+    let after = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["files", "--locked"]);
 
     assert!(first.status.success(), "{}", stderr(&first));
     assert!(
@@ -5585,15 +5570,27 @@ fn a_snapshot_in_a_workspace_requires_the_commit_in_each_member_and_pins_at_its_
         &format!("[package]\nname = 'dev'\n\n[dev-dependencies]\ncells = {{ git = '{cells}', version = '1' }}\n"),
     );
     let member = ws.join("ip/other");
-    let patched = astli_with_cache(&fixture, &member, &["patch", "cells"]);
+    let patched = driver(&fixture)
+        .dir(&member)
+        .cache()
+        .args(["patch", "cells"]);
     let commit = commit_in_clone(&fixture, &ws);
 
-    let bender = astli_with_cache(&fixture, &member, &["snapshot", "cells"]);
+    let bender = driver(&fixture)
+        .dir(&member)
+        .cache()
+        .args(["snapshot", "cells"]);
     let other_after_bender =
         std::fs::read_to_string(member.join("astli.toml")).expect("a manifest");
     std::fs::remove_dir_all(ws.join("ip/legacy")).expect("removed");
-    let snapshot = astli_with_cache(&fixture, &member, &["snapshot", "cells"]);
-    let after = files_with_cache(&fixture, &ws, &["--locked"]);
+    let snapshot = driver(&fixture)
+        .dir(&member)
+        .cache()
+        .args(["snapshot", "cells"]);
+    let after = driver(&fixture)
+        .dir(&ws)
+        .cache()
+        .args(["files", "--locked"]);
 
     assert!(patched.status.success(), "{}", stderr(&patched));
     assert!(!bender.status.success());
@@ -5656,11 +5653,17 @@ fn a_snapshot_of_what_only_a_dependency_requires_goes_to_the_member_whose_design
         axi.display()
     );
     fixture.file("ws/ip/dma/astli.toml", &dma);
-    let patched = astli_with_cache(&fixture, &ws, &["patch", "cells"]);
+    let patched = driver(&fixture).dir(&ws).cache().args(["patch", "cells"]);
     let commit = commit_in_clone(&fixture, &ws);
 
-    let elsewhere = astli_with_cache(&fixture, &ws.join("ip/other"), &["snapshot", "cells"]);
-    let snapshot = astli_with_cache(&fixture, &ws.join("ip/dma"), &["snapshot", "cells"]);
+    let elsewhere = driver(&fixture)
+        .dir(ws.join("ip/other"))
+        .cache()
+        .args(["snapshot", "cells"]);
+    let snapshot = driver(&fixture)
+        .dir(ws.join("ip/dma"))
+        .cache()
+        .args(["snapshot", "cells"]);
 
     assert!(patched.status.success(), "{}", stderr(&patched));
     assert!(!elsewhere.status.success());
@@ -5722,21 +5725,20 @@ fn add_requires_the_highest_version_a_repository_tags_and_locks_it() {
     fixture.file("axi/axi.sv", "module axi;\nendmodule\n");
     let root = fixture.path().join("root");
 
-    let added = astli_with_cache(&fixture, &root, &["add", &url]);
+    let added = driver(&fixture).dir(&root).cache().args(["add", &url]);
     let manifest = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
-    let refused = astli_with_cache(&fixture, &root, &["add", &untagged.display().to_string()]);
-    let tracked = astli_with_cache(
-        &fixture,
-        &root,
-        &[
-            "add",
-            &untagged.display().to_string(),
-            "--rev",
-            "main",
-            "--name",
-            "other",
-        ],
-    );
+    let refused = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["add", &untagged.display().to_string()]);
+    let tracked = driver(&fixture).dir(&root).cache().args([
+        "add",
+        &untagged.display().to_string(),
+        "--rev",
+        "main",
+        "--name",
+        "other",
+    ]);
     let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
 
     assert!(added.status.success(), "{}", stderr(&added));
@@ -5779,7 +5781,10 @@ fn add_names_a_repository_as_its_manifest_does() {
     fixture.file("root/astli.toml", "[dependencies]\n");
     let root = fixture.path().join("root");
 
-    let added = astli_with_cache(&fixture, &root, &["add", &repo.display().to_string()]);
+    let added = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["add", &repo.display().to_string()]);
 
     assert!(added.status.success(), "{}", stderr(&added));
     assert_eq!(
@@ -5813,10 +5818,16 @@ fn add_changes_an_entry_in_place_and_requires_a_package_the_design_holds() {
     );
     let root = fixture.path().join("root");
 
-    let changed = astli_with_cache(&fixture, &root, &["add", "axi", "--version", "1.0"]);
-    let held = astli_with_cache(&fixture, &root, &["add", "cells", "--dev"]);
-    let unknown = astli_with_cache(&fixture, &root, &["add", "apb"]);
-    let twice = astli_with_cache(&fixture, &root, &["add", "cells"]);
+    let changed = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["add", "axi", "--version", "1.0"]);
+    let held = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["add", "cells", "--dev"]);
+    let unknown = driver(&fixture).dir(&root).cache().args(["add", "apb"]);
+    let twice = driver(&fixture).dir(&root).cache().args(["add", "cells"]);
 
     assert!(changed.status.success(), "{}", stderr(&changed));
     assert!(held.status.success(), "{}", stderr(&held));
@@ -5856,15 +5867,25 @@ fn add_requires_a_directory_by_its_path_from_the_manifest() {
     fixture.file("root/hw/top.sv", "module top;\nendmodule\n");
     let hw = fixture.path().join("root/hw");
 
-    let added = astli_in(&hw, &["add", "--path", "../../tech", "--features", "asic"]);
-    let missing = astli_in(&hw, &["add", "--path", "../nowhere"]);
-    let versioned = astli_in(&hw, &["add", "--path", "../../tech", "--rev", "main"]);
+    let added =
+        driver(&fixture)
+            .dir(&hw)
+            .args(["add", "--path", "../../tech", "--features", "asic"]);
+    let missing = driver(&fixture)
+        .dir(&hw)
+        .args(["add", "--path", "../nowhere"]);
+    let versioned =
+        driver(&fixture)
+            .dir(&hw)
+            .args(["add", "--path", "../../tech", "--rev", "main"]);
     // Resolving it then fails, so the manifest is put back.
     fixture.file(
         "broken/astli.toml",
         "[dependencies]\nnope = { path = \"nope\" }\n",
     );
-    let unresolved = astli_in(&hw, &["add", "--path", "../../broken"]);
+    let unresolved = driver(&fixture)
+        .dir(&hw)
+        .args(["add", "--path", "../../broken"]);
 
     assert!(added.status.success(), "{}", stderr(&added));
     assert_eq!(
@@ -5911,8 +5932,10 @@ fn add_and_remove_refuse_a_root_whose_dependencies_come_from_its_bender_yml() {
     fixture.file("root/astli.toml", "[fmt]\n");
     let root = fixture.path().join("root");
 
-    let added = astli_in(&root, &["add", "--path", "../tech", "--name", "other"]);
-    let removed = astli_in(&root, &["remove", "tech"]);
+    let added = driver(&fixture)
+        .dir(&root)
+        .args(["add", "--path", "../tech", "--name", "other"]);
+    let removed = driver(&fixture).dir(&root).args(["remove", "tech"]);
 
     for output in [&added, &removed] {
         assert!(!output.status.success());
@@ -5942,18 +5965,27 @@ fn remove_drops_a_dependency_and_what_mentions_it() {
              [resolve]\npinned = [\"cells\"]\n"
         ),
     );
-    let locked = astli_with_cache(&fixture, &root, &["update"]);
+    let locked = driver(&fixture).dir(&root).cache().args(["update"]);
     let before = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
     let lock_before = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
-    let refused = astli_with_cache(&fixture, &root, &["remove", "cells", "--locked"]);
+    let refused = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["remove", "cells", "--locked"]);
     let kept = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
     let lock_kept = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
 
-    let removed = astli_with_cache(&fixture, &root, &["remove", "cells", "tech"]);
+    let removed = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["remove", "cells", "tech"]);
     let after = std::fs::read_to_string(root.join("astli.toml")).expect("a manifest");
     let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
-    let dev = astli_with_cache(&fixture, &root, &["remove", "sim"]);
-    let unknown = astli_with_cache(&fixture, &root, &["remove", "--dev", "apb"]);
+    let dev = driver(&fixture).dir(&root).cache().args(["remove", "sim"]);
+    let unknown = driver(&fixture)
+        .dir(&root)
+        .cache()
+        .args(["remove", "--dev", "apb"]);
 
     assert!(locked.status.success(), "{}", stderr(&locked));
     // Resolving it then fails, so the manifest is put back.
@@ -6017,7 +6049,10 @@ fn workspace(fixture: &Fixture) -> PathBuf {
 
 /// The files `astli files` lists in `dir`, by name.
 fn listed_in(fixture: &Fixture, dir: &Path, args: &[&str]) -> Vec<String> {
-    let output = files_with_cache(fixture, dir, args);
+    let output = driver(fixture)
+        .dir(dir)
+        .cache()
+        .args(["files"].iter().chain(args));
     assert!(output.status.success(), "{}", stderr(&output));
     let mut names: Vec<String> = (stdout(&output).lines())
         .filter_map(|line| Path::new(line).file_name())
@@ -6056,14 +6091,7 @@ fn a_member_shares_the_roots_patches_and_build_and_is_told_what_it_holds_unread(
     fixture.file("ws/ip/other/.astli/patch.toml", "[patch]\n");
     fixture.file("ws/.astli/build/verilator/dev/soc/tb/Vtb", "");
     fixture.file("work/cells/cells.sv", "module cells;\nendmodule\n");
-    let in_member = |args: &[&str]| {
-        Command::new(env!("CARGO_BIN_EXE_astli"))
-            .args(args)
-            .current_dir(ws.join("ip/dma"))
-            .env("ASTLI_CACHE_DIR", fixture.path().join("cache"))
-            .output()
-            .expect("the driver runs")
-    };
+    let in_member = |args: &[&str]| driver(&fixture).dir(ws.join("ip/dma")).cache().args(args);
 
     let tree = in_member(&["tree"]);
     let patched = in_member(&["patch", "cells", "../../../work/cells"]);
@@ -6101,9 +6129,11 @@ fn verilator_a_member_builds_into_the_workspace_root_under_its_name() {
     fixture.file("astli.toml", "[workspace]\n");
     adder_in(&fixture, "ip/adder/");
 
-    let output = astli_in(&fixture.path().join("ip/adder"), &["build"]);
-    let built = astli_in(fixture.path(), &["build", "-p", "adder"]);
-    let ran = astli_in(fixture.path(), &["run", "-p", "adder"]);
+    let output = driver(&fixture)
+        .dir(fixture.path().join("ip/adder"))
+        .args(["build"]);
+    let built = driver(&fixture).args(["build", "-p", "adder"]);
+    let ran = driver(&fixture).args(["run", "-p", "adder"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
     let dir = fixture.path().join(".astli/build/verilator/dev/adder/tb");
@@ -6125,11 +6155,6 @@ fn slashed(output: &Output) -> String {
     stdout(output).replace('\\', "/")
 }
 
-/// Runs the driver in `dir` with `args`, fetching into `fixture`'s cache.
-fn astli_cached(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
-    driver(fixture).dir(dir).cache().args(args)
-}
-
 #[test]
 fn p_acts_on_the_workspace_package_it_names_from_anywhere_in_it() {
     let fixture = Fixture::new("workspace-p");
@@ -6140,15 +6165,22 @@ fn p_acts_on_the_workspace_package_it_names_from_anywhere_in_it() {
     );
     fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
     fixture.file("ws/ip/dma/bad.sv", "module   bad;\nendmodule\n");
-    let in_other = |args: &[&str]| astli_cached(&fixture, &ws.join("ip/other"), args);
+    let in_other = |args: &[&str]| driver(&fixture).dir(ws.join("ip/other")).cache().args(args);
 
     let dma = listed_in(&fixture, &ws.join("ip/other"), &["-p", "dma"]);
     let tree = in_other(&["tree", "-p", "soc"]);
-    let other = astli_cached(&fixture, &ws, &["fmt", "--check", "-p", "other"]);
+    let other = driver(&fixture)
+        .dir(&ws)
+        .cache()
+        .args(["fmt", "--check", "-p", "other"]);
     let unformatted = in_other(&["fmt", "--check", "--package", "dma"]);
     let unknown = in_other(&["tree", "-p", "nothing"]);
-    let outside = astli_in(&fixture.path().join("cells"), &["tree", "-p", "cells"]);
-    let alone = astli_in(&fixture.path().join("cells"), &["tree", "--workspace"]);
+    let outside = driver(&fixture)
+        .dir(fixture.path().join("cells"))
+        .args(["tree", "-p", "cells"]);
+    let alone = driver(&fixture)
+        .dir(fixture.path().join("cells"))
+        .args(["tree", "--workspace"]);
 
     assert_eq!(dma, ["bad.sv", "cells.sv", "dma.sv"]);
     assert!(tree.status.success(), "{}", stderr(&tree));
@@ -6186,14 +6218,14 @@ fn workspace_runs_once_per_package_and_fails_if_any_fails() {
     let fixture = Fixture::new("workspace-all");
     let ws = workspace(&fixture);
     fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
-    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+    let at_root = |args: &[&str]| driver(&fixture).dir(&ws).cache().args(args);
 
     let tree = at_root(&["tree", "--workspace"]);
-    let fmt = astli_cached(
-        &fixture,
-        &ws.join("ip/dma"),
-        &["fmt", "--check", "--workspace"],
-    );
+    let fmt =
+        driver(&fixture)
+            .dir(ws.join("ip/dma"))
+            .cache()
+            .args(["fmt", "--check", "--workspace"]);
     let lint = at_root(&["lint", "--workspace"]);
     let both = at_root(&["check", "--workspace", "-p", "dma"]);
     let named = at_root(&["fmt", "--workspace", "soc.sv"]);
@@ -6255,8 +6287,14 @@ fn a_member_is_told_only_of_what_its_design_holds() {
         ),
     );
 
-    let dma = astli_cached(&fixture, &ws.join("ip/dma"), &["tree"]);
-    let other = astli_cached(&fixture, &ws.join("ip/other"), &["tree"]);
+    let dma = driver(&fixture)
+        .dir(ws.join("ip/dma"))
+        .cache()
+        .args(["tree"]);
+    let other = driver(&fixture)
+        .dir(ws.join("ip/other"))
+        .cache()
+        .args(["tree"]);
 
     assert!(dma.status.success(), "{}", stderr(&dma));
     let said = stderr(&dma);
@@ -6282,7 +6320,10 @@ fn check_workspace_tells_a_finding_in_a_sibling_once() {
         "module dma;\n  cells u_cells (.missing(1'b0));\nendmodule\n",
     );
 
-    let output = astli_cached(&fixture, &ws, &["check", "--workspace"]);
+    let output = driver(&fixture)
+        .dir(&ws)
+        .cache()
+        .args(["check", "--workspace"]);
 
     assert!(!output.status.success());
     let said = stderr(&output);
@@ -6308,9 +6349,18 @@ fn check_workspace_checks_every_table_of_a_member_and_goes_on_past_it() {
         "module soc;\n  dma u_dma (.missing(1'b0));\nendmodule\n",
     );
 
-    let output = astli_cached(&fixture, &ws, &["check", "--workspace"]);
-    let json = astli_cached(&fixture, &ws, &["check", "--workspace", "--diag=json"]);
-    let gitlab = astli_cached(&fixture, &ws, &["check", "--workspace", "--diag=gitlab"]);
+    let output = driver(&fixture)
+        .dir(&ws)
+        .cache()
+        .args(["check", "--workspace"]);
+    let json = driver(&fixture)
+        .dir(&ws)
+        .cache()
+        .args(["check", "--workspace", "--diag=json"]);
+    let gitlab = driver(&fixture)
+        .dir(&ws)
+        .cache()
+        .args(["check", "--workspace", "--diag=gitlab"]);
 
     assert!(!output.status.success());
     let said = stderr(&output);
@@ -6375,7 +6425,7 @@ fn test_list_selects_the_tests_the_package_marks() {
         "ws/ip/other/tb_other.sv",
         "(* astli_test *) module tb_other;\nendmodule\nmodule helper;\nendmodule\n",
     );
-    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+    let at_root = |args: &[&str]| driver(&fixture).dir(&ws).cache().args(args);
     let listed = |output: &Output| {
         assert!(output.status.success(), "{}", stderr(output));
         stdout(output)
@@ -6493,12 +6543,12 @@ fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
         "(* astli_test *)\nmodule tb_bit;\n  (* astli_sweep *) parameter bit Fast = 0;\nendmodule\n",
     );
     let listed = |args: &[&str]| {
-        let output = astli_in(fixture.path(), args);
+        let output = driver(&fixture).args(args);
         assert!(output.status.success(), "{}", stderr(&output));
         stdout(&output)
     };
     let refused = |args: &[&str]| {
-        let output = astli_in(fixture.path(), args);
+        let output = driver(&fixture).args(args);
         assert!(!output.status.success(), "{}", stdout(&output));
         said_in(&fixture, &output)
     };
@@ -6544,7 +6594,7 @@ fn test_list_names_each_point_of_the_sweeps_a_test_declares() {
     );
     let bad = fixture.path().join("tb/bad.sv");
     std::fs::write(&bad, b"module bad;\xff\nendmodule\n").unwrap();
-    let unread = astli_in(fixture.path(), &["test", "--list"]);
+    let unread = driver(&fixture).args(["test", "--list"]);
     let said = stderr(&unread);
     assert_eq!(
         said.matches("did not contain valid UTF-8").count(),
@@ -6638,10 +6688,10 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     );
     fixture.file("ws/soc.sv", "module   soc;\nendmodule\n");
     fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
-    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+    let at_root = |args: &[&str]| driver(&fixture).dir(&ws).cache().args(args);
 
     std::fs::create_dir_all(ws.join("docs")).expect("a directory");
-    let tree = astli_cached(&fixture, &ws.join("docs"), &["tree"]);
+    let tree = driver(&fixture).dir(ws.join("docs")).cache().args(["tree"]);
     let fmt = at_root(&["fmt", "--check"]);
     let files = at_root(&["files"]);
     let dma = listed_in(&fixture, &ws, &["-p", "dma"]);
@@ -6695,7 +6745,7 @@ fn bender_export_workspace_writes_each_package_bender_does_not_manage() {
     // Still bender's: its dependencies come from its `Bender.yml`.
     fixture.file("ws/ip/other/astli.toml", "[package]\nname = 'other'\n");
     fixture.file("ws/ip/other/Bender.yml", "package:\n  name: other\n");
-    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+    let at_root = |args: &[&str]| driver(&fixture).dir(&ws).cache().args(args);
 
     let exported = at_root(&["bender", "export", "--workspace"]);
     let checked = at_root(&["bender", "export", "--workspace", "--check"]);
@@ -6723,7 +6773,7 @@ fn bender_export_workspace_writes_each_package_bender_does_not_manage() {
 fn p_chooses_the_manifest_add_remove_and_bender_export_write() {
     let fixture = Fixture::new("workspace-p-manifest");
     let ws = workspace(&fixture);
-    let at_root = |args: &[&str]| astli_cached(&fixture, &ws, args);
+    let at_root = |args: &[&str]| driver(&fixture).dir(&ws).cache().args(args);
 
     let added = at_root(&["add", "-p", "other", "--path", "ip/dma"]);
     let removed = at_root(&["remove", "-p", "dma", "cells"]);
