@@ -434,7 +434,7 @@ member has a type, which `Elaboration::expr_type` gives, and no symbol.
 
 `&&` or `||` on a handle, which other tools accept, is not reported, nor
 a handle given the handle of another class, which would need what each
-class extends. A `.name` or `.*` connection, a `ref` or `output` argument, and
+class extends. A `ref` or `output` argument, and
 what an associative array holds or is indexed by are not compared either
 ([S50](sema.md#decisions)). **Revisit when** a design's mistake hides in
 one. **Where** `astli-sema/src/typing.rs`
