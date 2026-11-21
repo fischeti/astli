@@ -25,7 +25,7 @@ use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::listing::{self, Listing};
 use crate::lockfile;
-use crate::render;
+use crate::render::{self, Report};
 use crate::term;
 use crate::tops::Chosen;
 
@@ -92,13 +92,12 @@ impl RunWith<Ctx<'_>> for Files {
                 true => all,
                 false => listing::short_of_a_header(all, of),
             };
-            let (summary, said, errors) = listing::summarized(file, plan.build(unit), told)?;
+            let (summary, said) = listing::summarized(file, plan.build(unit), told)?;
             if unit.reported && tops.is_empty() {
-                sink.diagnostics.write_all(&said)?;
-                sink.errors += errors;
-                return Ok((summary, Vec::new(), 0));
+                sink.report.add(said);
+                return Ok((summary, Report::default()));
             }
-            Ok((summary, said, errors))
+            Ok((summary, said))
         })?;
         // A region that did not parse may hold an instance, so the list could
         // be short: a file with errors fails the run as it does `check`. With
@@ -106,10 +105,7 @@ impl RunWith<Ctx<'_>> for Files {
         if outcome.failed > 0 || outcome.wrong > 0 {
             return outcome.finish();
         }
-        let (summaries, short): (Vec<Summary>, Vec<(Vec<u8>, usize)>) = (outcome.values)
-            .into_iter()
-            .map(|(summary, said, errors)| (summary, (said, errors)))
-            .unzip();
+        let (summaries, short): (Vec<Summary>, Vec<Report>) = outcome.values.into_iter().unzip();
         let unreplaced = plan.replace(&summaries)?;
         let short = kept_only(short, &unreplaced);
         let index = Index::new(kept_only(summaries, &unreplaced));
@@ -132,12 +128,12 @@ impl RunWith<Ctx<'_>> for Files {
         }
         // With a top, so does a dependency's file the list holds that is
         // short of a header, which a tool given the list cannot find either.
-        let wrong: Vec<&(Vec<u8>, usize)> = (kept.iter().map(|&file| &short[file]))
+        let wrong: Vec<&Report> = (kept.iter().map(|&file| &short[file]))
             .filter(|_| !tops.is_empty())
-            .filter(|(_, errors)| *errors > 0)
+            .filter(|said| said.errors > 0)
             .collect();
-        for (said, _) in &wrong {
-            term::write(said).map_err(Error::Output)?;
+        for said in &wrong {
+            term::write(&said.said).map_err(Error::Output)?;
         }
         if !wrong.is_empty() {
             return Err(Error::tally(format!(
@@ -151,12 +147,12 @@ impl RunWith<Ctx<'_>> for Files {
         // instantiates, but may by what it declares: a region of it that did
         // not parse may hold a name they use that no file declares.
         if !tops.is_empty() && !index.undeclared(&kept).is_empty() {
-            let unreached: Vec<&(Vec<u8>, usize)> = (short.iter().enumerate())
-                .filter(|(file, (_, errors))| *errors > 0 && !kept.contains(file))
-                .map(|(_, short)| short)
+            let unreached: Vec<&Report> = (short.iter().enumerate())
+                .filter(|(file, said)| said.errors > 0 && !kept.contains(file))
+                .map(|(_, said)| said)
                 .collect();
-            for (said, _) in &unreached {
-                term::write(said).map_err(Error::Output)?;
+            for said in &unreached {
+                term::write(&said.said).map_err(Error::Output)?;
             }
             if !unreached.is_empty() {
                 term::note("a file with errors may declare what the tops use and no file declares")

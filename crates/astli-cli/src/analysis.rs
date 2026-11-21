@@ -14,13 +14,12 @@ use astli_parse::parse_expanded;
 use astli_preproc::Build;
 use astli_sema::{BodyId, Design, Elaboration, FileId, Hir, TopValue, lower};
 use astli_text::{Diagnostic, Origins};
-use rayon::prelude::*;
 
 use crate::cmd::{self, Outcome};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::points;
-use crate::render::{self, Out};
+use crate::render::{self, Out, Report};
 use crate::run::Run;
 use crate::session;
 use crate::term;
@@ -285,46 +284,16 @@ fn lowered(path: &Path, build: &Build, summarize: bool) -> Result<Lowered> {
     Ok((Arc::new(hir), origins, summary, found))
 }
 
-/// A file to report: what resolves its spans, what was already rendered of
-/// it and how many errors that held, and what remains to render.
-pub(crate) type Told<'a> = (Option<&'a Origins>, Vec<u8>, usize, Vec<Diagnostic>);
-
-/// Renders what each file was found to hold, in parallel, and writes it in
-/// order once `out` is flushed. A file is given with what resolves its
-/// spans, unless it has no diagnostics, what was already rendered of it and
-/// how many errors that held, and its diagnostics. Hands back how many of
-/// them have errors, which [`Outcome::finish`] tallies.
-pub(crate) fn report(out: &mut Out, files: Vec<Told>) -> Result<Outcome<()>> {
-    write(out, render(files)?)
-}
-
-/// What each file was found to hold, rendered in parallel, with how many
-/// errors it holds.
-pub(crate) fn render(files: Vec<Told>) -> Result<Vec<(Vec<u8>, usize)>> {
-    let rendered = |(origins, mut said, errors, found): Told| {
-        let errors = match origins {
-            Some(origins) => errors + render::diagnostics(&mut said, origins, &found)?,
-            None => errors,
-        };
-        Ok((said, errors))
-    };
-    // A report that gathers every file's findings in one list gathers them
-    // in the order rendered.
-    match render::gathered() {
-        true => files.into_iter().map(rendered).collect(),
-        false => files.into_par_iter().map(rendered).collect(),
-    }
-}
-
 /// Writes what was rendered of each file, in order, once `out` is flushed,
-/// and hands back how many of them have errors.
-pub(crate) fn write(out: &mut Out, rendered: Vec<(Vec<u8>, usize)>) -> Result<Outcome<()>> {
+/// and hands back how many of them have errors, which
+/// [`Outcome::finish`] tallies.
+pub(crate) fn write(out: &mut Out, rendered: Vec<Report>) -> Result<Outcome<()>> {
     out.flush()?;
     let mut outcome = Outcome::<()>::new(rendered.len());
-    for (said, errors) in rendered {
-        term::write(&said).map_err(Error::Output)?;
+    for said in rendered {
+        term::write(&said.said).map_err(Error::Output)?;
         outcome.values.push(());
-        outcome.wrong += usize::from(errors > 0);
+        outcome.wrong += usize::from(said.errors > 0);
     }
     Ok(outcome)
 }

@@ -24,7 +24,6 @@ use crate::cli::{BuildArgs, Sources};
 use crate::cmd::{self, Ctx};
 use crate::error::Result;
 use crate::listing;
-use crate::render;
 use crate::session;
 use crate::sources;
 use crate::term::{self, Place};
@@ -160,8 +159,8 @@ fn one(
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
     let summary = Summary::new(&opened.session, opened.file, &parsed);
     let origins = opened.session.origins();
-    sink.errors += render::diagnostics(sink.diagnostics, origins, opened.diagnostics())?;
-    sink.errors += render::diagnostics(sink.diagnostics, origins, &parsed.diagnostics)?;
+    sink.report.render(origins, opened.diagnostics())?;
+    sink.report.render(origins, &parsed.diagnostics)?;
     Ok((summary, expand.then(|| parsed.root.green().to_owned())))
 }
 
@@ -241,7 +240,7 @@ fn left(
 ) -> Result<()> {
     let problem = term::warning(message).at(code, path, Place::Line(at.line as usize));
     match problem.rendered() {
-        Some(text) => sink.diagnostics.write_all(&text)?,
+        Some(text) => sink.report.said.extend(text),
         None => problem.report(sink.run),
     }
     Ok(())

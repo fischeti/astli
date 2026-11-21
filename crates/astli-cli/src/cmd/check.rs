@@ -46,7 +46,7 @@ use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::listing::{self, Listing};
 use crate::points;
-use crate::render::Out;
+use crate::render::{self, Out, Report};
 use crate::run::Run;
 
 /// Verify design semantics, port connections, parameter overrides, and undeclared identifiers
@@ -137,8 +137,7 @@ pub(crate) struct Found {
 /// header, which is told after the rest.
 struct Told {
     path: PathBuf,
-    said: Vec<u8>,
-    errors: usize,
+    said: Report,
     short: bool,
 }
 
@@ -158,10 +157,7 @@ impl Found {
             .collect();
         for file in other.files {
             match at.get(&file.path) {
-                Some(&before) => {
-                    self.files[before].said.extend(file.said);
-                    self.files[before].errors += file.errors;
-                }
+                Some(&before) => self.files[before].said.add(file.said),
                 None => {
                     at.insert(file.path.clone(), self.files.len());
                     self.files.push(file);
@@ -173,9 +169,7 @@ impl Found {
 
     /// Writes what was found, and hands back whether the check passed.
     pub(crate) fn report(self, out: &mut Out) -> Result<Result> {
-        let rendered = (self.files.into_iter())
-            .map(|file| (file.said, file.errors))
-            .collect();
+        let rendered = self.files.into_iter().map(|file| file.said).collect();
         let mut reported = analysis::write(out, rendered)?;
         reported.failed = self.unread;
         let reported = reported.finish();
@@ -305,17 +299,20 @@ pub(crate) fn found(run: &Run, plan: &Plan, analysis: &mut Analysis) -> Result<F
                     first
                 });
             }
-            (Some(&*analysis.origins[file]), Vec::new(), told_before, all)
+            (&*analysis.origins[file], told_before, all)
         })
         .collect();
-    let rendered = analysis::render(told_files)?;
+    let rendered = render::reports(told_files, |(origins, told_before, found)| {
+        let mut said = Report::of(origins, &found)?;
+        said.errors += told_before;
+        Ok(said)
+    })?;
     let files = (shown.iter().map(|&file| (file, false)))
         .chain(short.iter().map(|&file| (file, true)))
         .zip(rendered)
-        .map(|((file, short), (said, errors))| Told {
+        .map(|((file, short), said)| Told {
             path: plan.units[file].path.clone(),
             said,
-            errors,
             short,
         })
         .collect();

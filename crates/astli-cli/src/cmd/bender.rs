@@ -169,9 +169,8 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
             true => all,
             false => Vec::new(),
         };
-        let (summary, said, errors) = listing::summarized(file, plan.build(unit), told)?;
-        sink.diagnostics.write_all(&said)?;
-        sink.errors += errors;
+        let (summary, said) = listing::summarized(file, plan.build(unit), told)?;
+        sink.report.add(said);
         Ok(summary)
     })?;
     // A region that did not parse may hold an instance, so the order
