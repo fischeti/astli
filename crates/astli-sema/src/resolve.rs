@@ -1196,7 +1196,7 @@ impl<'d> Resolver<'d> {
                 let root = hir.root();
                 match self.design.declared(self.file, root, &name.text) {
                     Some(symbol) => self.here(symbol),
-                    None if self.design.is_opaque(self.file, root) => Resolution::Unknown,
+                    None if hir[root].opaque => Resolution::Unknown,
                     None => Resolution::Undeclared(Searched::Package),
                 }
             }

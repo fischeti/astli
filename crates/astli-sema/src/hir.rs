@@ -155,6 +155,10 @@ pub struct Scope {
     pub owner: Option<SymbolId>,
     /// What stands in the scope, in the order written.
     pub members: Vec<Member>,
+    /// Whether the scope holds what is not lowered, which may declare
+    /// anything: an opaque member, or an opaque statement of a block's or a
+    /// subroutine's own.
+    pub opaque: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

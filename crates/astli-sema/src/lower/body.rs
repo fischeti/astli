@@ -257,10 +257,7 @@ impl Lower<'_> {
             let symbol = self.declare(scope, name, SymbolKind::Block(inner));
             self.hir.scopes[inner.index()].owner = Some(symbol);
         }
-        let stmts = block
-            .items()
-            .filter_map(|item| self.body(inner, item))
-            .collect();
+        let stmts = self.stmts(inner, block.items());
         let join = match block.open() {
             Some(open) if open.kind() == FORK_KW => block.close().map(|close| close.kind()),
             _ => None,
@@ -289,10 +286,7 @@ impl Lower<'_> {
     pub(super) fn constraints(&mut self, scope: ScopeId, block: &ast::ConstraintBlock) -> StmtId {
         let span = self.span(block.syntax());
         let inner = self.scope(ScopeKind::Block, Some(scope), None);
-        let stmts = block
-            .items()
-            .filter_map(|item| self.body(inner, item))
-            .collect();
+        let stmts = self.stmts(inner, block.items());
         let kind = StmtKind::Block {
             scope: inner,
             join: None,
