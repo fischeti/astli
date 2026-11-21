@@ -498,17 +498,17 @@ impl Tokens for Expanded<'_> {
         if self.kind(1) != L_PAREN || self.line_break_before(1) {
             return Some(1);
         }
-        let mut depth = 0u32;
+        // As the preprocessor nests them: every bracket in one count, and a
+        // `]` or `}` with none open ignored.
+        let mut depth = 0;
         for ahead in 1.. {
-            match self.kind(ahead) {
-                L_PAREN => depth += 1,
-                R_PAREN => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return Some(ahead as u32 + 1);
-                    }
-                }
+            let kind = self.kind(ahead);
+            match kind {
+                R_PAREN if depth == 1 => return Some(ahead as u32 + 1),
                 EOF => break,
+                _ if depth > 1 || delimiters::bracket_depth(kind) > 0 => {
+                    depth += delimiters::bracket_depth(kind);
+                }
                 _ => {}
             }
         }
@@ -666,7 +666,9 @@ mod tests {
     fn an_undefined_reference_is_shaped_as_raw_mode_would() {
         // Left as written by the expansion, with its arguments when a `(`
         // follows on the same line, and without them when it does not.
-        let mut source = Source::new("`log(\"a\", (1)) ;\n`bare\n(x) ;\n`note /* a\nb */ (y) ;\n");
+        let mut source = Source::new(
+            "`log(\"a\", (1)) ;\n`bare\n(x) ;\n`note /* a\nb */ (y) ;\n`pick(a[b)]) ;\n",
+        );
         let tokens = source.session.expand(source.file).tokens;
         let pieces = pieces(source.session.origins(), &tokens);
         let mut expanded = Expanded::new(&pieces);
@@ -677,8 +679,9 @@ mod tests {
             expanded.bump();
         }
         // `log ( "a" , ( 1 ) ) -- eight tokens; `bare alone; `note ( y ) --
-        // four, since a comment that spans lines ends none.
-        assert_eq!(lengths, [8, 1, 4]);
+        // four, since a comment that spans lines ends none; `pick ( a [ b ) ]
+        // ) -- eight, since the first `)` is inside the brackets.
+        assert_eq!(lengths, [8, 1, 4, 8]);
     }
 
     #[test]
