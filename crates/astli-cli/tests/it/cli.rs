@@ -1346,6 +1346,12 @@ fn files_fails_and_writes_no_list_when_a_file_it_keeps_does_not_parse() {
     assert!(output.status.success(), "{}", stderr(&output));
     assert_eq!(stdout(&output), "lone.sv\n");
     assert!(!stderr(&output).contains("sub.sv"), "{}", stderr(&output));
+    // A Code Quality report holds what the run tells, and only that.
+    let output = files_in(
+        &fixture,
+        &["--top", "lone", "lone.sv", "sub.sv", "--diag=gitlab"],
+    );
+    assert_eq!(stderr(&output), "[]\n");
 
     // ...unless the top uses a name no file declares, which the region
     // that did not parse may.

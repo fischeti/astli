@@ -130,7 +130,7 @@ impl RunWith<Ctx<'_>> for Files {
             .filter(|said| said.errors > 0)
             .collect();
         for said in &wrong {
-            term::write(&said.said).map_err(Error::Output)?;
+            said.tell().map_err(Error::Output)?;
         }
         if !wrong.is_empty() {
             return Err(cmd::tally(0, wrong.len(), kept.len()));
@@ -144,7 +144,7 @@ impl RunWith<Ctx<'_>> for Files {
                 .map(|(_, said)| said)
                 .collect();
             for said in &unreached {
-                term::write(&said.said).map_err(Error::Output)?;
+                said.tell().map_err(Error::Output)?;
             }
             if !unreached.is_empty() {
                 term::note("a file with errors may declare what the tops use and no file declares")

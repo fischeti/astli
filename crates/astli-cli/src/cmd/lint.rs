@@ -334,9 +334,7 @@ impl<'a> Read<'a> {
         let sets: Vec<(&Origins, &[Diagnostic])> = (self.found.iter())
             .map(|(origins, found)| (&**origins, found.as_slice()))
             .collect();
-        let mut said = Vec::new();
-        let errors = render::findings(&mut said, &self.path, &sets)?;
-        Ok(Report { said, errors })
+        Report::findings(&self.path, &sets)
     }
 }
 

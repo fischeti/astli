@@ -461,8 +461,8 @@ impl Problem {
         if run.tells_once() && !run.first_told(self) {
             return;
         }
-        if let Some(text) = self.at.as_ref().and_then(|at| self.located(at)) {
-            let _ = write(&text);
+        if let Some(report) = self.at.as_ref().and_then(|at| self.located(at)) {
+            let _ = report.tell();
             return;
         }
         // A Code Quality finding needs a line to hang on, and the exit code
@@ -504,7 +504,7 @@ impl Problem {
     /// the place. Its names are in backticks, as a diagnostic from the
     /// source writes them, whether or not stderr takes colour: a `short` or
     /// `github` line is for a tool, which takes no style.
-    fn located(&self, at: &At) -> Option<Vec<u8>> {
+    fn located(&self, at: &At) -> Option<render::Report> {
         let text = std::fs::read_to_string(&at.path).ok()?;
         let range = at.place.range(&text)?;
         let mut origins = Origins::new();
@@ -515,8 +515,6 @@ impl Problem {
         diagnostic.label = at.label.as_deref().map(mark::plain);
         diagnostic.notes = self.notes.iter().map(|note| mark::plain(note)).collect();
         diagnostic.help = self.help.iter().map(|help| mark::plain(help)).collect();
-        let mut out = Vec::new();
-        render::diagnostics(&mut out, &origins, &[diagnostic]).ok()?;
-        Some(out)
+        render::Report::of(&origins, &[diagnostic]).ok()
     }
 }

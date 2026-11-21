@@ -27,7 +27,7 @@ use crate::cmd::{self, Ctx};
 use crate::config;
 use crate::discovery;
 use crate::error::{Error, Result};
-use crate::render;
+use crate::render::{self, Report};
 use crate::run::Run;
 use crate::target::Target;
 use crate::term;
@@ -104,7 +104,7 @@ impl Fmt {
             let tree = crate::session::tree(path)?;
             report(
                 sink.out,
-                &mut sink.report.said,
+                &mut sink.report,
                 path,
                 &tree,
                 options,
@@ -144,7 +144,7 @@ fn from_stdin(
 
     let text = io::read_to_string(io::stdin()).map_err(|err| Error::io(STDIN, err))?;
     let tree = SyntaxTree::parse(STDIN, text);
-    let mut said = Vec::new();
+    let mut said = Report::default();
     let reported = report(
         out,
         &mut said,
@@ -155,7 +155,7 @@ fn from_stdin(
         quiet,
     );
     out.flush()?;
-    term::write(&said).map_err(Error::Output)?;
+    said.tell().map_err(Error::Output)?;
     match reported? {
         true if !matches!(mode, Mode::Print) => {
             Err(Error::failed(format!("{STDIN} is not formatted")))
@@ -175,14 +175,16 @@ fn from_stdin(
 /// branches of an `` `ifdef ``, and the user could not act on it.
 fn report(
     out: &mut dyn Write,
-    said: &mut dyn Write,
+    said: &mut Report,
     path: &Path,
     tree: &SyntaxTree,
     options: &Options,
     mode: Mode,
     quiet: bool,
 ) -> Result<bool> {
-    render::diagnostics(said, tree.origins(), tree.diagnostics())?;
+    let mut found = Report::of(tree.origins(), tree.diagnostics())?;
+    found.errors = 0;
+    said.add(found);
 
     let formatted = format(tree, options).map_err(|refusal| {
         let at = tree.line_col(refusal.offset);
