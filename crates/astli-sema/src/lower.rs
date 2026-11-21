@@ -538,7 +538,14 @@ impl Lower<'_> {
                     Some(name) => {
                         let ty = self.with_unpacked(scope, ty, declarator.as_ref());
                         let name = self.name(&name);
-                        self.declare(scope, name, SymbolKind::Typedef(ty));
+                        let enumeration = match ty.kind {
+                            TypeKind::Enum(id) if ty.dims.is_empty() => Some(id),
+                            _ => None,
+                        };
+                        let typedef = self.declare(scope, name, SymbolKind::Typedef(ty));
+                        if let Some(id) = enumeration {
+                            self.hir.enums[id.index()].typedef = Some(typedef);
+                        }
                     }
                     // A forward typedef names a type declared later.
                     None => self.opaque_member(scope, typedef.syntax()),
@@ -1810,6 +1817,12 @@ impl Lower<'_> {
             ast::DataType::TypeRef(ty) => return self.type_ref(scope, ty),
             ast::DataType::EnumType(ty) => {
                 let base = self.data_type(scope, ty.type_ref().map(ast::DataType::TypeRef));
+                let owner = EnumId(self.hir.enums.len() as u32);
+                self.hir.enums.push(Enum {
+                    base,
+                    members: Vec::new(),
+                    typedef: None,
+                });
                 let mut members = Vec::new();
                 for variant in ty.enum_variants() {
                     let Some(name) = variant.name() else {
@@ -1837,14 +1850,13 @@ impl Lower<'_> {
                     for name in names {
                         let kind = SymbolKind::EnumMember {
                             value: value.take(),
+                            owner,
                         };
                         members.push(self.declare(scope, name, kind));
                     }
                 }
-                TypeKind::Enum {
-                    base: Box::new(base),
-                    members,
-                }
+                self.hir.enums[owner.index()].members = members;
+                TypeKind::Enum(owner)
             }
             ast::DataType::StructType(ty) => {
                 let fields = self.fields(scope, ty.struct_members());

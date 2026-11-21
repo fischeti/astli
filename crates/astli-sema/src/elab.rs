@@ -101,21 +101,9 @@ enum Given {
 /// What is known of one file, worked out when first needed.
 #[derive(Default)]
 struct FileFacts {
-    /// Each enum member's enum, its place there, and the typedef that
-    /// names the enum, if one does.
-    enums: OnceLock<FxHashMap<SymbolId, EnumOf>>,
     /// The scopes holding a `defparam` or a chosen `bind`, and those around
     /// them.
     defers: OnceLock<FxHashSet<ScopeId>>,
-}
-
-/// The enum an enum member belongs to.
-#[derive(Clone)]
-struct EnumOf {
-    /// The enum's type as written, shared by its members.
-    ty: Arc<Type>,
-    index: usize,
-    typedef: Option<SymbolId>,
 }
 
 /// A design elaborated on demand: the values of its constants and the types
@@ -547,53 +535,6 @@ impl Elaboration {
         self.design.names(cx.file).expr(expr)
     }
 
-    fn enum_of(&self, file: FileId, member: SymbolId) -> Option<EnumOf> {
-        let enums = self.facts[file.index()].enums.get_or_init(|| {
-            let hir = &self.design[file];
-            let mut enums = FxHashMap::default();
-            let mut types: Vec<(&Type, Option<SymbolId>)> = Vec::new();
-            for (id, symbol) in hir.symbols() {
-                match &symbol.kind {
-                    SymbolKind::Typedef(ty) => types.push((ty, Some(id))),
-                    SymbolKind::Port(Port { ty, .. })
-                    | SymbolKind::Parameter(Parameter { ty, .. })
-                    | SymbolKind::Net(Data { ty, .. })
-                    | SymbolKind::Variable(Data { ty, .. })
-                    | SymbolKind::Subroutine {
-                        returns: Some(ty), ..
-                    } => types.push((ty, None)),
-                    _ => {}
-                }
-            }
-            for (_, expr) in hir.exprs() {
-                if let ExprKind::Type(ty) = &expr.kind {
-                    types.push((ty, None));
-                }
-            }
-            while let Some((ty, typedef)) = types.pop() {
-                match &ty.kind {
-                    TypeKind::Enum { base, members } => {
-                        types.push((base, None));
-                        // A typedef names the enum only if it adds no
-                        // dimensions.
-                        let typedef = typedef.filter(|_| ty.dims.is_empty());
-                        let shared = Arc::new(ty.clone());
-                        for (index, &member) in members.iter().enumerate() {
-                            let ty = shared.clone();
-                            enums.insert(member, EnumOf { ty, index, typedef });
-                        }
-                    }
-                    TypeKind::Struct { fields, .. } => {
-                        types.extend(fields.iter().map(|field| (&field.ty, None)));
-                    }
-                    _ => {}
-                }
-            }
-            enums
-        });
-        enums.get(&member).cloned()
-    }
-
     // ------------------------------------------------------------- queries
 
     fn compute_value(&self, cx: Cx, symbol: SymbolId) -> Value {
@@ -609,16 +550,10 @@ impl Elaboration {
                     None => Value::Unknown,
                 }
             }
-            SymbolKind::EnumMember { value } => {
-                let Some(EnumOf {
-                    ty: enum_ty, index, ..
-                }) = self.enum_of(cx.file, symbol)
-                else {
-                    return Value::Unknown;
-                };
-                let TypeKind::Enum { base, members } = &enum_ty.kind else {
-                    return Value::Unknown;
-                };
+            SymbolKind::EnumMember { value, owner } => {
+                let Enum { base, members, .. } = &hir[*owner];
+                let index = (members.iter().position(|&it| it == symbol))
+                    .expect("an enum member is among its enum's members");
                 let ty = self.enum_base(cx, base);
                 match (value, index) {
                     (Some(value), _) => self.eval_assign(cx, *value, &ty),
@@ -703,18 +638,9 @@ impl Elaboration {
                 };
                 named(self.resolve_type(cx, ty), &hir[symbol].name.text, at)
             }
-            SymbolKind::EnumMember { .. } => match self.enum_of(cx.file, symbol) {
-                Some(EnumOf {
-                    typedef: Some(typedef),
-                    ..
-                }) => self.type_of(cx.body, typedef),
-                Some(EnumOf { ty, .. }) => {
-                    let mut ty = (*ty).clone();
-                    ty.dims.clear();
-                    ty.packed = 0;
-                    self.resolve_type(cx, &ty)
-                }
-                None => Ty::Unknown,
+            SymbolKind::EnumMember { owner, .. } => match hir[*owner].typedef {
+                Some(typedef) => self.type_of(cx.body, typedef),
+                None => self.enum_type(cx, *owner),
             },
             SymbolKind::Port(Port { ty, .. })
             | SymbolKind::Net(Data { ty, .. })
@@ -800,23 +726,7 @@ impl Elaboration {
             }
             TypeKind::Builtin { keyword, signing } => builtin(*keyword, *signing),
             TypeKind::Named(name) => self.named_type(cx, *name),
-            TypeKind::Enum { base, members } => match self.enum_base(cx, base) {
-                Ty::Packed(base) => Ty::Packed(Packed {
-                    shape: Shape::Enum(Arc::new(EnumTy {
-                        name: None,
-                        typedef: None,
-                        base: base.clone(),
-                        members: (members.iter())
-                            .map(|&symbol| SymbolRef {
-                                file: cx.file,
-                                symbol,
-                            })
-                            .collect(),
-                    })),
-                    ..base
-                }),
-                _ => Ty::Unknown,
-            },
+            TypeKind::Enum(id) => self.enum_type(cx, *id),
             TypeKind::Struct {
                 keyword,
                 packed,
@@ -998,6 +908,28 @@ impl Elaboration {
     }
 
     /// An enum's base type: `int` when none is written.
+    /// The enum `id`, unnamed: a typedef's type names it.
+    fn enum_type(&self, cx: Cx, id: EnumId) -> Ty {
+        let Enum { base, members, .. } = &self.design[cx.file][id];
+        match self.enum_base(cx, base) {
+            Ty::Packed(base) => Ty::Packed(Packed {
+                shape: Shape::Enum(Arc::new(EnumTy {
+                    name: None,
+                    typedef: None,
+                    base: base.clone(),
+                    members: (members.iter())
+                        .map(|&symbol| SymbolRef {
+                            file: cx.file,
+                            symbol,
+                        })
+                        .collect(),
+                })),
+                ..base
+            }),
+            _ => Ty::Unknown,
+        }
+    }
+
     fn enum_base(&self, cx: Cx, base: &Type) -> Ty {
         match base {
             Type {

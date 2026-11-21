@@ -510,7 +510,7 @@ impl<'a> Walk<'a> {
             if member.file != self.file {
                 return;
             }
-            let SymbolKind::EnumMember { value } = hir[member.symbol].kind else {
+            let SymbolKind::EnumMember { value, .. } = hir[member.symbol].kind else {
                 continue;
             };
             let name = &hir[member.symbol].name;

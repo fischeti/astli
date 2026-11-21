@@ -557,7 +557,7 @@ impl<'d> Resolver<'d> {
             SymbolKind::Genvar(init) => self.value(scope, *init),
             SymbolKind::Typedef(ty) => self.ty(scope, ty),
             SymbolKind::Forward => {}
-            SymbolKind::EnumMember { value } => self.value(scope, *value),
+            SymbolKind::EnumMember { value, .. } => self.value(scope, *value),
             SymbolKind::Subroutine {
                 scope: body,
                 returns,
@@ -792,7 +792,7 @@ impl<'d> Resolver<'d> {
             // The value is walked where it is matched.
             TypeKind::Matched { .. } => {}
             // Its members are walked where they are declared.
-            TypeKind::Enum { base, .. } => self.ty(scope, base),
+            TypeKind::Enum(id) => self.ty(scope, &self.hir[*id].base),
             TypeKind::Struct { fields, .. } => {
                 for field in fields {
                     self.ty(scope, &field.ty);

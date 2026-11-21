@@ -118,15 +118,19 @@ for member in &hir[hir.root()].members { … }
 println!("{hir}");                     // a line per member or statement
 ```
 
-A `Hir` is arenas addressed by `ScopeId`, `SymbolId`, `StmtId`, `ExprId` and
-`BindId`, indexed on the `Hir` itself. It holds spans and no syntax node, so
+A `Hir` is arenas addressed by `ScopeId`, `SymbolId`, `StmtId`, `ExprId`,
+`BindId` and `EnumId`, indexed on the `Hir` itself. It holds spans and no syntax node, so
 files lower in parallel and a HIR outlives its tree; its spans resolve
 against the session that parsed it. The types are the API, with public
 fields and no accessors, since every analysis walks them whole. What
 lowering knows it records, so that no reader works it out again: the scope
 declaring each symbol, or holding the `bind` that adds an instance, how a
 parameter was declared, which of a definition's parameters an instance may
-override. What takes the whole design it leaves as written: a name alone
+override, the enum declaring each member and the typedef naming it. A type
+is a value, copied into each declarator it is written for, which adds its
+unpacked dimensions; an enum is the one written, whatever the copies, so
+that its members know it. `hir.types()` lists every type, wherever it is
+written. What takes the whole design it leaves as written: a name alone
 after `bind` may be a definition or an instance. `Display` is for tests and
 debugging, and its format may change.
 
