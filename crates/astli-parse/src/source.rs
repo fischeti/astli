@@ -421,7 +421,9 @@ impl<'a> Expanded<'a> {
         self.pieces.get(at as usize)
     }
 
-    /// Whether a line ends between grammar token `ahead` and the one before it.
+    /// Whether a line ends between grammar token `ahead` and the one before
+    /// it: whitespace holds a newline. A block comment that spans lines ends
+    /// none, as the preprocessor reads lines.
     fn line_break_before(&self, ahead: usize) -> bool {
         let at = self.at as usize + ahead;
         match (
@@ -430,7 +432,7 @@ impl<'a> Expanded<'a> {
         ) {
             (Some(Some(&before)), Some(&after)) => self.pieces[before as usize + 1..after as usize]
                 .iter()
-                .any(|piece| piece.text.contains('\n')),
+                .any(|piece| piece.kind == WHITESPACE && piece.text.contains('\n')),
             _ => false,
         }
     }
@@ -664,7 +666,7 @@ mod tests {
     fn an_undefined_reference_is_shaped_as_raw_mode_would() {
         // Left as written by the expansion, with its arguments when a `(`
         // follows on the same line, and without them when it does not.
-        let mut source = Source::new("`log(\"a\", (1)) ;\n`bare\n(x) ;\n");
+        let mut source = Source::new("`log(\"a\", (1)) ;\n`bare\n(x) ;\n`note /* a\nb */ (y) ;\n");
         let tokens = source.session.expand(source.file).tokens;
         let pieces = pieces(source.session.origins(), &tokens);
         let mut expanded = Expanded::new(&pieces);
@@ -674,8 +676,9 @@ mod tests {
             lengths.extend(expanded.macro_call());
             expanded.bump();
         }
-        // `log ( "a" , ( 1 ) ) -- eight tokens; `bare alone.
-        assert_eq!(lengths, [8, 1]);
+        // `log ( "a" , ( 1 ) ) -- eight tokens; `bare alone; `note ( y ) --
+        // four, since a comment that spans lines ends none.
+        assert_eq!(lengths, [8, 1, 4]);
     }
 
     #[test]
