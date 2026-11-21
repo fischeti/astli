@@ -1773,7 +1773,10 @@ fn lint_reads_what_the_top_builds_only_given_it() {
 fn lint_with_a_top_judges_only_what_it_reaches_by_the_design() {
     let fixture = Fixture::new("lint-top-reached");
     fixture.file("astli.toml", "[top.tb_a]\n");
-    fixture.file("tb/tb_a.sv", "module tb_a;\n  logic unread;\nendmodule\n");
+    fixture.file(
+        "tb/tb_a.sv",
+        "module tb_a;\n  logic unread;\n  always @* ;\nendmodule\n",
+    );
     fixture.file(
         "tb/tb_b.sv",
         "module tb_b;\n  logic unread = 1'b0;\nendmodule\n",
@@ -1782,10 +1785,11 @@ fn lint_with_a_top_judges_only_what_it_reaches_by_the_design() {
     let output = lint_in(fixture.path(), &["--diag", "short"]);
 
     let said = stderr(&output);
-    assert!(
-        said.contains("tb_a.sv:2:9: warning[unused-signal]"),
-        "{said}"
-    );
+    // A file's findings are one list in line order, whichever rules read
+    // the design and whichever the file as written.
+    let design = said.find("tb_a.sv:2:9: warning[unused-signal]");
+    let tree = said.find("tb_a.sv:3:3: warning[always-comb]");
+    assert!(design.is_some() && design < tree, "{said}");
     // No top builds `tb_b`, so the design rules leave it alone, but how it
     // is written is still read.
     assert!(

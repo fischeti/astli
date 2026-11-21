@@ -6,7 +6,9 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use anstyle::AnsiColor;
-use astli_diag::{Sources, resolve_all, write as write_diagnostic, write_github, write_short};
+use astli_diag::{
+    Resolved, Sources, resolve_all, write as write_diagnostic, write_github, write_short,
+};
 use astli_syntax::SyntaxNode;
 use astli_text::{Diagnostic, Origins, Severity};
 use rowan::NodeOrToken;
@@ -149,56 +151,97 @@ pub fn diagnostics(
     origins: &Origins,
     diagnostics: &[Diagnostic],
 ) -> Result<usize> {
-    if diagnostics.is_empty() {
+    let resolved = (resolve_all(origins, diagnostics).into_iter())
+        .map(|one| (0, one))
+        .collect();
+    written(to, &mut [Sources::new(origins)], resolved)
+}
+
+/// Formats and prints what was found in `file` to `to`, as one list, each
+/// set of diagnostics resolved against its own origins, and returns the
+/// count of errors encountered.
+///
+/// Those reported in `file` come first, in the order of its lines, as
+/// written, whichever set they are in; then the rest, such as those in a
+/// header it includes, set by set.
+pub fn findings(
+    to: &mut dyn Write,
+    file: &Path,
+    sets: &[(&Origins, &[Diagnostic])],
+) -> Result<usize> {
+    let mut resolved: Vec<(usize, Resolved)> = (sets.iter().enumerate())
+        .flat_map(|(at, (origins, found))| {
+            (resolve_all(origins, found).into_iter()).map(move |one| (at, one))
+        })
+        .collect();
+    resolved.sort_by_key(
+        |(at, one)| match sets[*at].0.path(one.at.src_id) == Some(file) {
+            true => (false, one.at.start),
+            false => (true, 0),
+        },
+    );
+    let mut sources: Vec<Sources> = sets
+        .iter()
+        .map(|(origins, _)| Sources::new(origins))
+        .collect();
+    written(to, &mut sources, resolved)
+}
+
+/// Writes each of `resolved`, which the set of `sources` it is in resolves,
+/// and returns the count of errors among them.
+fn written(
+    to: &mut dyn Write,
+    sources: &mut [Sources],
+    resolved: Vec<(usize, Resolved)>,
+) -> Result<usize> {
+    if resolved.is_empty() {
         return Ok(0);
     }
 
-    let resolved = resolve_all(origins, diagnostics);
     let errors = resolved
         .iter()
-        .filter(|one| one.diagnostic.is_error())
+        .filter(|(_, one)| one.diagnostic.is_error())
         .count();
     let warnings = resolved
         .iter()
-        .filter(|one| one.diagnostic.severity == Severity::Warning)
+        .filter(|(_, one)| one.diagnostic.severity == Severity::Warning)
         .count();
 
-    let mut sources = Sources::new(origins);
     // A tool reading lines wants every one, and nothing between them.
     match FORMAT.get() {
         Some(DiagnosticFormat::Short) => {
-            for one in &resolved {
-                write_short(to, &sources, one)?;
+            for (at, one) in &resolved {
+                write_short(to, &sources[*at], one)?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Github) => {
-            for one in &resolved {
-                write_github(to, &sources, one)?;
+            for (at, one) in &resolved {
+                write_github(to, &sources[*at], one)?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Json) => {
-            for one in &resolved {
-                writeln!(to, "{}", json::line(&sources, one))?;
+            for (at, one) in &resolved {
+                writeln!(to, "{}", json::line(&sources[*at], one))?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Gitlab) => {
-            for one in &resolved {
-                json::find(&sources, one);
+            for (at, one) in &resolved {
+                json::find(&sources[*at], one);
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Pretty) | None => {}
     }
 
-    for (index, one) in resolved.iter().take(SHOWN).enumerate() {
+    for (index, (at, one)) in resolved.iter().take(SHOWN).enumerate() {
         // A blank line keeps one report's frame from running into the next.
         if index > 0 {
             writeln!(to)?;
         }
-        write_diagnostic(to, &mut sources, one, term::style())?;
+        write_diagnostic(to, &mut sources[*at], one, term::style())?;
     }
 
     // One report counts itself; past that, a tally saves counting frames.

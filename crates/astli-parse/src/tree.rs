@@ -91,4 +91,10 @@ impl SyntaxTree {
     pub fn origins(&self) -> &Origins {
         self.session.origins()
     }
+
+    /// The store the diagnostics' spans index, kept to render them after
+    /// the tree is gone.
+    pub fn into_origins(self) -> Origins {
+        self.session.into_origins()
+    }
 }
