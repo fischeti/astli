@@ -145,11 +145,8 @@ fn one(
     }?;
 
     // Diagnostics are written to stderr so that redirected stdout remains clean.
-    sink.errors += crate::render::diagnostics(
-        sink.diagnostics,
-        opened.session.origins(),
-        opened.diagnostics(),
-    )?;
+    sink.report
+        .render(opened.session.origins(), opened.diagnostics())?;
 
     Ok(counts)
 }

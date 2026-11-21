@@ -15,7 +15,7 @@ use rayon::prelude::*;
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::filelist::quoted;
-use crate::render;
+use crate::render::Report;
 use crate::run::Run;
 use crate::session;
 use crate::term::{self, Place};
@@ -127,12 +127,11 @@ pub(crate) fn summarized(
     path: &Path,
     build: &astli_preproc::Build,
     told: impl FnOnce(Vec<Diagnostic>) -> Vec<Diagnostic>,
-) -> Result<(Summary, Vec<u8>, usize)> {
+) -> Result<(Summary, Report)> {
     let mut opened = session::open(path, build)?;
     let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
-    let mut said = Vec::new();
-    let errors = render::diagnostics(&mut said, opened.session.origins(), &told(diagnostics))?;
-    Ok((summary, said, errors))
+    let said = Report::of(opened.session.origins(), &told(diagnostics))?;
+    Ok((summary, said))
 }
 
 /// Of what a dependency's file says, what says an `` `include `` found no

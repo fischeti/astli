@@ -11,6 +11,7 @@ use astli_diag::{
 };
 use astli_syntax::SyntaxNode;
 use astli_text::{Diagnostic, Origins, Severity};
+use rayon::prelude::*;
 use rowan::NodeOrToken;
 use similar::udiff::UnifiedHunkHeader;
 use similar::{ChangeTag, TextDiff};
@@ -143,6 +144,48 @@ pub static FORMAT: OnceLock<DiagnosticFormat> = OnceLock::new();
 /// at the end, rather than writing each file's as it is rendered.
 pub fn gathered() -> bool {
     matches!(FORMAT.get(), Some(DiagnosticFormat::Gitlab))
+}
+
+/// What was rendered of a file, for stderr, and how many errors it holds.
+#[derive(Default)]
+pub struct Report {
+    pub said: Vec<u8>,
+    pub errors: usize,
+}
+
+impl Report {
+    /// `found`, whose spans `origins` resolves, rendered.
+    pub fn of(origins: &Origins, found: &[Diagnostic]) -> Result<Report> {
+        let mut report = Report::default();
+        report.render(origins, found)?;
+        Ok(report)
+    }
+
+    /// Renders `found`, whose spans `origins` resolves, after what the
+    /// report holds.
+    pub fn render(&mut self, origins: &Origins, found: &[Diagnostic]) -> Result {
+        self.errors += diagnostics(&mut self.said, origins, found)?;
+        Ok(())
+    }
+
+    /// Adds what `other` holds after what the report does.
+    pub fn add(&mut self, other: Report) {
+        self.said.extend(other.said);
+        self.errors += other.errors;
+    }
+}
+
+/// Makes a report of each of `files` with `report`, in parallel, in order.
+pub fn reports<T: Send>(
+    files: Vec<T>,
+    report: impl Fn(T) -> Result<Report> + Sync + Send,
+) -> Result<Vec<Report>> {
+    // A report that gathers every file's findings in one list gathers them
+    // in the order rendered.
+    match gathered() {
+        true => files.into_iter().map(report).collect(),
+        false => files.into_par_iter().map(report).collect(),
+    }
 }
 
 /// Formats and prints diagnostics to `to`, returning the count of errors encountered.

@@ -47,7 +47,7 @@ use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::lockfile::Target;
 use crate::points;
-use crate::render;
+use crate::render::{self, Report};
 use crate::run::Run;
 use crate::term;
 
@@ -131,7 +131,7 @@ impl Lint {
             let mut read = Read::of(path, &levels[at[path]], !self.fix, design)?;
             if !design {
                 for (origins, found) in std::mem::take(&mut read.found) {
-                    sink.errors += render::diagnostics(sink.diagnostics, &origins, &found)?;
+                    sink.report.render(&origins, &found)?;
                 }
             }
             Ok(read)
@@ -155,21 +155,7 @@ impl Lint {
             Ok(())
         })?;
         designs.flags.undeclared("no top")?;
-        // A file's findings are one list, whichever layer found them.
-        let rendered = |read: Read| {
-            let sets: Vec<(&Origins, &[Diagnostic])> = (read.found.iter())
-                .map(|(origins, found)| (&**origins, found.as_slice()))
-                .collect();
-            let mut said = Vec::new();
-            let errors = render::findings(&mut said, &read.path, &sets)?;
-            Ok((said, errors))
-        };
-        // A report that gathers every file's findings in one list gathers
-        // them in the order rendered.
-        let rendered = match render::gathered() {
-            true => trees.into_iter().map(rendered).collect::<Result<_>>()?,
-            false => trees.into_par_iter().map(rendered).collect::<Result<_>>()?,
-        };
+        let rendered = render::reports(trees, Read::report)?;
         let mut outcome = analysis::write(out, rendered)?;
         outcome.failed = unread + unread_units;
         outcome.finish()
@@ -345,6 +331,16 @@ impl<'a> Read<'a> {
             waivers,
             levels,
         })
+    }
+
+    /// What was found, rendered as one list, whichever layer found it.
+    fn report(self) -> Result<Report> {
+        let sets: Vec<(&Origins, &[Diagnostic])> = (self.found.iter())
+            .map(|(origins, found)| (&**origins, found.as_slice()))
+            .collect();
+        let mut said = Vec::new();
+        let errors = render::findings(&mut said, &self.path, &sets)?;
+        Ok(Report { said, errors })
     }
 }
 

@@ -30,6 +30,7 @@ use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::json::Json;
+use crate::render::{self, Report};
 use crate::term;
 use crate::tops::{Chosen, Flags};
 
@@ -83,9 +84,10 @@ impl RunWith<Ctx<'_>> for Elab {
         let reported = (analysis.origins.iter().zip(parsed))
             .zip(&plan.units)
             .filter(|(_, unit)| unit.reported)
-            .map(|((origins, found), _)| (Some(&**origins), Vec::new(), 0, found))
+            .map(|(file, _)| file)
             .collect();
-        let mut reported = analysis::report(out, reported)?;
+        let rendered = render::reports(reported, |(origins, found)| Report::of(origins, &found))?;
+        let mut reported = analysis::write(out, rendered)?;
         let written = match self.json {
             true => design(&analysis).to_string(),
             false => (analysis.tops.iter())

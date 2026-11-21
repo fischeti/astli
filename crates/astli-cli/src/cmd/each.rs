@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, mpsc};
 
 use crate::error::{Error, Result};
-use crate::render::{Out, have, plural};
+use crate::render::{Out, Report, have, plural};
 use crate::run::Run;
 use crate::term;
 
@@ -19,10 +19,8 @@ use crate::term;
 pub struct Sink<'a> {
     /// Standard output buffer for generated artifacts (tokens, AST, preprocessed source).
     pub out: &'a mut dyn Write,
-    /// Diagnostic buffer for compiler warnings and errors.
-    pub diagnostics: &'a mut dyn Write,
-    /// Total number of diagnostic errors encountered for this file.
-    pub errors: usize,
+    /// What the file's work says on stderr, and how many errors that holds.
+    pub report: Report,
     /// The run, for a problem that cannot be rendered with the rest.
     pub run: &'a Run,
 }
@@ -125,20 +123,18 @@ fn sequential<T>(
 
     for (at, file) in files.iter().enumerate() {
         let file = file.as_ref();
-        let mut said = Vec::new();
-        let mut errors = 0;
+        let mut said = Report::default();
         let value = turn(out, run, heading, at, file, &mut outcome, |out| {
             let mut sink = Sink {
                 out,
-                diagnostics: &mut said,
-                errors: 0,
+                report: Report::default(),
                 run,
             };
             let value = work(&mut sink, file);
-            errors = sink.errors;
+            said = sink.report;
             value
         });
-        report(out, &said, errors, &mut outcome)?;
+        report(out, &said, &mut outcome)?;
         value?;
     }
 
@@ -146,17 +142,17 @@ fn sequential<T>(
 }
 
 /// Flushes stdout before emitting diagnostics to stderr to maintain proper message ordering.
-fn report<T>(out: &mut Out, said: &[u8], errors: usize, outcome: &mut Outcome<T>) -> Result {
+fn report<T>(out: &mut Out, said: &Report, outcome: &mut Outcome<T>) -> Result {
     // Counted whether or not anything was said: a GitLab report keeps a
     // file's errors to write at the end.
-    if errors > 0 {
+    if said.errors > 0 {
         outcome.wrong += 1;
     }
-    if said.is_empty() {
+    if said.said.is_empty() {
         return Ok(());
     }
     out.flush()?;
-    term::write(said).map_err(Error::Output)?;
+    term::write(&said.said).map_err(Error::Output)?;
     Ok(())
 }
 
@@ -188,21 +184,19 @@ fn parallel<T: Send>(
                 // them to wait for output that will never be written.
                 let _stop = Stop(queue);
                 while let Some(at) = queue.take(files.len()) {
-                    let (mut printed, mut said) = (Vec::new(), Vec::new());
+                    let mut printed = Vec::new();
                     let mut sink = Sink {
                         out: &mut printed,
-                        diagnostics: &mut said,
-                        errors: 0,
+                        report: Report::default(),
                         run,
                     };
                     let value = work(&mut sink, files[at].as_ref());
-                    let errors = sink.errors;
-                    queue.hold(printed.len() + said.len());
+                    let said = sink.report;
+                    queue.hold(printed.len() + said.said.len());
                     let done = Done {
                         value,
                         printed,
                         said,
-                        errors,
                     };
                     if sent.send((at, done)).is_err() {
                         break;
@@ -244,12 +238,12 @@ fn write<T>(
                 Err(_) => return Ok(()),
             }
         };
-        queue.release(done.printed.len() + done.said.len());
+        queue.release(done.printed.len() + done.said.said.len());
         let turned = turn(out, run, heading, at, file.as_ref(), outcome, |out| {
             out.write_all(&done.printed)?;
             done.value
         });
-        report(out, &done.said, done.errors, outcome)?;
+        report(out, &done.said, outcome)?;
         turned?;
     }
     Ok(())
@@ -259,8 +253,7 @@ fn write<T>(
 struct Done<T> {
     value: Result<T>,
     printed: Vec<u8>,
-    said: Vec<u8>,
-    errors: usize,
+    said: Report,
 }
 
 /// The most output the files waiting to be written may hold before threads

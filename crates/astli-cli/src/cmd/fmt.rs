@@ -104,7 +104,7 @@ impl Fmt {
             let tree = crate::session::tree(path)?;
             report(
                 sink.out,
-                sink.diagnostics,
+                &mut sink.report.said,
                 path,
                 &tree,
                 options,
