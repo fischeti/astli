@@ -246,7 +246,7 @@ impl Printer<'_> {
             }
             SymbolKind::Typedef(ty) => self.line(format_args!("typedef {name}: {}", self.ty(ty))),
             SymbolKind::Forward => self.line(format_args!("typedef {name}")),
-            SymbolKind::EnumMember { value } => {
+            SymbolKind::EnumMember { value, .. } => {
                 let value = self.init(*value);
                 self.line(format_args!("enum member {name}{value}"));
             }
@@ -733,7 +733,8 @@ impl Printer<'_> {
                 None => spelling(*kw).to_string(),
             },
             TypeKind::Named(name) => self.expr(*name),
-            TypeKind::Enum { base, members } => {
+            TypeKind::Enum(id) => {
+                let Enum { base, members, .. } = &self.hir[*id];
                 let members = list(
                     members
                         .iter()

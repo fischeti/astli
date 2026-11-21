@@ -20,6 +20,7 @@ pub struct Hir {
     pub(crate) stmts: Vec<Stmt>,
     pub(crate) exprs: Vec<Expr>,
     pub(crate) binds: Vec<Bind>,
+    pub(crate) enums: Vec<Enum>,
 }
 
 macro_rules! ids {
@@ -55,6 +56,8 @@ ids! {
     ExprId => exprs: Expr;
     /// A [`Bind`] of a [`Hir`].
     BindId => binds: Bind;
+    /// An [`Enum`] of a [`Hir`].
+    EnumId => enums: Enum;
 }
 
 impl Hir {
@@ -77,6 +80,45 @@ impl Hir {
 
     pub fn exprs(&self) -> impl Iterator<Item = (ExprId, &Expr)> {
         (self.exprs.iter().enumerate()).map(|(i, expr)| (ExprId(i as u32), expr))
+    }
+
+    /// Every type the file writes: each declaration's, each where an
+    /// expression may stand, each enum's base, and the members' of each
+    /// struct among them.
+    pub fn types(&self) -> Vec<&Type> {
+        let mut types = Vec::new();
+        for (_, symbol) in self.symbols() {
+            match &symbol.kind {
+                SymbolKind::Typedef(ty)
+                | SymbolKind::Port(Port { ty, .. })
+                | SymbolKind::Parameter(Parameter { ty, .. })
+                | SymbolKind::Net(Data { ty, .. })
+                | SymbolKind::Variable(Data { ty, .. })
+                | SymbolKind::Subroutine {
+                    returns: Some(ty), ..
+                }
+                | SymbolKind::Coverpoint(Coverpoint { ty: Some(ty), .. }) => types.push(ty),
+                SymbolKind::Class(class) => {
+                    types.extend(class.extends.iter().map(|(ty, _)| ty));
+                    types.extend(&class.implements);
+                }
+                _ => {}
+            }
+        }
+        for (_, expr) in self.exprs() {
+            if let ExprKind::Type(ty) = &expr.kind {
+                types.push(ty);
+            }
+        }
+        types.extend(self.enums.iter().map(|it| &it.base));
+        let mut at = 0;
+        while at < types.len() {
+            if let TypeKind::Struct { fields, .. } = &types[at].kind {
+                types.extend(fields.iter().map(|field| &field.ty));
+            }
+            at += 1;
+        }
+        types
     }
 
     /// The nearest scope of `kind` that `scope` is or is inside: the
@@ -309,6 +351,8 @@ pub enum SymbolKind {
     /// A name an enum declares in the scope around it.
     EnumMember {
         value: Option<ExprId>,
+        /// The enum declaring it.
+        owner: EnumId,
     },
     Subroutine {
         keyword: SyntaxKind,
@@ -600,11 +644,8 @@ pub enum TypeKind {
     /// A typedef, class or interface, by a name expression: `t`, `pkg::t`,
     /// `intf.mp`, `C#(8)`.
     Named(ExprId),
-    Enum {
-        base: Box<Type>,
-        /// Declared in the scope the enum is written in.
-        members: Vec<SymbolId>,
-    },
+    /// An enum, one however many declarators it is written for.
+    Enum(EnumId),
     /// A struct or union, by its keyword.
     Struct {
         keyword: SyntaxKind,
@@ -621,6 +662,17 @@ pub enum TypeKind {
         path: Vec<PatternStep>,
     },
     Opaque(Opaque),
+}
+
+/// An enum as written.
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub base: Type,
+    /// Declared in the scope the enum is written in.
+    pub members: Vec<SymbolId>,
+    /// The typedef that names it: one whose type it is, with no dimensions
+    /// added.
+    pub typedef: Option<SymbolId>,
 }
 
 /// A step into a value a pattern takes apart.

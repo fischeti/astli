@@ -97,33 +97,18 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
 
     // A packed struct's member given a default, wherever the struct is
     // written.
-    let mut types: Vec<&Type> = Vec::new();
-    for (_, symbol) in hir.symbols() {
-        match &symbol.kind {
-            SymbolKind::Typedef(ty)
-            | SymbolKind::Port(Port { ty, .. })
-            | SymbolKind::Parameter(Parameter { ty, .. })
-            | SymbolKind::Net(Data { ty, .. })
-            | SymbolKind::Variable(Data { ty, .. })
-            | SymbolKind::Subroutine {
-                returns: Some(ty), ..
-            } => types.push(ty),
-            _ => {}
-        }
-    }
-    for (_, expr) in hir.exprs() {
-        if let ExprKind::Type(ty) = &expr.kind {
-            types.push(ty);
-        }
-    }
-    while let Some(ty) = types.pop() {
-        if let TypeKind::Struct { packed, fields, .. } = &ty.kind {
+    for ty in hir.types() {
+        if let TypeKind::Struct {
+            packed: true,
+            fields,
+            ..
+        } = &ty.kind
+        {
             for field in fields {
-                if *packed && let Some(default) = field.default {
+                if let Some(default) = field.default {
                     let at = hir[default].span;
                     found.push(diagnostics::packed_member_default(&field.name.text, at));
                 }
-                types.push(&field.ty);
             }
         }
     }

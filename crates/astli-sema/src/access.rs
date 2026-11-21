@@ -311,7 +311,7 @@ impl Walk<'_> {
             SymbolKind::Genvar(init) => self.init(id, *init),
             SymbolKind::Typedef(ty) => self.ty(ty),
             SymbolKind::Forward => {}
-            SymbolKind::EnumMember { value } => self.value(*value, READ),
+            SymbolKind::EnumMember { value, .. } => self.value(*value, READ),
             SymbolKind::Subroutine {
                 scope,
                 returns,
@@ -622,7 +622,7 @@ impl Walk<'_> {
             TypeKind::Named(name) | TypeKind::TypeOf(name) => self.expr(*name, READ),
             // The value is read where it is matched.
             TypeKind::Matched { .. } => {}
-            TypeKind::Enum { base, .. } => self.ty(base),
+            TypeKind::Enum(id) => self.ty(&self.hir[*id].base),
             TypeKind::Struct { fields, .. } => {
                 for field in fields {
                     self.ty(&field.ty);
