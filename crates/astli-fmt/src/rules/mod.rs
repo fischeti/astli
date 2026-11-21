@@ -52,9 +52,19 @@ struct Writer<'a> {
 impl Writer<'_> {
     /// `node` with the comments around it.
     fn node(&mut self, node: &SyntaxNode) -> Doc {
+        self.with_comments(node, Self::layout)
+    }
+
+    /// `node` laid out by `rule`, with the comments around it: for a rule
+    /// that `layout` cannot pick, since it takes more than the node.
+    fn with_comments(
+        &mut self,
+        node: &SyntaxNode,
+        rule: impl FnOnce(&mut Self, &SyntaxNode) -> Doc,
+    ) -> Doc {
         Doc::concat([
             self.comments.leading(node),
-            self.layout(node),
+            rule(self, node),
             self.comments.trailing(node),
         ])
     }
