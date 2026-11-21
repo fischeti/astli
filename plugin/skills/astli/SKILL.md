@@ -193,7 +193,8 @@ passes only by failing with TEXT in its output, a scope or a tag the
 `$error` or `$fatal` message holds, not an exit code. Each run starts in `run/<seed>/` in its build
 directory, gets `+astli_root=<package root>` to find its files by, and keeps
 its output in `output.log` there. A failure prints the command that repeats
-it; run that rather than `astli run`. A filter matching no test is an error.
+it, with every flag that changed the build or the run and `--trace`, quoted
+for a shell; run that rather than `astli run`. A filter matching no test is an error.
 Quote a name holding `[`, which zsh globs. `[test] timeout` (seconds) bounds
 every run of the package; there is no `[test.NAME]`; `[test] seeds` is
 `--seeds` for every run.
