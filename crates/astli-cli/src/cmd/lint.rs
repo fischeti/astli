@@ -27,7 +27,7 @@
 //! With `--fix`, the files reported are first rewritten with the fixes the
 //! tree rules' findings carry, and what remains is reported.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -43,7 +43,7 @@ use crate::analysis::{self, Analysis, Designs};
 use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
-use crate::discovery::Plan;
+use crate::discovery::{Plan, Whose};
 use crate::error::{Error, Result};
 use crate::lockfile::Target;
 use crate::points;
@@ -178,11 +178,9 @@ impl Lint {
         // With tops, the design rules judge only the files they reach: one
         // no top builds is judged at its defaults, which a root's modules
         // rarely build at. The tree rules read every file all the same.
-        let reached: Option<HashSet<usize>> = match &analysis.index {
+        let reached = match &analysis.index {
             Some(index) if !tops.is_empty() => {
-                let reached =
-                    (index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?;
-                Some(reached.into_iter().collect())
+                Some((index.reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?)
             }
             _ => None,
         };
@@ -193,9 +191,9 @@ impl Lint {
         let at: HashMap<&Path, usize> = (plan.own.iter().enumerate())
             .map(|(at, path)| (path.as_path(), at))
             .collect();
-        let reported: Vec<(usize, usize)> = (plan.units.iter().enumerate())
-            .filter(|(unit, it)| it.reported && reached.as_ref().is_none_or(|it| it.contains(unit)))
-            .filter_map(|(unit, it)| Some((unit, *at.get(it.path.as_path())?)))
+        let reported: Vec<(usize, usize)> = (plan.shown(reached.as_deref(), Whose::Own))
+            .into_iter()
+            .filter_map(|unit| Some((unit, *at.get(plan.units[unit].path.as_path())?)))
             .collect();
         let built = (reported.iter()).any(|&(_, own)| trees[own].levels.needs(Layer::Built))
             && !tops.is_empty();

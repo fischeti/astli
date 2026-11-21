@@ -109,6 +109,26 @@ impl AsRef<Path> for Unit {
     }
 }
 
+/// Whose files a command reports the findings of, as [`Plan::shown`] says.
+#[derive(Clone, Copy)]
+pub enum Whose {
+    /// The root package's, or every file named.
+    Own,
+    /// The root package's, and each dependency's a `path` requirement
+    /// reads from disk.
+    OnDisk,
+}
+
+impl Whose {
+    /// Whether the findings of `unit` are reported.
+    pub fn takes(self, unit: &Unit) -> bool {
+        match self {
+            Whose::Own => unit.reported,
+            Whose::OnDisk => unit.reported || unit.on_disk,
+        }
+    }
+}
+
 impl Plan {
     /// The files `sources` names, or without any those of the package
     /// `target` chose, built with no top's defines until
@@ -205,6 +225,35 @@ impl Plan {
     /// their order is only that of their paths.
     pub fn is_package(&self) -> bool {
         self.packages.is_some()
+    }
+
+    /// The units whose findings a command reports, in order: those `whose`
+    /// takes, of the units the tops reach if `reached` gives them, or else
+    /// of every unit. The commands differ on purpose:
+    ///
+    /// - `check` takes what the tops reach, [`Whose::OnDisk`]: an error in
+    ///   a `path` dependency's file breaks the build, its authors are
+    ///   likely the root's, and only a dependent elaborates it with the
+    ///   values it is given. A file no top builds is another top's to
+    ///   check.
+    /// - `lint`'s design rules take what the tops reach, [`Whose::Own`]: a
+    ///   dependency's style is its authors' to fix, on disk or not, and a
+    ///   file no top builds would be judged at defaults a root's modules
+    ///   rarely build at.
+    /// - `elab` takes every file, reached or not, [`Whose::Own`]: it prints
+    ///   what their expansion and parser say beside a tree built from all
+    ///   of them, and fails for none of it.
+    /// - `files` takes every file without a top, [`Whose::Own`], as the
+    ///   roots of the list. With tops it reports every file the list
+    ///   holds, a dependency's too, since a tool given the list cannot
+    ///   build it either; of a dependency's file only what leaves it short
+    ///   of a header, as `check` reports a reached dependency's.
+    pub fn shown(&self, reached: Option<&[usize]>, whose: Whose) -> Vec<usize> {
+        let takes = |&at: &usize| whose.takes(&self.units[at]);
+        match reached {
+            Some(reached) => reached.iter().copied().filter(takes).collect(),
+            None => (0..self.units.len()).filter(takes).collect(),
+        }
     }
 
     /// Where the unit at `at` in `units` comes in a list grouped by package:

@@ -27,7 +27,7 @@ use usage_rs::{Args, RunWith};
 use crate::analysis::{self, Analysis, Elaborated};
 use crate::cli::{BuildArgs, FeatureArgs, PackageArg, Sources};
 use crate::cmd::{self, Ctx, Outcome};
-use crate::discovery::Plan;
+use crate::discovery::{Plan, Whose};
 use crate::error::{Error, Result};
 use crate::json::Json;
 use crate::render::{self, Report};
@@ -80,11 +80,9 @@ impl RunWith<Ctx<'_>> for Elab {
         flags.check(&analysis)?;
         // What the files reported is printed, and the tree is still built
         // from what they hold.
-        let parsed = std::mem::take(&mut analysis.parsed);
-        let reported = (analysis.origins.iter().zip(parsed))
-            .zip(&plan.units)
-            .filter(|(_, unit)| unit.reported)
-            .map(|(file, _)| file)
+        let (origins, parsed) = (&analysis.origins, &mut analysis.parsed);
+        let reported = (plan.shown(None, Whose::Own).into_iter())
+            .map(|unit| (&*origins[unit], std::mem::take(&mut parsed[unit])))
             .collect();
         let rendered = render::reports(reported, |(origins, found)| Report::of(origins, &found))?;
         let reported = analysis::write(out, rendered)?;
