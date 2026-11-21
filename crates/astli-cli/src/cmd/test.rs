@@ -117,9 +117,8 @@ pub struct Point {
 impl Point {
     /// The point `top` is.
     fn of(elaborated: &Elaborated) -> Point {
-        let name = &elaborated.top.name;
         Point {
-            test: point_of(name).unwrap_or(name).to_string(),
+            test: test_of(elaborated).to_string(),
             values: (elaborated.values.iter())
                 .map(|(name, value)| (name.clone(), value.short()))
                 .collect(),
@@ -136,6 +135,12 @@ impl Point {
         });
         (hash & max).max(1)
     }
+}
+
+/// The test `elaborated` is a point of.
+fn test_of(elaborated: &Elaborated) -> &str {
+    let name = &elaborated.top.name;
+    point_of(name).unwrap_or(name)
 }
 
 impl fmt::Display for Point {
@@ -475,19 +480,13 @@ impl Test {
                 return Err(err);
             }
         };
-        let (Some(builder), Some(mut lists)) =
-            (builder, lists.filter(|_| !selected.points.is_empty()))
-        else {
+        let (Some(builder), Some(mut lists)) = (builder, lists.filter(|it| !it.is_empty())) else {
             return Ok(selected);
         };
-        let lists = (selected.points.iter())
-            .map(|point| {
-                let name = point.to_string();
-                let at = (lists.iter().position(|it| it.elaborated.top.name == name))
-                    .expect("every point is listed");
-                lists.swap_remove(at)
-            })
-            .collect();
+        // Sorted as the points are, and the points made again from them,
+        // so that each is beside what its build reads.
+        lists.sort_by(|a, b| test_of(&a.elaborated).cmp(test_of(&b.elaborated)));
+        selected.points = (lists.iter()).map(|it| Point::of(&it.elaborated)).collect();
         selected.built = Some(Built { builder, lists });
         Ok(selected)
     }
