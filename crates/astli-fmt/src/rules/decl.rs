@@ -136,10 +136,21 @@ impl Writer<'_> {
     /// function's do.
     pub(super) fn modport(&mut self, modport: &SyntaxNode) -> Doc {
         match &significant_children(modport)[..] {
-            [NodeOrToken::Token(name), NodeOrToken::Node(ports)] if ports.kind() == PORT_LIST => {
-                Doc::concat([self.token(name), Doc::Space, self.node(ports)])
+            [NodeOrToken::Token(name), ports] if ports.kind() == PORT_LIST => {
+                let name = self.token(name);
+                Doc::concat([name, Doc::Space, self.header_list(ports, false)])
             }
             _ => self.verbatim(modport),
+        }
+    }
+
+    /// A subroutine a modport imports or exports, on one line: its keywords,
+    /// its return type and its name, with its ports after it.
+    pub(super) fn modport_method(&mut self, method: &SyntaxNode) -> Doc {
+        let children = significant_children(method);
+        match children.split_last() {
+            Some((ports, words)) if ports.kind() == PORT_LIST => self.called(words, Some(ports)),
+            _ => self.spaced(&children),
         }
     }
 

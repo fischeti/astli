@@ -4,9 +4,10 @@
 //! says: the keywords and the name, or a base class. The header says what
 //! goes between its parts, and how each of its lists breaks.
 
-use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*};
+use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxKind::*, SyntaxNode};
+use rowan::NodeOrToken;
 
-use super::{Writer, is_wildcard, separation, significant_children};
+use super::{Writer, separation, significant_children};
 use crate::doc::Doc;
 
 impl Writer<'_> {
@@ -67,19 +68,27 @@ impl Writer<'_> {
         Some(Doc::concat(docs))
     }
 
-    /// A function's, a task's or a checker's header: its qualifiers, its
-    /// keyword and lifetime, its return type, and its name, `class::name` or
-    /// `port.name`, with its ports after it.
+    /// A function's, a task's or a checker's header: its attributes, then
+    /// its qualifiers, its keyword and lifetime, its return type, and its
+    /// name, `class::name` or `port.name`, with its ports after it.
     pub(super) fn subroutine_header(&mut self, header: &[SyntaxElement]) -> Option<Doc> {
+        let attributes = header.iter().take_while(|it| it.kind() == ATTRIBUTES);
+        let (attributes, header) = header.split_at(attributes.count());
+        let named = self.named_header(header)?;
+        Some(Doc::concat([
+            self.attributes(attributes, &Doc::Space),
+            named,
+        ]))
+    }
+
+    /// Words ending in a name, with its ports after it: a property's or a
+    /// sequence's header, or a subroutine's after its attributes.
+    pub(super) fn named_header(&mut self, header: &[SyntaxElement]) -> Option<Doc> {
         let mut parts = Parts(header);
-        let attributes = parts.all(ATTRIBUTES);
         let name = parts.words();
         let ports = parts.one(PORT_LIST);
         parts.end()?;
-        Some(Doc::concat([
-            self.attributes(attributes, &Doc::Space),
-            self.called(name, ports),
-        ]))
+        Some(self.called(name, ports))
     }
 
     /// A covergroup's header: its keyword and name with its formals after
@@ -146,7 +155,7 @@ impl Writer<'_> {
 
     /// A header's list of parameters, ports or arguments, with an entry per
     /// line if `broken`, or else as [`Writer::list`] says. `(.*)` takes the
-    /// ports an `extern` prototype declared, and is written as it is.
+    /// ports an `extern` prototype declared, and has no space inside.
     pub(super) fn header_list(&mut self, list: &SyntaxElement, broken: bool) -> Doc {
         let list = list.as_node().expect("a list is a node");
         self.with_comments(list, |this, list| {
@@ -194,4 +203,14 @@ impl<'a> Parts<'a> {
     fn end(&self) -> Option<()> {
         self.0.is_empty().then_some(())
     }
+}
+
+/// Whether `list` is `(.*)`.
+fn is_wildcard(list: &SyntaxNode) -> bool {
+    let children = significant_children(list);
+    let [_, NodeOrToken::Node(port), _] = &children[..] else {
+        return false;
+    };
+    let port = significant_children(port);
+    matches!(&port[..], [dot, star] if dot.kind() == DOT && star.kind() == STAR)
 }
