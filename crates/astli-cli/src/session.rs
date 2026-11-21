@@ -27,14 +27,19 @@ pub fn tree(path: &Path) -> Result<SyntaxTree> {
 
 /// Opens `path` within a new session configured by `build`.
 pub fn open(path: &Path, build: &Build) -> Result<Opened> {
-    let text = read(path)?;
+    Ok(opened(path, read(path)?, build))
+}
+
+/// Opens `path`, already read as `text`, within a new session configured
+/// by `build`.
+pub fn opened(path: &Path, text: String, build: &Build) -> Opened {
     let mut session = Session::new().building(build.clone());
     let file = session.add(path, text);
-    Ok(Opened {
+    Opened {
         session,
         file,
         diagnostics: Vec::new(),
-    })
+    }
 }
 
 impl Opened {

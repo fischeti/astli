@@ -14,6 +14,7 @@ use astli_index::Declares;
 use astli_package::mark;
 use astli_preproc::MacroTable;
 use astli_sema::{Elaboration, TopError, TopValue};
+use astli_text::is_lfs_pointer;
 
 use crate::analysis::Elaborated;
 use crate::cmd;
@@ -67,20 +68,26 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &Run) -> Result<Vec<Marked
     let outcome = cmd::each(out, &own, run, None, |_, file| {
         // A file that does not name the attributes marks nothing, and is
         // not parsed again.
-        let text = std::fs::read(file).map_err(|err| Error::io(file, err))?;
-        if !(text.windows(MARK.len())).any(|it| it == MARK.as_bytes()) {
-            return Ok(None);
+        let bytes = std::fs::read(file).map_err(|err| Error::io(file, err))?;
+        if !(bytes.windows(MARK.len())).any(|it| it == MARK.as_bytes()) {
+            return Ok(Vec::new());
         }
-        let opened = session::open(file, &astli_preproc::Build::new())?;
+        // Bytes that are no source, not UTF-8 or a Git LFS pointer, are
+        // read again, to be refused as any read of a source refuses them.
+        let text = match String::from_utf8(bytes) {
+            Ok(text) if !is_lfs_pointer(&text) => text,
+            _ => session::read(file)?,
+        };
+        let opened = session::opened(file, text, &astli_preproc::Build::new());
         let parsed = astli_parse::parse(&opened.session, opened.file, MacroTable::new());
-        Ok(Some(marks(opened.session.origins(), &parsed)))
+        Ok(marks(opened.session.origins(), &parsed))
     })?;
     // Only a file that could not be read fails here.
     outcome.finish()?;
 
     let mut marked = Vec::new();
     let mut wrong = 0;
-    for marks in outcome.values.iter().flatten() {
+    for marks in &outcome.values {
         wrong += tests(run, marks, &mut marked);
     }
     if wrong > 0 {
