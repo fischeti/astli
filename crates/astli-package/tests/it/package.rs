@@ -1203,15 +1203,15 @@ fn a_dependency_says_where_it_comes_from() {
     );
     // Read, and refused once resolved.
     assert_eq!(source("tech"), None);
-    let submodules = |name: &str| package.manifest.dependencies[name].submodules.clone();
+    let submodules = |name: &str| package.manifest.dependencies[name].takes.submodules.clone();
     assert_eq!(submodules("idma"), Submodules::All);
     assert_eq!(
         submodules("core"),
         Submodules::Paths(["vendor/fpu".to_string()].into())
     );
     assert!(submodules("axi").is_empty());
-    assert!(package.manifest.dependencies["idma"].lfs);
-    assert!(!package.manifest.dependencies["axi"].lfs);
+    assert!(package.manifest.dependencies["idma"].takes.lfs);
+    assert!(!package.manifest.dependencies["axi"].takes.lfs);
 }
 
 #[test]

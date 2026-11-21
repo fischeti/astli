@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::time::Duration;
 
-use astli_package::{Submodules, lfs_object, mark};
+use astli_package::{Submodules, Takes, lfs_object, mark};
 use gix::ObjectId;
 use gix::filter::plumbing::eol::{AutoCrlf, Mode};
 use gix::index::entry::Mode as Kind;
@@ -663,24 +663,6 @@ const LFS: &str = "git-lfs";
 
 /// The largest a Git LFS pointer is, as its specification bounds it.
 const POINTER_SIZE: u64 = 1024;
-
-/// What a checkout holds besides its commit's own files.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Takes {
-    /// The submodules it writes in.
-    pub submodules: Submodules,
-    /// Whether it writes what each file stored with Git LFS holds, in its
-    /// submodules too, rather than the pointer the commit holds.
-    pub lfs: bool,
-}
-
-impl Takes {
-    /// Adds what `other` takes.
-    pub fn add(&mut self, other: &Takes) {
-        self.submodules.add(&other.submodules);
-        self.lfs |= other.lfs;
-    }
-}
 
 /// A submodule a checkout takes, at the commit its gitlink names.
 struct Taken {

@@ -23,7 +23,7 @@ mod version;
 
 pub use error::Error;
 pub use lock::{LOCKFILE, Lock, Locked};
-pub use mirror::{Checkout, Mirror, Takes};
+pub use mirror::{Checkout, Mirror};
 pub use report::{Report, Silent, Step};
 pub use resolve::{Located, Origin, Overrides, Resolution, Resolved, Warning, resolve};
 pub use store::{Store, canonical};

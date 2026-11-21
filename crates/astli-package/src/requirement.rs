@@ -27,14 +27,10 @@ pub struct Requirement {
     /// defaults are off only if every requirement of it in the design turns
     /// them off.
     pub default_features: bool,
-    /// The submodules of its repository it checks out. Every requirement of
-    /// a package adds to them, as it does to the features enabled.
-    pub submodules: Submodules,
-    /// Whether its checkout fetches the files its repository stores with
-    /// Git LFS, rather than leaving their pointers. Any requirement of a
-    /// package asking for them makes its checkout fetch them, in its
-    /// submodules too.
-    pub lfs: bool,
+    /// The submodules of its repository it checks out, and whether it
+    /// fetches the files stored with Git LFS. Every requirement of a
+    /// package adds to them, as it does to the features enabled.
+    pub takes: Takes,
 }
 
 impl Default for Requirement {
@@ -43,8 +39,7 @@ impl Default for Requirement {
             source: None,
             features: Vec::new(),
             default_features: true,
-            submodules: Submodules::default(),
-            lfs: false,
+            takes: Takes::default(),
         }
     }
 }
@@ -63,6 +58,24 @@ pub enum Submodules {
 impl Default for Submodules {
     fn default() -> Submodules {
         Submodules::Paths(BTreeSet::new())
+    }
+}
+
+/// What a checkout of a repository holds besides its commit's own files.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Takes {
+    /// The submodules it writes in.
+    pub submodules: Submodules,
+    /// Whether it writes what each file stored with Git LFS holds, in its
+    /// submodules too, rather than the pointer the commit holds.
+    pub lfs: bool,
+}
+
+impl Takes {
+    /// Adds what `other` takes.
+    pub fn add(&mut self, other: &Takes) {
+        self.submodules.add(&other.submodules);
+        self.lfs |= other.lfs;
     }
 }
 
@@ -179,8 +192,10 @@ impl AstliEntry {
             source,
             features: self.features,
             default_features: self.default_features.unwrap_or(true),
-            submodules,
-            lfs: self.lfs,
+            takes: Takes {
+                submodules,
+                lfs: self.lfs,
+            },
         })
     }
 }
