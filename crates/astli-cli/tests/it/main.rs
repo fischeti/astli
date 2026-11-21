@@ -2,6 +2,19 @@
 //! the whole dependency graph, so the crate has one.
 
 mod benchmarks;
-mod cli;
+mod bender;
+mod build;
+mod command_line;
 mod corpus;
+mod design;
+mod diagnostics;
+mod elab;
+mod files;
+mod fmt;
+mod lex_parse;
+mod lint;
+mod packages;
 mod plugin;
+mod support;
+mod test;
+mod workspace;
