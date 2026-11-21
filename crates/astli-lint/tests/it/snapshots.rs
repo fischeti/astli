@@ -9,6 +9,9 @@
 //! A rule that reads what is built sees the case built from each module
 //! nothing in it instantiates.
 //!
+//! A line `// option: <key> <value>...` in a case sets the rule's option
+//! `key` to the values after it, none for an empty list.
+//!
 //! Where a rule's findings carry a fix, the case with every fix applied is
 //! compared with the `.fixed` beside it, and must parse whole and leave
 //! nothing more to fix: a fix that does not do away with its finding, or
@@ -99,6 +102,14 @@ fn found(rule: &str, name: &str, text: String, unparsed: bool) -> (String, Optio
         config.set(group.name(), Level::Allow).unwrap();
     }
     config.set(rule, Level::Warn).unwrap();
+    for line in tree.source().lines() {
+        if let Some(option) = line.trim().strip_prefix("// option:") {
+            let mut words = option.split_whitespace();
+            let key = words.next().expect("an option's key");
+            let values: Vec<&str> = words.collect();
+            config.set_option(rule, key, &values).unwrap();
+        }
+    }
 
     let mut out = String::new();
     let found = match RULES.iter().find(|it| it.name == rule) {

@@ -76,6 +76,10 @@ astli lint --allow lowrisc --warn parameter-name-style rtl/*.sv
   several with a comma-separated list. For whole directories, use
   `[lint.paths]` in `astli.toml`. Prefer fixing the code over waiving it, and
   ask before adding waivers.
+- `unused-signal` and `unused-parameter` skip a name matching their
+  `ignore` patterns, `["*unused*"]` by default in any case, so name a
+  signal meant to be left unread `unused_*`. A project's
+  `[lint.rules.unused-signal] ignore = [...]` replaces that default.
 
 ## Checking a design
 

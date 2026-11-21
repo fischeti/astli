@@ -1,5 +1,5 @@
 //! What a project may set of a rule beyond its level: the styles the
-//! naming rules hold names to.
+//! naming rules hold names to, and the names the unused rules leave alone.
 
 use std::fmt;
 
@@ -23,6 +23,9 @@ pub enum OptionKind {
     Cases,
     /// The patterns a name may match, any one of them.
     Patterns,
+    /// The patterns of the names a rule leaves alone, any one of them,
+    /// which may be none.
+    Ignored,
 }
 
 /// An option's value, parsed.
@@ -35,7 +38,7 @@ pub(crate) enum Value {
 impl Value {
     /// `values` as `kind` holds them.
     pub(crate) fn parse<S: AsRef<str>>(kind: OptionKind, values: &[S]) -> Result<Value, String> {
-        if values.is_empty() {
+        if values.is_empty() && kind != OptionKind::Ignored {
             return Err("names nothing, so that no name passes".to_string());
         }
         let values = values.iter().map(|it| it.as_ref());
@@ -44,7 +47,7 @@ impl Value {
                 .map(Case::named)
                 .collect::<Result<_, _>>()
                 .map(Value::Cases),
-            OptionKind::Patterns => (values.map(Pattern::parse))
+            OptionKind::Patterns | OptionKind::Ignored => (values.map(Pattern::parse))
                 .collect::<Result<_, _>>()
                 .map(Value::Patterns),
         }
@@ -168,6 +171,18 @@ impl Pattern {
             left = &left[at + piece.len()..];
         }
         (!stem.is_empty()).then_some(stem)
+    }
+
+    /// Whether `name` matches, in whatever case either is written.
+    pub fn matches_ignoring_case(&self, name: &str) -> bool {
+        let lower = Pattern {
+            pieces: self
+                .pieces
+                .iter()
+                .map(|it| it.to_lowercase().into())
+                .collect(),
+        };
+        lower.stem(&name.to_lowercase()).is_some()
     }
 
     /// The text before and after the one `*`, if the pattern has one.
@@ -430,6 +445,15 @@ mod tests {
             let parsed = Pattern::parse(pattern).unwrap();
             assert_eq!(parsed.stem(name), stem, "`{pattern}` against `{name}`");
         }
+    }
+
+    #[test]
+    fn a_pattern_may_match_ignoring_case() {
+        let pattern = Pattern::parse("*Unused*").unwrap();
+        assert!(pattern.matches_ignoring_case("spare_UNUSED"));
+        assert!(pattern.matches_ignoring_case("unused"));
+        assert!(!pattern.matches_ignoring_case("spare"));
+        assert_eq!(pattern.stem("unused"), None);
     }
 
     #[test]
