@@ -15,8 +15,9 @@ use crate::resolve::Resolution;
 #[derive(Debug, Clone)]
 pub struct Conversion {
     pub kind: ConversionKind,
-    /// What it stands in.
-    pub within: Within,
+    /// Whether it stands in a class, where nothing is evaluated: typing
+    /// reads it, and the width rules do not.
+    pub in_class: bool,
     /// Whether a branch around it that a constant condition rules out
     /// never evaluates it, as one parameter's value or another's decides.
     pub unevaluated: bool,
@@ -69,16 +70,6 @@ pub enum ConversionKind {
     },
 }
 
-/// What a conversion stands in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Within {
-    /// The frame's own items and processes.
-    Body,
-    /// A subroutine's body, or a class's, which typing reads and the width
-    /// rules do not.
-    Routine,
-}
-
 impl Elaboration {
     /// Gives `f` each conversion in `frame`, in the order of a walk of its
     /// members, each before what it holds. A property's operators, a type,
@@ -92,7 +83,7 @@ impl Elaboration {
             walked,
             unevaluated: 0,
             hir: &self.design()[frame.file],
-            within: Within::Body,
+            in_class: false,
             function: None,
             f,
         };
@@ -108,7 +99,7 @@ struct Walk<'a, F> {
     /// out.
     unevaluated: u32,
     hir: &'a Hir,
-    within: Within,
+    in_class: bool,
     /// The function whose body is walked, if it returns a value.
     function: Option<SymbolId>,
     f: F,
@@ -116,10 +107,10 @@ struct Walk<'a, F> {
 
 impl<F: FnMut(Conversion)> Walk<'_, F> {
     fn give(&mut self, kind: ConversionKind) {
-        let (within, unevaluated) = (self.within, self.unevaluated > 0);
+        let (in_class, unevaluated) = (self.in_class, self.unevaluated > 0);
         (self.f)(Conversion {
             kind,
-            within,
+            in_class,
             unevaluated,
         });
     }
@@ -129,15 +120,6 @@ impl<F: FnMut(Conversion)> Walk<'_, F> {
         self.unevaluated += u32::from(!evaluated);
         walk(self);
         self.unevaluated -= u32::from(!evaluated);
-    }
-
-    /// Walks what `walk` does in `within`, inside a function's body where
-    /// that returns a value.
-    fn inside(&mut self, within: Within, function: Option<SymbolId>, walk: impl FnOnce(&mut Self)) {
-        let outer = (self.within, self.function);
-        (self.within, self.function) = (within, function);
-        walk(self);
-        (self.within, self.function) = outer;
     }
 
     fn scope(&mut self, scope: ScopeId) {
@@ -187,18 +169,17 @@ impl<F: FnMut(Conversion)> Walk<'_, F> {
                 body,
                 ..
             } => {
-                let function = returns.as_ref().map(|_| symbol);
-                self.inside(Within::Routine, function, |walk| {
-                    walk.locals(*scope);
-                    for &stmt in body {
-                        walk.stmt(stmt);
-                    }
-                });
+                let outer = std::mem::replace(&mut self.function, returns.as_ref().map(|_| symbol));
+                self.locals(*scope);
+                for &stmt in body {
+                    self.stmt(stmt);
+                }
+                self.function = outer;
             }
             SymbolKind::Class(class) => {
-                self.inside(Within::Routine, self.function, |walk| {
-                    walk.scope(class.scope)
-                });
+                let outer = std::mem::replace(&mut self.in_class, true);
+                self.scope(class.scope);
+                self.in_class = outer;
             }
             _ => {}
         }

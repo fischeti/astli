@@ -5,7 +5,7 @@
 use astli_sema::{
     Arg, Bits, BodyId, Bound, Built, Conversion, ConversionKind, Elaboration, ExprId, ExprKind,
     FileId, Frame, Literal, Operator, Parameter, Resolution, ScopeKind, SymbolId, SymbolKind,
-    SymbolRef, Ty, TypeKind, Value, Walked, Within,
+    SymbolRef, Ty, TypeKind, Value, Walked,
 };
 use astli_syntax::SyntaxKind::*;
 use astli_text::Span;
@@ -105,12 +105,12 @@ struct Walk<'a> {
 }
 
 impl Walk<'_> {
-    /// The widths of `conversion` in `frame`, if they differ. What a
-    /// subroutine or a class holds is not sized, nor is a return, nor what a
-    /// branch a constant condition rules out holds, as the widths it is
-    /// written for are other parameters'.
+    /// The widths of `conversion` in `frame`, if they differ. Nothing in a
+    /// class is sized, nor is a return, nor what a branch a constant
+    /// condition rules out holds, as the widths it is written for are
+    /// other parameters'.
     fn conversion(&mut self, frame: &Frame, conversion: Conversion) {
-        if conversion.within != Within::Body || conversion.unevaluated {
+        if conversion.in_class || conversion.unevaluated {
             return;
         }
         let hir = &self.elaboration.design()[frame.file];

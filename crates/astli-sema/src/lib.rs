@@ -65,7 +65,7 @@ pub use access::{Access, Driver, Write, accesses};
 pub use bind::{Bound, bind};
 pub use built::{Built, Frame};
 pub use check::{check, check_built};
-pub use conversions::{Conversion, ConversionKind, Within};
+pub use conversions::{Conversion, ConversionKind};
 pub use design::{Design, FileId, SymbolRef};
 pub use elab::{
     Blocks, BodyId, Child, ChildKind, Elaboration, Operator, TopError, TopSetting, TopValue, Walked,
