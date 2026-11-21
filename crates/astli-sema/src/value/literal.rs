@@ -52,6 +52,17 @@ pub fn literal(text: &str) -> Literal {
     }
 }
 
+/// The width `text` writes before its `'`, if it writes one, whether or
+/// not the literal is well formed.
+pub(crate) fn size(text: &str) -> Option<u32> {
+    let (size, _) = text.split_once('\'')?;
+    let size = size.replace('_', "");
+    if size.is_empty() {
+        return None;
+    }
+    size.parse().ok()
+}
+
 /// `size'[s]<base><digits>`, `size` empty when unsized.
 fn based_literal(size: &str, based: &str) -> Option<Bits> {
     let size: String = size.chars().filter(|&c| c != '_').collect();

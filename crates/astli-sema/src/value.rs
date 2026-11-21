@@ -7,6 +7,7 @@ use std::fmt;
 use std::sync::Arc;
 
 pub use bits::{Bit, Bits};
+pub(crate) use literal::size;
 pub use literal::{Literal, literal};
 
 /// The value of a constant expression.

@@ -955,7 +955,7 @@ impl<'d> Resolver<'d> {
             }
             ExprKind::System(_)
             | ExprKind::Keyword(_)
-            | ExprKind::Literal(_)
+            | ExprKind::Literal { .. }
             | ExprKind::Time { .. }
             | ExprKind::Bind(_) => {}
             ExprKind::Unary { operand, .. } | ExprKind::Postfix { operand, .. } => {

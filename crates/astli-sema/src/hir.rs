@@ -5,6 +5,8 @@ use std::ops::Index;
 use astli_syntax::SyntaxKind;
 use astli_text::Span;
 
+use crate::value::Literal;
+
 /// One file, lowered: its scopes, the symbols declared in them, and the
 /// statements and expressions they hold, each addressed by an id.
 ///
@@ -798,8 +800,16 @@ pub enum ExprKind {
     /// `this`, `super`, `null`, `$`, `default`, `new`, and a keyword type
     /// written where an expression is, as in `int'(x)`.
     Keyword(SyntaxKind),
-    /// A number or a string, as spelled.
-    Literal(Box<str>),
+    /// A number or a string: as spelled, which is how it is shown, and
+    /// what that means.
+    Literal {
+        text: Box<str>,
+        /// Boxed: few expressions are literals, and [`Bits`](crate::Bits) is wide.
+        value: Box<Literal>,
+        /// The width written before its `'`, as `8` in `8'hFF`, whether or
+        /// not the digits after it are well formed; `None` if none is.
+        size: Option<u32>,
+    },
     /// A time, as spelled, and its value in the time unit where it is
     /// written, rounded to the precision there; `None` if malformed.
     Time {
@@ -934,6 +944,19 @@ pub enum ExprKind {
     /// sequence too, so one stands alone where a property may.
     Property(Property),
     Opaque(Opaque),
+}
+
+impl ExprKind {
+    /// Whether it is an unbased unsized literal, `'0`, `'1`, `'x` or `'z`,
+    /// which is as wide as its context.
+    pub fn is_fill(&self) -> bool {
+        matches!(self, ExprKind::Literal { value, .. } if matches!(**value, Literal::Fill(_)))
+    }
+
+    /// Whether it is a string literal.
+    pub fn is_string(&self) -> bool {
+        matches!(self, ExprKind::Literal { value, .. } if matches!(**value, Literal::String(_)))
+    }
 }
 
 /// A sequence or a property an operator builds, which has no value: what it

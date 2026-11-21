@@ -26,7 +26,7 @@ use crate::elab::{BodyId, Elaboration, Walked};
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
-use crate::value::{Bit, Literal, Value, literal};
+use crate::value::{Bit, Value};
 
 /// What is mistyped in what `built` builds, once however many bodies
 /// build it: as warnings at `defaults`, where `built` holds definitions at
@@ -429,7 +429,7 @@ impl<'a> Walk<'a> {
         let design = self.elaboration.design();
         let hir = &design[file];
         match &hir[expr].kind {
-            ExprKind::Literal(text) => matches!(literal(text), Literal::String(_)),
+            ExprKind::Literal { .. } => hir[expr].kind.is_string(),
             ExprKind::Concat(parts) => parts.iter().all(|&part| self.text(file, part, hops)),
             ExprKind::Replication { concat, .. } => self.text(file, *concat, hops),
             ExprKind::Conditional {
@@ -518,8 +518,9 @@ impl<'a> Walk<'a> {
             let mut reported = false;
             match value {
                 Some(value) => {
-                    if let ExprKind::Literal(text) = &hir[value].kind
-                        && let Some(width) = sized(text)
+                    if let ExprKind::Literal {
+                        size: Some(width), ..
+                    } = hir[value].kind
                         && width != base.width
                     {
                         let message = format!(
@@ -847,8 +848,7 @@ fn mismatch(
         kind,
         Some(ExprKind::Concat(_) | ExprKind::Replication { .. } | ExprKind::Pattern { .. })
     );
-    let fill =
-        matches!(kind, Some(ExprKind::Literal(text)) if matches!(literal(text), Literal::Fill(_)));
+    let fill = kind.is_some_and(ExprKind::is_fill);
     match target {
         Ty::Packed(Packed {
             shape: Shape::Enum(_),
@@ -966,16 +966,6 @@ fn pattern_count(hir: &Hir, target: &Ty, expr: ExprId) -> Option<(usize, usize, 
         }
         _ => None,
     }
-}
-
-/// The width of `text`, a literal, if it is sized.
-fn sized(text: &str) -> Option<u32> {
-    let (size, _) = text.split_once('\'')?;
-    let size = size.replace('_', "");
-    if size.is_empty() {
-        return None;
-    }
-    size.parse().ok()
 }
 
 fn unknown(value: &Value) -> bool {

@@ -6,6 +6,7 @@ use astli_syntax::{SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken, significa
 
 use super::{Lower, block_label};
 use crate::hir::*;
+use crate::value;
 
 impl Lower<'_> {
     /// Lowers `item` standing in `scope` among statements. A declaration is
@@ -944,7 +945,11 @@ impl Lower<'_> {
                         value: self.timescale.scale(&text),
                         text: text.into(),
                     },
-                    false => ExprKind::Literal(text.into()),
+                    false => ExprKind::Literal {
+                        value: Box::new(value::literal(&text)),
+                        size: value::size(&text),
+                        text: text.into(),
+                    },
                 }
             }
             ast::Expr::NameRef(name) => match name.name() {

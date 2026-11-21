@@ -42,7 +42,7 @@ use crate::design::{Design, FileId, SymbolRef};
 use crate::hir::*;
 use crate::resolve::{Names, Resolution};
 use crate::types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
-use crate::value::{Bits, Literal, Value, literal};
+use crate::value::{Bits, Literal, Value};
 pub use expr::Operator;
 use expr::{four_state, literal_type, string_bits};
 use shared::{Arena, Memo, Shards};
@@ -418,9 +418,7 @@ impl Elaboration {
             return None;
         };
         let hir = &self.design[cx.file];
-        let literal = matches!(&hir[*first].kind, ExprKind::Literal(text)
-            if matches!(literal(text), Literal::String(_)));
-        if !literal && self.self_type(cx, *first) != Ty::String {
+        if !hir[*first].kind.is_string() && self.self_type(cx, *first) != Ty::String {
             return None;
         }
         match self.formatted(cx, args) {
@@ -1068,8 +1066,7 @@ impl Elaboration {
 
     /// Whether `expr` is an unbased unsized literal, `'0` or `'1`.
     fn fills(&self, cx: Cx, expr: ExprId) -> bool {
-        let hir = &self.design[cx.file];
-        matches!(&hir[expr].kind, ExprKind::Literal(text) if matches!(literal(text), Literal::Fill(_)))
+        self.design[cx.file][expr].kind.is_fill()
     }
 
     /// `expr` as a constant integer, if it is one and fits.

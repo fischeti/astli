@@ -688,7 +688,7 @@ impl Walk<'_> {
             }
             ExprKind::System(_)
             | ExprKind::Keyword(_)
-            | ExprKind::Literal(_)
+            | ExprKind::Literal { .. }
             | ExprKind::Time { .. }
             | ExprKind::Bind(None) => {}
             // A match assigns the variable what it matches.
