@@ -30,11 +30,12 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use astli_lint::{Config, Layer, Level, Linter, RULES, RuleOption, Waivers, lint};
 use astli_parse::{NOT_PARSED, SyntaxTree};
 use astli_sema::Built;
-use astli_text::{Diagnostic, Edit, apply};
+use astli_text::{Diagnostic, Edit, Origins, apply};
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
@@ -129,9 +130,9 @@ impl Lint {
         let trees = cmd::each(out, &plan.own, run, None, |sink, path| {
             let mut read = Read::of(path, &levels[at[path]], !self.fix, design)?;
             if !design {
-                sink.diagnostics
-                    .write_all(&std::mem::take(&mut read.said))?;
-                sink.errors += read.errors;
+                for (origins, found) in std::mem::take(&mut read.found) {
+                    sink.errors += render::diagnostics(sink.diagnostics, &origins, &found)?;
+                }
             }
             Ok(read)
         })?;
@@ -154,24 +155,28 @@ impl Lint {
             Ok(())
         })?;
         designs.flags.undeclared("no top")?;
-        let told = (trees.iter_mut())
-            .map(|tree| {
-                (
-                    None,
-                    std::mem::take(&mut tree.said),
-                    tree.errors,
-                    Vec::new(),
-                )
-            })
-            .collect();
-        let mut outcome = analysis::report(out, told)?;
+        // A file's findings are one list, whichever layer found them.
+        let rendered = |read: Read| {
+            let sets: Vec<(&Origins, &[Diagnostic])> = (read.found.iter())
+                .map(|(origins, found)| (&**origins, found.as_slice()))
+                .collect();
+            let mut said = Vec::new();
+            let errors = render::findings(&mut said, &read.path, &sets)?;
+            Ok((said, errors))
+        };
+        // A report that gathers every file's findings in one list gathers
+        // them in the order rendered.
+        let rendered = match render::gathered() {
+            true => trees.into_iter().map(rendered).collect::<Result<_>>()?,
+            false => trees.into_par_iter().map(rendered).collect::<Result<_>>()?,
+        };
+        let mut outcome = analysis::write(out, rendered)?;
         outcome.failed = unread + unread_units;
-        drop(trees);
         outcome.finish()
     }
 
     /// Lints `analysis`, the design `plan` holds, adding what its rules
-    /// find in each file read on its own to what `trees` already says of
+    /// find in each file read on its own to what `trees` already found in
     /// it.
     fn design(&self, plan: &Plan, run: &Run, analysis: &Analysis, trees: &mut [Read]) -> Result {
         let tops = analysis.top_names();
@@ -220,9 +225,6 @@ impl Lint {
             .collect();
         for (&(unit, _), found) in reported.iter().zip(&mut found) {
             found.splice(0..0, std::mem::take(&mut unparsed[unit]));
-            if built.is_some() {
-                found.sort_by_key(|it| (it.at.src_id, it.at.start, it.code));
-            }
         }
 
         // Of a file several designs read, each tells only what none before
@@ -233,12 +235,10 @@ impl Lint {
                 found.retain(|diagnostic| run.first_found(path, diagnostic));
             }
         }
-        let told = (reported.iter().zip(found))
-            .map(|(&(unit, _), found)| (Some(&*origins[unit]), Vec::new(), 0, found))
-            .collect();
-        for (&(_, own), (said, errors)) in reported.iter().zip(analysis::render(told)?) {
-            trees[own].said.extend(said);
-            trees[own].errors += errors;
+        for (&(unit, own), found) in reported.iter().zip(found) {
+            if !found.is_empty() {
+                trees[own].found.push((Arc::clone(&origins[unit]), found));
+            }
         }
         Ok(())
     }
@@ -301,11 +301,12 @@ fn fix(files: &[PathBuf], levels: &[Config]) -> Result {
     Ok(())
 }
 
-/// One file read on its own, with what its tree's rules found already
-/// rendered, what it waives for the design's rules, and its levels.
+/// One file read on its own: what was found in it, each set with what
+/// resolves its spans, the tree's first and then each design's; what it
+/// waives for the design's rules; and its levels.
 struct Read<'a> {
-    said: Vec<u8>,
-    errors: usize,
+    path: PathBuf,
+    found: Vec<(Arc<Origins>, Vec<Diagnostic>)>,
     waivers: Waivers,
     levels: &'a Config,
 }
@@ -334,11 +335,13 @@ impl<'a> Read<'a> {
             }
             found.push(diagnostic);
         }
-        let mut said = Vec::new();
-        let errors = render::diagnostics(&mut said, tree.origins(), &found)?;
+        let found = match found.is_empty() {
+            true => Vec::new(),
+            false => vec![(Arc::new(tree.into_origins()), found)],
+        };
         Ok(Read {
-            said,
-            errors,
+            path: path.to_path_buf(),
+            found,
             waivers,
             levels,
         })
