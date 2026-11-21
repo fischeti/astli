@@ -245,19 +245,8 @@ impl<'a> Walk<'a> {
 
     fn stmt(&mut self, stmt: StmtId, returns: Option<&Ty>) {
         let hir = self.hir();
-        let each = |walk: &mut Self, stmt: &Option<StmtId>| {
-            if let Some(stmt) = stmt {
-                walk.stmt(*stmt, returns);
-            }
-        };
         match &hir[stmt].kind {
-            StmtKind::Expr(expr) | StmtKind::ProceduralAssign { expr, .. } => self.expr(*expr),
-            StmtKind::Block { scope, stmts, .. } => {
-                self.locals(*scope);
-                for &stmt in stmts {
-                    self.stmt(stmt, returns);
-                }
-            }
+            StmtKind::Block { scope, .. } => self.locals(*scope),
             StmtKind::If {
                 condition,
                 then_branch,
@@ -266,81 +255,39 @@ impl<'a> Walk<'a> {
             } => {
                 self.expr(*condition);
                 let taken = self.taken(*condition);
+                let each = |walk: &mut Self, stmt: &Option<StmtId>| {
+                    if let Some(stmt) = stmt {
+                        walk.stmt(*stmt, returns);
+                    }
+                };
                 self.branch(taken != Some(false), |walk| each(walk, then_branch));
                 self.branch(taken != Some(true), |walk| each(walk, else_branch));
+                return;
             }
-            StmtKind::Case {
-                selector, items, ..
-            } => {
-                if let Some(selector) = selector {
-                    self.expr(*selector);
-                }
-                for item in items {
-                    for &label in &item.labels {
-                        self.expr(label);
-                    }
-                    each(self, &item.body);
-                }
-            }
-            StmtKind::For { header, body } => {
-                self.locals(header.scope);
-                for &expr in header
-                    .init
-                    .iter()
-                    .chain(&header.condition)
-                    .chain(&header.step)
-                {
-                    self.expr(expr);
-                }
-                each(self, body);
-            }
-            StmtKind::Loop {
-                condition, body, ..
-            }
-            | StmtKind::Wait { condition, body } => {
-                if let Some(condition) = condition {
-                    self.expr(*condition);
-                }
-                each(self, body);
-            }
-            StmtKind::Timed { timing, body } => {
-                self.timing(timing);
-                let mut exprs = Vec::new();
-                timed(timing, &mut exprs);
-                for expr in exprs {
-                    self.expr(expr);
-                }
-                each(self, body);
-            }
-            // What a property's operators build is not typed.
-            StmtKind::ConcurrentAssertion { pass, fail, .. } => {
-                each(self, pass);
-                each(self, fail);
-            }
-            StmtKind::Foreach { body, .. } => each(self, body),
+            StmtKind::For { header, .. } => self.locals(header.scope),
+            StmtKind::Timed { timing, .. } => self.timing(timing),
             StmtKind::Return(Some(value)) => {
                 if let Some(returns) = returns {
                     self.convert(returns, *value, Target::Return);
                 }
-                self.expr(*value);
             }
-            StmtKind::Assertion {
-                condition,
-                pass,
-                fail,
-                ..
-            } => {
-                self.expr(*condition);
-                each(self, pass);
-                each(self, fail);
+            // What a property's operators build is not typed.
+            StmtKind::ConcurrentAssertion { pass, fail, .. } => {
+                for stmt in [pass, fail].into_iter().flatten() {
+                    self.stmt(*stmt, returns);
+                }
+                return;
             }
             _ => {}
         }
+        hir.stmt_children(stmt, |child| match child {
+            Node::Expr(expr) => self.expr(expr),
+            Node::Stmt(stmt) => self.stmt(stmt, returns),
+        });
     }
 
     fn expr(&mut self, expr: ExprId) {
         let hir = self.hir();
-        let mut children = Vec::new();
         match &hir[expr].kind {
             ExprKind::Assign {
                 op,
@@ -353,10 +300,8 @@ impl<'a> Walk<'a> {
                     EQ | LT_EQ => self.convert(&target, *rhs, Target::Assign),
                     _ => self.compound(&target, *rhs),
                 }
-                children.extend([*lhs, *rhs]);
                 if let Some(timing) = timing {
                     self.timing(timing);
-                    timed(timing, &mut children);
                 }
             }
             // The right of `&&`, `||` or `->` is not evaluated where the
@@ -370,18 +315,10 @@ impl<'a> Walk<'a> {
                 self.expr(*lhs);
                 let decides = self.taken(*lhs) == Some(*op == PIPE_PIPE);
                 self.branch(!decides, |walk| walk.expr(*rhs));
+                return;
             }
-            ExprKind::Binary { op, lhs, rhs } => {
-                self.binary(*op, *lhs, *rhs);
-                children.extend([*lhs, *rhs]);
-            }
-            ExprKind::Unary { op, operand } => {
-                self.unary(*op, *operand, hir[expr].span);
-                children.push(*operand);
-            }
-            ExprKind::Postfix { operand, .. } | ExprKind::Cast { operand, .. } => {
-                children.push(*operand)
-            }
+            ExprKind::Binary { op, lhs, rhs } => self.binary(*op, *lhs, *rhs),
+            ExprKind::Unary { op, operand } => self.unary(*op, *operand, hir[expr].span),
             ExprKind::Conditional {
                 condition,
                 then_value,
@@ -392,37 +329,32 @@ impl<'a> Walk<'a> {
                 let taken = self.taken(*condition);
                 self.branch(taken != Some(false), |walk| walk.expr(*then_value));
                 self.branch(taken != Some(true), |walk| walk.expr(*else_value));
+                return;
             }
-            ExprKind::Select { base, index, range } => {
-                self.select(*base, *index, *range);
-                children.extend([*base, *index]);
-                children.extend(range.map(|(_, end)| end));
+            ExprKind::Select { base, index, range } => self.select(*base, *index, *range),
+            ExprKind::Call { callee, args } => self.arguments(*callee, args),
+            // A type is not typed, as a declaration's is not, and neither is
+            // what a pattern's key names.
+            ExprKind::Pattern { items, .. } => {
+                for item in items {
+                    self.expr(item.value);
+                }
+                return;
             }
-            ExprKind::Member { base, .. } => children.push(*base),
-            ExprKind::Call { callee, args } => {
-                self.arguments(*callee, args);
-                children.push(*callee);
-                children.extend(args.iter().filter_map(value));
-            }
-            ExprKind::Concat(parts) => children.extend(parts),
-            ExprKind::Replication { count, concat } => children.extend([*count, *concat]),
-            ExprKind::Inside { expr, set } => {
-                children.push(*expr);
-                children.extend(set);
-            }
-            ExprKind::Pattern { items, .. } => children.extend(items.iter().map(|it| it.value)),
-            ExprKind::Stream { slice, concat, .. } => {
-                children.extend(*slice);
-                children.push(*concat);
-            }
-            ExprKind::Range { lo, hi, .. } => children.extend([*lo, *hi]),
-            ExprKind::With { base, with } => children.extend([*base, with.expr]),
-            ExprKind::Tagged { value, .. } => children.extend(*value),
+            ExprKind::Cast { operand, .. } => return self.expr(*operand),
+            // What `::` follows names a package or a class; a property's
+            // operators are not typed, nor are constraints, as a class's
+            // are not.
+            ExprKind::Type(_)
+            | ExprKind::Scoped { .. }
+            | ExprKind::Property(_)
+            | ExprKind::Constrained { .. } => return,
             _ => {}
         }
-        for child in children {
-            self.expr(child);
-        }
+        hir.expr_children(expr, |child| match child {
+            Node::Expr(expr) => self.expr(expr),
+            Node::Stmt(stmt) => self.stmt(stmt, None),
+        });
     }
 
     /// Which way `condition` goes, where it is a constant: `None` where it
@@ -848,30 +780,6 @@ impl<'a> Walk<'a> {
         if refused {
             self.report(diagnostics::invalid_operand(spelled, &ty, at));
         }
-    }
-}
-
-/// The expressions of a timing.
-fn timed(timing: &Timing, exprs: &mut Vec<ExprId>) {
-    let events = match timing {
-        Timing::Delay(_, values) => return exprs.extend(values),
-        Timing::Star => return,
-        Timing::Events(events) => events,
-        Timing::Repeat(count, events) => {
-            exprs.push(*count);
-            events
-        }
-    };
-    for event in events {
-        exprs.push(event.expr);
-        exprs.extend(event.iff);
-    }
-}
-
-fn value(arg: &Arg) -> Option<ExprId> {
-    match arg {
-        Arg::Positional(value) | Arg::Named { value, .. } => *value,
-        _ => None,
     }
 }
 
