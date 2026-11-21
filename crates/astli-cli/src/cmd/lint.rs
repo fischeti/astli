@@ -31,7 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_lint::{Layer, Level, Linter, RULES, Waivers, lint};
+use astli_lint::{Config, Layer, Level, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_sema::Built;
 use astli_text::{Diagnostic, Edit, apply};
@@ -108,18 +108,25 @@ impl Lint {
     fn once(&self, out: &mut render::Out, target: &Target, run: &Run) -> Result {
         let mut plan = Plan::new(target, &self.sources, &self.features, &self.build, run)?;
         let config = LintConfig::load(run, target, self.config.as_deref(), &self.levels, &plan)?;
-        let design = (plan.own.iter()).any(|path| config.for_file(path).needs(Layer::Design));
+        // Each file's levels, which its patterns make.
+        let levels: Vec<Config> = (plan.own.iter())
+            .map(|path| config.for_file(path))
+            .collect();
+        let at: HashMap<&Path, usize> = (plan.own.iter().enumerate())
+            .map(|(at, path)| (path.as_path(), at))
+            .collect();
+        let design = levels.iter().any(|it| it.needs(Layer::Design));
         // Only a design rule reads what the tests elaborate.
         let tests = design && self.tests;
         let mut designs = Designs::of(out, &plan, &self.top, tests, &self.param, run)?;
         if self.fix {
-            fix(&plan.own, &config)?;
+            fix(&plan.own, &levels)?;
         }
 
         if !design {
             let outcome = cmd::each(out, &plan.own, run, None, |sink, path| {
                 let tree = crate::session::tree(path)?;
-                let (found, _) = linted(&tree, &config, !self.fix, true);
+                let (found, _) = linted(&tree, &levels[at[path]], !self.fix, true);
                 sink.errors += render::diagnostics(sink.diagnostics, tree.origins(), &found)?;
                 Ok(())
             })?;
@@ -130,12 +137,14 @@ impl Lint {
         let trees = cmd::each(out, &plan.own, run, None, |_, path| {
             let tree = crate::session::tree(path)?;
             let mut said = Vec::new();
-            let (found, waivers) = linted(&tree, &config, !self.fix, false);
+            let levels = &levels[at[path]];
+            let (found, waivers) = linted(&tree, levels, !self.fix, false);
             let errors = render::diagnostics(&mut said, tree.origins(), &found)?;
             Ok(Read {
                 said,
                 errors,
                 waivers,
+                levels,
             })
         })?;
         // A file that could not be read is reported once, and the design
@@ -149,7 +158,7 @@ impl Lint {
         let mut unread_units = 0;
         designs.each(out, plan, run, false, true, |_, plan, analysis, flags| {
             flags.check(analysis)?;
-            self.design(&plan, run, &config, analysis, &mut trees)?;
+            self.design(&plan, run, analysis, &mut trees)?;
             unread_units = analysis.unread;
             Ok(())
         })?;
@@ -173,14 +182,7 @@ impl Lint {
     /// Lints `analysis`, the design `plan` holds, adding what its rules
     /// find in each file read on its own to what `trees` already says of
     /// it.
-    fn design(
-        &self,
-        plan: &Plan,
-        run: &Run,
-        config: &LintConfig,
-        analysis: &Analysis,
-        trees: &mut [Read],
-    ) -> Result {
+    fn design(&self, plan: &Plan, run: &Run, analysis: &Analysis, trees: &mut [Read]) -> Result {
         let tops = analysis.top_names();
         // What a compiler would not read is an error once expanded, where
         // the file as written only warns of it. The rest the expansion and
@@ -215,15 +217,14 @@ impl Lint {
             .filter(|(unit, it)| it.reported && reached.as_ref().is_none_or(|it| it.contains(unit)))
             .filter_map(|(unit, it)| Some((unit, *at.get(it.path.as_path())?)))
             .collect();
-        let built = (reported.iter())
-            .any(|&(unit, _)| config.for_file(&plan.units[unit].path).needs(Layer::Built))
+        let built = (reported.iter()).any(|&(_, own)| trees[own].levels.needs(Layer::Built))
             && !tops.is_empty();
         let built = built.then(|| Built::new(elaboration, &analysis.bodies()));
         let linter = Linter::new(elaboration, built.as_ref());
         let mut found: Vec<Vec<Diagnostic>> = (reported.par_iter())
             .map(|&(unit, own)| {
-                let config = config.for_file(&plan.units[unit].path);
-                linter.lint(files[unit], &origins[unit], &trees[own].waivers, &config)
+                let tree = &trees[own];
+                linter.lint(files[unit], &origins[unit], &tree.waivers, tree.levels)
             })
             .collect();
         for (&(unit, _), found) in reported.iter().zip(&mut found) {
@@ -262,7 +263,7 @@ impl Lint {
 /// waive the design's rules too.
 fn linted(
     tree: &SyntaxTree,
-    config: &LintConfig,
+    config: &Config,
     offer: bool,
     unparsed: bool,
 ) -> (Vec<Diagnostic>, Waivers) {
@@ -273,7 +274,7 @@ fn linted(
     }
     let (waivers, invalid) = Waivers::read(tree);
     found.extend(invalid);
-    for mut diagnostic in lint(tree, &waivers, &config.for_file(tree.path())) {
+    for mut diagnostic in lint(tree, &waivers, config) {
         if offer && !diagnostic.fix.is_empty() {
             diagnostic = diagnostic.help("`astli lint --fix` fixes this");
         }
@@ -287,24 +288,24 @@ fn linted(
 /// is left with it rather than run on.
 const PASSES: usize = 8;
 
-/// Rewrites each of `files` with the fixes its tree rules find, pass after
+/// Rewrites each of `files`, at the levels `levels` holds for it, with the
+/// fixes its tree rules find, pass after
 /// pass until none is left, and says how many it applied. A file the parser
 /// did not read whole is left alone, since a fix is only known safe in a
 /// tree that says what each token is; a pass whose result would not parse
 /// whole is dropped.
-fn fix(files: &[PathBuf], config: &LintConfig) -> Result {
-    let fixed: Vec<usize> = (files.par_iter())
-        .map(|path| {
+fn fix(files: &[PathBuf], levels: &[Config]) -> Result {
+    let fixed: Vec<usize> = (files.par_iter().zip(levels))
+        .map(|(path, config)| {
             let original = crate::session::tree(path)?;
             if !original.diagnostics().is_empty() {
                 return Ok(0);
             }
-            let config = config.for_file(path);
             let (mut tree, mut fixed) = (None, 0);
             for _ in 0..PASSES {
                 let current = tree.as_ref().unwrap_or(&original);
                 let (waivers, _) = Waivers::read(current);
-                let found = lint(current, &waivers, &config);
+                let found = lint(current, &waivers, config);
                 let fixes: Vec<&[Edit]> = (found.iter())
                     .map(|it| it.fix.as_slice())
                     .filter(|it| !it.is_empty())
@@ -340,11 +341,12 @@ fn fix(files: &[PathBuf], config: &LintConfig) -> Result {
 }
 
 /// One file read on its own, with what its tree's rules found already
-/// rendered, and what it waives for the design's rules.
-struct Read {
+/// rendered, what it waives for the design's rules, and its levels.
+struct Read<'a> {
     said: Vec<u8>,
     errors: usize,
     waivers: Waivers,
+    levels: &'a Config,
 }
 
 /// Prints each rule's name, group and default level, and what it finds.
