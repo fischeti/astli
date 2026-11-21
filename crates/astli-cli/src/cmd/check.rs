@@ -203,7 +203,7 @@ pub(crate) fn listed(run: &Run, plan: &Plan, index: &Index, told: Option<&[usize
     if !plan.is_package() {
         return;
     }
-    Listing::of(plan, index, told.map(<[usize]>::to_vec), false).misfound(run, plan, index);
+    Listing::of(plan, index, told.map(<[usize]>::to_vec), true).misfound(run, plan, index);
 }
 
 /// What `analysis`, which a check summarizes, says of each unit.

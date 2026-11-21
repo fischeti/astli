@@ -2512,9 +2512,14 @@ fn files_warns_where_the_list_finds_another_header_than_check() {
         "`include \"defs.svh\"\nmodule top;\n  leaf u_leaf ();\n  macro u_macro ();\nendmodule\n",
     );
     fixture.file("root/include/defs.svh", "`define W 8\n");
+    // Listed after what it instantiates, though walked before it.
     fixture.file(
         "ip/src/leaf.sv",
-        "`include \"defs.svh\"\nmodule leaf;\nendmodule\n",
+        "`include \"defs.svh\"\nmodule leaf;\n  sub u_sub ();\nendmodule\n",
+    );
+    fixture.file(
+        "ip/src/sub.sv",
+        "`include \"defs.svh\"\nmodule sub;\nendmodule\n",
     );
     // A stub the list leaves out, whose header a tool is never asked for.
     fixture.file(
@@ -2537,17 +2542,25 @@ fn files_warns_where_the_list_finds_another_header_than_check() {
     let whole = astli_with_cache(&fixture, &root, &["check", "--diag", "short"]);
 
     // Each package found its own, but the list searches the root's first
-    // for both.
-    for output in [&files, &check, &whole] {
+    // for both, and the check of the tops warns of the list `files` writes,
+    // in its order.
+    let differs = |output: &Output| -> Vec<String> {
         assert!(output.status.success(), "{}", stderr(output));
-        let said = stderr(output).replace('\\', "/");
-        assert!(
-            said.contains("leaf.sv:1:1: warning[include-differs]: a tool given the list reads")
-                && said.contains("root/include/defs.svh` for `defs.svh`"),
-            "{said}"
-        );
-        assert_eq!(said.matches("[include-differs]").count(), 1, "{said}");
-    }
+        (stderr(output).replace('\\', "/").lines())
+            .filter(|line| line.contains("[include-differs]"))
+            .map(str::to_string)
+            .collect()
+    };
+    let listed = differs(&files);
+    assert_eq!(listed.len(), 2, "{listed:?}");
+    assert!(
+        listed[0].contains("sub.sv:1:1: warning[include-differs]: a tool given the list reads")
+            && listed[0].contains("root/include/defs.svh` for `defs.svh`")
+            && listed[1].contains("leaf.sv:1:1: warning[include-differs]"),
+        "{listed:?}"
+    );
+    assert_eq!(differs(&check), listed);
+    assert_eq!(differs(&whole), listed);
 }
 
 /// A package whose bench builds only with `MY_FEATURE` defined, and the
