@@ -2,6 +2,7 @@
 //!
 //! Reconciles source paths and preprocessor arguments across CLI options and `.f` filelists.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use astli_preproc::Build;
@@ -18,7 +19,8 @@ use crate::term;
 pub struct Resolved {
     /// All resolved source file paths to process.
     pub files: Vec<PathBuf>,
-    /// The include directories, in the order named.
+    /// The include directories, in the order named, each once: a directory
+    /// searched again finds nothing its first search missed.
     pub incdir: Vec<PathBuf>,
     /// The definitions, as `NAME` or `NAME=VALUE`, kept as written so that a
     /// filelist written from them says what the input said.
@@ -60,6 +62,8 @@ pub fn resolve(run: &Run, sources: &Sources, build: &BuildArgs) -> Result<Resolv
     // The flags' after the filelists', so that a flag wins.
     incdir.extend(build.incdirs());
     define.extend(build.defines());
+    let mut seen = HashSet::new();
+    incdir.retain(|dir| seen.insert(dir.clone()));
 
     if files.is_empty() {
         return Err(Error::failed(

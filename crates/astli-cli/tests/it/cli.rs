@@ -1187,6 +1187,16 @@ fn files_keeps_what_the_top_needs_in_dependency_order() {
     let output = files_in(&fixture, &["-f", "design.f", "--top", "top", "-DS=\"s\""]);
     let text = stdout(&output);
     assert!(text.contains("+define+S=\\\"s\\\"\n"), "{text}");
+
+    // A directory the filelist and a flag both give is searched, and so
+    // written, once.
+    let output = files_in(
+        &fixture,
+        &[
+            "-f", "design.f", "-I", "inc", "-I", "inc", "--emit", "incdirs",
+        ],
+    );
+    assert_eq!(stdout(&output), "+incdir+inc\n+incdir+unused\n");
 }
 
 #[test]
