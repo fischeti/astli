@@ -453,13 +453,9 @@ impl Test {
         };
         let lists = match self.list {
             true => {
-                for tops in &designs.chosen {
-                    let mut plan = plan.for_tops(tops);
-                    let flags = &mut designs.flags;
-                    let mut analysis = Analysis::new(out, &mut plan, tops, flags, run, true)?;
-                    chosen(&plan, &mut analysis, flags)?;
-                    analysis.leak();
-                }
+                designs.each(out, plan, run, true, true, |_, plan, analysis, flags| {
+                    chosen(&plan, analysis, flags)
+                })?;
                 None
             }
             false => Some(listed_tops(out, plan, &mut designs, run, chosen)),
