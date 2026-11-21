@@ -308,8 +308,11 @@ pub struct Problem {
     tally: bool,
 }
 
-/// Where in a file a problem is. The text that held it is gone by the time
-/// it is reported, so the file is read again to show it.
+/// Where in a file a problem is. What found it knows the file by its path
+/// alone, and the text that held it is gone by the time it is reported: an
+/// index's finding, a filelist's line, a manifest's bytes. So the file is
+/// read again to show it. Work that still holds the file's origins reports a
+/// [`Diagnostic`] with the rest of its findings instead.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct At {
     code: Code,
@@ -497,14 +500,6 @@ impl Problem {
 }
 
 impl Problem {
-    /// The problem rendered as a diagnostic, for a worker to hold with the
-    /// rest of what it says so that it reaches the terminal in order. None
-    /// without a place, or if the file no longer holds it, when `report` is
-    /// the way to say it.
-    pub fn rendered(&self) -> Option<Vec<u8>> {
-        self.located(self.at.as_ref()?)
-    }
-
     /// The problem rendered as a diagnostic at `at`, if the file still holds
     /// the place.
     fn located(&self, at: &At) -> Option<Vec<u8>> {

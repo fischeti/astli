@@ -21,8 +21,6 @@ pub struct Sink<'a> {
     pub out: &'a mut dyn Write,
     /// What the file's work says on stderr, and how many errors that holds.
     pub report: Report,
-    /// The run, for a problem that cannot be rendered with the rest.
-    pub run: &'a Run,
 }
 
 /// Aggregated results and error counts across all processed files.
@@ -135,7 +133,6 @@ fn sequential<T>(
             let mut sink = Sink {
                 out,
                 report: Report::default(),
-                run,
             };
             let value = work(&mut sink, file);
             said = sink.report;
@@ -195,7 +192,6 @@ fn parallel<T: Send>(
                     let mut sink = Sink {
                         out: &mut printed,
                         report: Report::default(),
-                        run,
                     };
                     let value = work(&mut sink, files[at].as_ref());
                     let said = sink.report;
