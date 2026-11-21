@@ -1,0 +1,49 @@
+// A header in each shape it may take. An attribute goes on a line of its own
+// before a design unit or a class, and stays on the line of anything else,
+// a prototype of a design unit among them. What follows a header's imports
+// starts on the line after them, a `;` too. A covergroup sampled by `@@`, a
+// modport without ports and a property with an attribute are written as they
+// were read.
+(* keep *) extern module e (
+  input logic a
+);
+(* keep *)
+package p;
+endpackage
+module m
+  import p::*;
+;
+endmodule
+(* keep *)
+class c implements i;
+endclass
+class d #(type T = int) implements i, j;
+endclass
+class f extends base;
+  (* keep *) function automatic void f::g(int a);
+  endfunction
+  (* keep *) extern task t;
+  import "DPI-C" context function int c_f(input int a);
+  export "DPI-C" sv_name = function f;
+  (* keep *) covergroup cg extends base;
+  endgroup
+  covergroup cg2(int a) with function sample(bit b);
+  endgroup
+endclass
+module n;
+  (* keep *) clocking cb @(posedge clk);
+  endclocking
+  covergroup cg3 @@(begin f);
+  endgroup
+endmodule
+(* keep *) checker ch(logic a);
+endchecker
+(* keep *) config cfg;
+  design lib.top;
+endconfig
+interface bus_if;
+  modport m;
+  (* keep *) property p (a);
+    a;
+  endproperty
+endinterface

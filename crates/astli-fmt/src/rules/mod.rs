@@ -17,6 +17,7 @@ use crate::verbatim::verbatim;
 
 mod decl;
 mod expr;
+mod header;
 mod items;
 mod list;
 mod preproc;
@@ -81,9 +82,17 @@ impl Writer<'_> {
     /// `node` without the comments around it.
     fn layout(&mut self, node: &SyntaxNode) -> Doc {
         match node.kind() {
-            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | CLASS_DECL
-            | FUNCTION_DECL | TASK_DECL | COVERGROUP_DECL | CLOCKING_DECL | CHECKER_DECL
-            | CONFIG_DECL | EXTERN_DECL | UDP_DECL => self.scope(node),
+            // An attribute on a design unit goes on a line of its own, as the
+            // corpus has every one, but one on a prototype stays on its line.
+            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | PACKAGE_DECL | UDP_DECL => self
+                .scope(node, |this, header| {
+                    this.unit_header(header, &Doc::HardLine)
+                }),
+            EXTERN_DECL => self.scope(node, |this, header| this.unit_header(header, &Doc::Space)),
+            CLASS_DECL => self.scope(node, Self::class_header),
+            FUNCTION_DECL | TASK_DECL | CHECKER_DECL => self.scope(node, Self::subroutine_header),
+            COVERGROUP_DECL => self.scope(node, Self::covergroup_header),
+            CLOCKING_DECL | CONFIG_DECL => self.scope(node, Self::clocking_header),
             CLOCKING_ITEM | CONFIG_RULE | MODPORT_METHOD => {
                 self.spaced(&significant_children(node))
             }
@@ -239,15 +248,13 @@ impl Writer<'_> {
 
 /// A space between two elements on a line, but none before `,`, `;` or `)`,
 /// none after `#` or `(`, and none around `::` or `.`. None either between a
-/// base class and the arguments to its constructor, or a name and the ports
-/// [`header_list`] says follow it, which read as calls. What comes before the
-/// first is its parent's to separate.
+/// name and the ports [`header_list`] says follow it, which read as a call.
+/// What comes before the first is its parent's to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let Some(prev) = prev else {
         return Doc::nil();
     };
     let call = match next.kind() {
-        ARG_LIST => prev.kind() == TYPE_REF,
         PORT_LIST => (next.as_node().and_then(header_list)).is_some_and(|it| it.after_name),
         _ => false,
     };
@@ -271,24 +278,14 @@ struct HeaderList {
 /// How `list` is laid out, if it is a header's.
 fn header_list(list: &SyntaxNode) -> Option<HeaderList> {
     let (broken, after_name) = match (list.kind(), list.parent()?.kind()) {
-        // A design unit's parameters and ports.
-        (
-            PARAM_PORT_LIST | PORT_LIST,
-            MODULE_DECL | INTERFACE_DECL | PROGRAM_DECL | EXTERN_DECL | UDP_DECL,
-        ) => (true, false),
-        // A class's parameters, the arguments to its base's constructor,
-        // which follow the base with no space as any arguments after a type
-        // do, and the parameters a configuration overrides.
-        (PARAM_PORT_LIST | ARG_LIST | PORT_LIST, CLASS_DECL | CONFIG_RULE) => (false, false),
-        // A modport's ports, after a space `modport` writes itself.
-        (PARAM_PORT_LIST | ARG_LIST | PORT_LIST, MODPORT) => (false, false),
-        // A subroutine's arguments and the prototypes in a modport, and the
-        // formals of a covergroup, a property, a sequence or a checker, which
-        // a checker's are as a property's.
+        // The parameters a configuration overrides, and a modport's ports,
+        // after a space `modport` writes itself.
+        (PARAM_PORT_LIST | ARG_LIST | PORT_LIST, CONFIG_RULE | MODPORT) => (false, false),
+        // The prototypes in a modport, and the formals of a property or a
+        // sequence.
         (
             PARAM_PORT_LIST | ARG_LIST | PORT_LIST,
-            FUNCTION_DECL | TASK_DECL | MODPORT_METHOD | COVERGROUP_DECL | PROPERTY_DECL
-            | SEQUENCE_DECL | CHECKER_DECL,
+            MODPORT_METHOD | PROPERTY_DECL | SEQUENCE_DECL,
         ) => (false, true),
         _ => return None,
     };
