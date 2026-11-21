@@ -90,7 +90,7 @@ pub struct Resolved {
     /// The highest version a tag on its commit gives it, if any.
     pub version: Option<Version>,
     /// The packages it depends on directly, by name.
-    pub needs: Vec<String>,
+    pub requires: Vec<String>,
     /// The `rev`s requirements name its commit by, other than the commit's
     /// own id.
     pub revs: Vec<String>,
@@ -406,7 +406,7 @@ struct State {
     /// it so.
     places: HashMap<String, (Place, String)>,
     /// What each package at each candidate depends on directly.
-    needs: HashMap<(String, Candidate), Vec<String>>,
+    requires: HashMap<(String, Candidate), Vec<String>>,
     /// Each package's manifest at each candidate, and where its paths are
     /// relative to, read once.
     manifests: HashMap<(String, Candidate), (Manifest, Base)>,
@@ -582,8 +582,8 @@ impl Provider<'_> {
                 Candidate::Commit { version, .. } => version.clone(),
                 Candidate::Local => None,
             };
-            let needs = (state
-                .needs
+            let requires = (state
+                .requires
                 .remove(&(name.clone(), candidate))
                 .unwrap_or_default())
             .into_iter()
@@ -598,7 +598,7 @@ impl Provider<'_> {
                 name,
                 origin,
                 version,
-                needs,
+                requires,
                 revs,
                 takes,
             });
@@ -1335,8 +1335,10 @@ impl DependencyProvider for Provider<'_> {
                         None,
                     )?;
                 }
-                let needs = manifest.dependencies.keys().cloned().collect();
-                state.needs.insert((name.clone(), candidate.clone()), needs);
+                let requires = manifest.dependencies.keys().cloned().collect();
+                state
+                    .requires
+                    .insert((name.clone(), candidate.clone()), requires);
             }
             Node::Feature(name, feature) => {
                 let (manifest, base) = self.manifest(state, name, candidate)?;

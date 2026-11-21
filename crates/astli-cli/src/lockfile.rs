@@ -461,13 +461,13 @@ pub fn dependencies(
             && matches!(it.origin, Origin::Dir(_))
             && on_disk.insert(name.clone())
         {
-            from_disk.extend(&it.needs);
+            from_disk.extend(&it.requires);
         }
     }
     let store = run.store()?;
     let mut found = Vec::new();
     let mut described = Vec::new();
-    for it in resolution.packages {
+    for it in &resolution.packages {
         if !reached.contains(&it.name) {
             continue;
         }
@@ -501,16 +501,21 @@ pub fn dependencies(
             }
         }
         found.push(Dependency {
-            name: it.name,
+            name: it.name.clone(),
             package: package.as_dependency(),
-            needs: it.needs,
+            needs: Vec::new(),
             walk: Walk {
                 held: located.held,
                 ..Walk::default()
             },
         });
     }
-    Ok((Dependencies::ordered(package, found)?, described, on_disk))
+    let requires = |name: &str| match resolution.packages.iter().find(|it| it.name == name) {
+        Some(it) => &it.requires[..],
+        None => &[],
+    };
+    let dependencies = Dependencies::ordered(package, found, requires)?;
+    Ok((dependencies, described, on_disk))
 }
 
 /// The names of the packages of `resolution` that `package`'s design holds:
@@ -524,7 +529,7 @@ pub fn held(package: &Package, resolution: &Resolution) -> BTreeSet<String> {
         if reached.insert(name.clone())
             && let Some(it) = resolution.packages.iter().find(|it| it.name == *name)
         {
-            open.extend(&it.needs);
+            open.extend(&it.requires);
         }
     }
     reached

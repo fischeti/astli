@@ -75,7 +75,7 @@ fn the_highest_version_every_requirement_admits_is_chosen() {
         .checkout(&fixture.store())
         .expect("checked out");
     assert!(cells.dir.join("fifo.sv").is_file() && !cells.dir.join("cdc.sv").exists());
-    assert_eq!(resolution.packages[0].needs, ["cells"]);
+    assert_eq!(resolution.packages[0].requires, ["cells"]);
     assert!(resolution.warnings.is_empty());
 }
 
@@ -374,9 +374,9 @@ fn an_optional_dependency_is_resolved_only_where_a_feature_brings_it_in() {
     let with = resolved(&fixture, &entry("'asic'"), &[]).expect("resolved");
 
     assert_eq!(names(&without), ["cells"]);
-    assert!(without.packages[0].needs.is_empty());
+    assert!(without.packages[0].requires.is_empty());
     assert_eq!(names(&with), ["cells", "tech"]);
-    assert_eq!(with.packages[0].needs, ["tech"]);
+    assert_eq!(with.packages[0].requires, ["tech"]);
 }
 
 #[test]
@@ -605,7 +605,7 @@ fn every_member_is_a_root_with_its_features_and_dev_dependencies() {
     assert_eq!(names(&resolution), ["cells", "dma", "tech", "verif"]);
     let dma = &resolution.packages[1];
     assert_eq!(dma.origin, Origin::Dir(fixture.path().join("root/ip/dma")));
-    assert_eq!(dma.needs, ["cells"]);
+    assert_eq!(dma.requires, ["cells"]);
 }
 
 #[test]

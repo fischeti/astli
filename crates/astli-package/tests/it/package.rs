@@ -1,5 +1,6 @@
 //! Finding the package a directory is in, and what its manifest may say.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -1329,18 +1330,22 @@ fn selected(
     selection: &Selection,
 ) -> (Package, Dependencies) {
     let root = Package::at(&fixture.path().join(dir)).expect("a package");
+    let mut requires = BTreeMap::new();
     let found = (found.iter())
         .map(|name| {
             let package = Package::at(&fixture.path().join(name)).expect("a package");
+            let required: Vec<String> = package.manifest.dependencies.keys().cloned().collect();
+            requires.insert(name.to_string(), required);
             Dependency {
                 name: name.to_string(),
-                needs: package.manifest.dependencies.keys().cloned().collect(),
+                needs: Vec::new(),
                 package: package.as_dependency(),
                 walk: Walk::default(),
             }
         })
         .collect();
-    let mut dependencies = Dependencies::ordered(&root, found).expect("ordered");
+    let mut dependencies =
+        Dependencies::ordered(&root, found, |name| &requires[name]).expect("ordered");
     dependencies.select(&root, selection).expect("a selection");
     (root, dependencies)
 }
