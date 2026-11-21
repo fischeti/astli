@@ -14,9 +14,10 @@ use astli_resolve::Loaded;
 
 use crate::cli::{BuildArgs, FeatureArgs, Sources};
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Target};
 use crate::run::Run;
+use crate::settle;
 use crate::sources::{self, Resolved, defined};
+use crate::target::{self, Target};
 use crate::tops::Chosen;
 
 /// What a build is made from, for a command run for each package: the walk
@@ -364,8 +365,8 @@ impl Plan {
             mut dependencies,
             described,
             on_disk,
-        } = lockfile::dependencies(run, &here, run.args.locked)?;
-        let lockfile::Here {
+        } = settle::dependencies(run, &here, run.args.locked)?;
+        let target::Here {
             package,
             workspace,
             in_workspace,

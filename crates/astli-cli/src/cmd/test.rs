@@ -51,11 +51,11 @@ use crate::cmd::build::{Builder, Listed, listed_tops};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
-use crate::lockfile::Target;
 use crate::points;
 use crate::render::{self, Out, plural};
 use crate::run::Run;
 use crate::sim::{Backend, Ended, SLOW, ended_by, shown_output, simulated};
+use crate::target::Target;
 use crate::term::{self, status};
 use crate::tops::{Chosen, Flags, point_of};
 

@@ -8,9 +8,9 @@ use astli_package::mark;
 
 use crate::cli::Members;
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Target};
 use crate::render::{Out, plural};
 use crate::run::Run;
+use crate::target::{self, Target};
 use crate::term;
 
 /// The package a command that acts on one acts on: the workspace package
@@ -25,8 +25,8 @@ pub fn choose(package: Option<&str>, named: bool) -> Result<Target> {
 fn chosen(here: Target, package: Option<&str>, named: bool) -> Result<Target> {
     match package {
         Some(name) => {
-            let workspace = lockfile::workspace(&here, "--package")?;
-            let package = lockfile::named(&workspace, name)?.clone();
+            let workspace = target::workspace(&here, "--package")?;
+            let package = target::named(&workspace, name)?.clone();
             Ok(Target::member(package, workspace))
         }
         None if !named && here.is_virtual()? => Err(term::error(

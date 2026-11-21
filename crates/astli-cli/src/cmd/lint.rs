@@ -45,10 +45,10 @@ use crate::cmd::{self, Ctx};
 use crate::config::{Levels, LintConfig};
 use crate::discovery::{Plan, Whose};
 use crate::error::{Error, Result};
-use crate::lockfile::Target;
 use crate::points;
 use crate::render::{self, Report};
 use crate::run::Run;
+use crate::target::Target;
 use crate::term;
 
 /// Lint SystemVerilog source files for syntax issues, coding style, and common bugs

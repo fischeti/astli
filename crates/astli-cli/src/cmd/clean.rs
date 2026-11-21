@@ -11,7 +11,7 @@ use usage_rs::{Args, RunWith};
 use crate::cmd::Ctx;
 use crate::cmd::build::builds_dir;
 use crate::error::{Error, Result};
-use crate::lockfile;
+use crate::target;
 use crate::term::status;
 
 /// Delete the package's builds
@@ -23,7 +23,7 @@ impl RunWith<Ctx<'_>> for Clean {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
-        let here = lockfile::here(run)?;
+        let here = target::here(run)?;
         let builds = builds_dir(&here.workspace.root.package.root);
         match std::fs::remove_dir_all(&builds) {
             Ok(()) => status!("Removed", "{}", mark::path(builds.display())),

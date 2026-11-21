@@ -18,8 +18,9 @@ use usage_rs::{Args, RunWith};
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
-use crate::lockfile::{self, Write};
 use crate::run::Run;
+use crate::settle::{self, Write};
+use crate::target;
 use crate::term::{self, status};
 
 /// Override a dependency with a local checkout, cloning it if necessary
@@ -41,7 +42,7 @@ impl RunWith<Ctx<'_>> for Patch {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
-        let here = lockfile::here(run)?;
+        let here = target::here(run)?;
         let mut patches = here.workspace.patches.clone();
         let name = &self.name;
         if self.remove {
@@ -65,13 +66,13 @@ impl RunWith<Ctx<'_>> for Patch {
         // Resolved as if it were not patched, for where it comes from.
         let mut overrides = here.overrides();
         overrides.patches.0.remove(name);
-        let resolution = lockfile::settle(
+        let resolution = settle::settle(
             run,
             &here,
             &overrides,
             Lock::clone,
             Write::Manifest,
-            lockfile::Tell::Workspace,
+            settle::Tell::Workspace,
             run.args.locked,
         )?;
         let Some(package) = resolution.packages.iter().find(|it| it.name == *name) else {

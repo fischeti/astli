@@ -19,8 +19,9 @@ use usage_rs::{Args, RunWith};
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
 use crate::git::git;
-use crate::lockfile::{self, Here, Tell};
 use crate::manifest::{self, Editable};
+use crate::settle::{self, Tell};
+use crate::target::{self, Here};
 use crate::term::{self, status};
 
 /// Pin a patched dependency to its current commit in astli.toml and remove the patch
@@ -36,7 +37,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
-        let here = lockfile::here(run)?;
+        let here = target::here(run)?;
         let shared = &here.workspace.root.package;
         let own = &here.package.package;
         let name = &self.name;
@@ -88,7 +89,7 @@ impl RunWith<Ctx<'_>> for Snapshot {
 
         // Who else requires it, read while it is still patched, so that the
         // requirements of what the clone added are among them.
-        let (_, resolution) = lockfile::resolved(run, &here, &here.overrides(), Lock::clone)?;
+        let (_, resolution) = settle::resolved(run, &here, &here.overrides(), Lock::clone)?;
         let targets = match requiring.is_empty() {
             false => requiring,
             true if here.in_workspace && !resolution.reached(own).contains(name.as_str()) => {

@@ -16,7 +16,7 @@ use astli_package::mark;
 use crate::cli::PackageArg;
 use crate::cmd::{self, Ctx};
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Write};
+use crate::settle::{self, Write};
 
 /// Print filesystem paths to checked-out dependency packages
 #[derive(Args)]
@@ -34,13 +34,13 @@ impl RunWith<Ctx<'_>> for Path {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let here = cmd::choose(self.package.package.as_deref(), false)?.here(run)?;
-        let resolution = lockfile::settle(
+        let resolution = settle::settle(
             run,
             &here,
             &here.overrides(),
             Lock::clone,
             Write::Manifest,
-            lockfile::Tell::Design,
+            settle::Tell::Design,
             run.args.locked,
         )?;
         let store = run.store()?;

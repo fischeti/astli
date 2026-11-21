@@ -13,8 +13,8 @@ use usage_rs::{Args, RunWith};
 use crate::cli::PackageArg;
 use crate::cmd::{self, Ctx};
 use crate::error::Result;
-use crate::lockfile::Tell;
 use crate::manifest::{self, Editable, tables};
+use crate::settle::Tell;
 use crate::term::{self, status};
 
 /// Remove dependencies from astli.toml and astli.lock

@@ -19,9 +19,10 @@ use usage_rs::{Args, RunWith};
 use crate::cli::Members;
 use crate::cmd::{self, Ctx};
 use crate::error::Result;
-use crate::lockfile::{self, Here, Write};
 use crate::render::Out;
 use crate::run::Run;
+use crate::settle::{self, Write};
+use crate::target::Here;
 
 /// Display the resolved dependency tree and package hierarchy
 #[derive(Args)]
@@ -48,13 +49,13 @@ impl RunWith<Ctx<'_>> for Tree {
 
 /// Prints the tree of the package `here` holds.
 fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
-    let resolution = lockfile::settle(
+    let resolution = settle::settle(
         run,
         here,
         &here.overrides(),
         Lock::clone,
         Write::Manifest,
-        lockfile::Tell::Design,
+        settle::Tell::Design,
         run.args.locked,
     )?;
     let root = &here.package.package;
@@ -86,7 +87,7 @@ fn tree(out: &mut Out, here: &Here, run: &Run) -> Result {
         .cloned()
         .collect();
     needs.sort();
-    lockfile::described(run, &described, here.in_workspace);
+    settle::described(run, &described, here.in_workspace);
 
     let name = match &root.manifest.name {
         Some(name) => name.clone(),

@@ -13,7 +13,8 @@ use astli_package::mark;
 
 use crate::cmd::Ctx;
 use crate::error::{Error, Result};
-use crate::lockfile::{self, Write};
+use crate::settle::{self, Write};
+use crate::target;
 
 /// Re-resolve dependencies and record pinned versions in astli.lock
 #[derive(Args)]
@@ -28,7 +29,7 @@ impl RunWith<Ctx<'_>> for Update {
 
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
-        let here = lockfile::here(run)?;
+        let here = target::here(run)?;
         if let Some(lock) = Lock::read(&here.lockfile())?
             && let Some(name) = self.names.iter().find(|it| lock.get(it).is_none())
         {
@@ -45,13 +46,13 @@ impl RunWith<Ctx<'_>> for Update {
             }
             kept
         };
-        lockfile::settle(
+        settle::settle(
             run,
             &here,
             &here.overrides(),
             kept,
             Write::Always,
-            lockfile::Tell::Workspace,
+            settle::Tell::Workspace,
             run.args.locked,
         )?;
         Ok(())

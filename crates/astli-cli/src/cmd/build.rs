@@ -417,7 +417,7 @@ mod tests {
 
     use super::*;
     use crate::cli::RunArgs;
-    use crate::lockfile::Target;
+    use crate::target::Target;
 
     // No command builds several tops yet, so the function is run here.
     #[test]

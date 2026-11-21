@@ -20,10 +20,11 @@ use crate::cmd::{self, Ctx};
 use crate::discovery::{Plan, kept_only};
 use crate::error::{Error, Result};
 use crate::listing;
-use crate::lockfile::{self, Target};
 use crate::manifest::{Editable, bender_text, relative, written};
 use crate::render::Out;
 use crate::run::Run;
+use crate::settle;
+use crate::target::Target;
 use crate::term::{self, status};
 
 /// Manage Bender compatibility manifests (Bender.yml)
@@ -153,7 +154,7 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
         &BuildArgs::default(),
         run,
     )?;
-    lockfile::described(run, &plan.described, plan.in_workspace());
+    settle::described(run, &plan.described, plan.in_workspace());
     let outcome = cmd::each(out, &plan.units, run, None, |sink, file| {
         let unit = plan.unit(file);
         // A dependency's findings are its authors' to fix.
