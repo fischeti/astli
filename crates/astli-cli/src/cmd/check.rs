@@ -169,6 +169,33 @@ impl Found {
         (self.files).sort_by(|a, b| (a.short, &a.path).cmp(&(b.short, &b.path)));
     }
 
+    /// What a check of `analysis`, the design `plan` holds, finds of the
+    /// files it could not read, looking at nothing else: what a run that
+    /// elaborates a design without checking it ends with.
+    pub(crate) fn unchecked(plan: &Plan, analysis: &Analysis) -> Result<Found> {
+        let tops = analysis.top_names();
+        let reached = match tops.is_empty() {
+            true => None,
+            false => Some(
+                (index(analysis).reachable(&tops)).map_err(|err| Error::failed(err.to_string()))?,
+            ),
+        };
+        // Each file the check would tell, so that the tally counts as its
+        // does.
+        let files = (plan.shown(reached.as_deref(), Whose::OnDisk).into_iter())
+            .map(|file| Told {
+                path: plan.units[file].path.clone(),
+                said: Report::default(),
+                short: false,
+            })
+            .collect();
+        Ok(Found {
+            files,
+            unread: analysis.unread,
+            ..Found::default()
+        })
+    }
+
     /// Writes what was found, and hands back how the check ends.
     pub(crate) fn report(self, out: &mut Out) -> Result<Checked> {
         let rendered = self.files.into_iter().map(|file| file.said).collect();

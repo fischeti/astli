@@ -612,6 +612,20 @@ fn test_list_selects_the_tests_the_package_marks() {
         assert!(stderr(&refused).contains(said), "{}", stderr(&refused));
     }
 
+    // A file that cannot be read may hold a test, so the list is written
+    // and the run fails, as it would building them.
+    let unread = fixture.path().join("ws/tb/unread.sv");
+    std::fs::write(&unread, b"module tb_\xff;\nendmodule\n").unwrap();
+    let partial = at_root(&["test", "--list"]);
+    assert!(!partial.status.success());
+    assert_eq!(stdout(&partial), "tb_soc\n");
+    assert!(
+        stderr(&partial).contains("1 of 2 files failed"),
+        "{}",
+        stderr(&partial)
+    );
+    std::fs::remove_file(&unread).unwrap();
+
     // A mark with a value, or on what is no module, is refused where it
     // is, as is a failure expected without its text, or of no test.
     fixture.file(
