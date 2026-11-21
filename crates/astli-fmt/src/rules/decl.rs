@@ -246,7 +246,7 @@ impl Writer<'_> {
             docs.push(match name {
                 NodeOrToken::Node(first) if prev.is_none() && aligned => Doc::concat([
                     self.comments.leading(first),
-                    self.declarator(first, true),
+                    self.declarator(first, Some(2)),
                     self.comments.trailing(first),
                 ]),
                 _ => self.element(name),
@@ -390,7 +390,7 @@ impl Writer<'_> {
         }
         let name_doc = match joined {
             true => self.node(name),
-            false => self.declarator(name, true),
+            false => self.declarator(name, Some(2)),
         };
         docs.extend([
             self.comments.leading(name),
@@ -431,8 +431,8 @@ impl Writer<'_> {
     }
 
     /// A name, its unpacked dimensions against it, and its initial value,
-    /// whose `=` lines up with the others of its table if `aligned`.
-    pub(super) fn declarator(&mut self, declarator: &SyntaxNode, aligned: bool) -> Doc {
+    /// whose `=` ends the cell `eq` of its table, if it is given one.
+    pub(super) fn declarator(&mut self, declarator: &SyntaxNode, eq: Option<usize>) -> Doc {
         let children = significant_children(declarator);
         let dimensions = children
             .iter()
@@ -453,10 +453,11 @@ impl Writer<'_> {
         let (name, value) = children.split_at(value);
         let mut docs: Vec<Doc> = name.iter().map(|it| self.element(it)).collect();
         if !value.is_empty() {
-            if aligned {
-                docs.push(Doc::Cell(2));
-            }
-            docs.extend([Doc::Space, self.spaced(value)]);
+            docs.extend([
+                eq.map_or_else(Doc::nil, Doc::Cell),
+                Doc::Space,
+                self.spaced(value),
+            ]);
         }
         Doc::concat(docs)
     }
