@@ -8,8 +8,9 @@
 //! 1. [`resolve`] (or [`resolve_all`] for many) maps each span to where it is
 //!    written, against the [`Origins`](astli_text::Origins) the diagnostic
 //!    came with. The result, a [`Resolved`], points at the outermost macro
-//!    call, holds the text the call stands for as
-//!    [`spelled`](Resolved::spelled), and lists the calls it went
+//!    call and names it as a [`Place`], a path and the lines and columns it
+//!    covers; holds the text the call stands for as
+//!    [`spelled`](Resolved::spelled); and lists the calls it went
 //!    [`through`](Resolved::through) and the includes it was reached from.
 //!    It is plain data, for a tool that renders diagnostics its own way, such
 //!    as a language server.
@@ -30,6 +31,7 @@
 //! let [one] = resolved.as_slice() else { panic!() };
 //! assert_eq!(one.diagnostic.code.as_str(), "undefined-macro");
 //! assert_eq!(session.origins().slice(one.at), "`BAD"); // where the user wrote it
+//! assert_eq!(one.place.start.to_string(), "2:12"); // the line and column of it
 //! assert_eq!(session.origins().slice(one.spelled.unwrap()), "`NOPE"); // what it stands for
 //!
 //! let mut out = Vec::new();
@@ -77,6 +79,6 @@ mod resolve;
 mod sources;
 mod terminal;
 
-pub use resolve::{Resolved, Through, resolve, resolve_all};
+pub use resolve::{Place, Resolved, Through, resolve, resolve_all};
 pub use sources::Sources;
 pub use terminal::{Style, write, write_github, write_short};
