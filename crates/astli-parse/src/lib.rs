@@ -175,6 +175,7 @@ mod verbatim;
 #[cfg(test)]
 mod testing;
 
+pub use diagnostics::NOT_PARSED;
 use source::{DirectiveShape, Expanded, Position, Raw, RegionShape, Tokens, pieces};
 pub use tree::SyntaxTree;
 
