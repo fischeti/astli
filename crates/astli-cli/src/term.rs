@@ -25,7 +25,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 use crate::cli::{Color, DiagnosticFormat};
 use crate::run::Run;
-use crate::{json, render};
+use crate::{formats, render};
 
 /// Writes what the run did, unless `-q`: `status!("Patched", "{name}")`.
 macro_rules! status {
@@ -467,7 +467,7 @@ impl Problem {
             Some(DiagnosticFormat::Json) => {
                 let notes: Vec<String> = self.notes.iter().map(|it| styled(it)).collect();
                 let help: Vec<String> = self.help.iter().map(|it| styled(it)).collect();
-                let line = json::unplaced(self.severity, &styled(&self.message), &notes, &help);
+                let line = formats::unplaced(self.severity, &styled(&self.message), &notes, &help);
                 let _ = write(format!("{line}\n").as_bytes());
                 return;
             }

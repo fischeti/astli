@@ -1015,25 +1015,16 @@ fn short_diagnostics_are_one_line_each_and_not_capped() {
 }
 
 #[test]
-fn github_diagnostics_are_workflow_commands() {
+fn github_diagnostics_are_workflow_commands_with_their_properties_escaped() {
     let fixture = Fixture::new("diag-github");
-    let file = fixture.file("macro.sv", "logic [`W-1:0] q;\n");
+    fixture.file("a,b.sv", "`define BAD `NOPE\nassign y = `BAD;\n");
 
-    let said = stderr(&astli([
-        "preprocess".as_ref(),
-        "--diag=github".as_ref(),
-        file.as_os_str(),
-    ]));
+    let output = astli_in(fixture.path(), &["preprocess", "--diag=github", "a,b.sv"]);
 
-    let [line] = said.lines().collect::<Vec<_>>()[..] else {
-        panic!("one line expected: {said}")
-    };
-    assert!(
-        line.starts_with("::error title=undefined-macro,file=")
-            && line.contains(",line=1,col=8,")
-            && line.ends_with("macro.sv:1:8: error[undefined-macro]: `W is not defined"),
-        "{said}"
-    );
+    expect_test::expect![[r#"
+        ::error title=undefined-macro,file=a%2Cb.sv,line=2,col=12,endLine=2,endColumn=16::a,b.sv:2:12: error[undefined-macro]: `NOPE is not defined
+    "#]]
+    .assert_eq(&stderr(&output));
 }
 
 #[test]

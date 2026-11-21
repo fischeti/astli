@@ -53,6 +53,31 @@ without knowing which mode made the tree: in raw mode it is the token's range
 in the file. `unparsed` is asked for rather than among the diagnostics,
 because a tool that only reads names, like the index, has no use for it.
 
+## Diagnostics
+
+A diagnostic points where a token is placed, which inside a macro is text
+the user never wrote. `astli-diag` maps it to where it is written, and
+renders it for a person:
+
+```rust
+let resolved = resolve_all(tree.origins(), tree.diagnostics());  // in order, each said once
+let one = &resolved[0];
+one.at;                  // the Span the user wrote, the outermost macro call
+one.place;               // Place: its path, and the start and end LineCol
+one.spelled;             // the text a call stands for, if not at `at`
+one.through;             // the calls it came through, innermost first
+one.included_from;       // the includes that reached the file
+Place::of(origins, span);  // any other span, named as `place` is
+write(&mut out, &mut Sources::new(origins), one, Style::plain())?;  // with the source under it
+```
+
+That is all of it: resolving, and the rendering a language server or a
+tool calling astli shows a person. The formats `astli --diag` writes for a
+program, `short`, `github`, `json` and `gitlab`, are the command's, in the
+driver: what they write is what the command promises, versioned with it
+([D18](plan.md#4-decisions)), and a tool that wants a format of its own
+builds it from a `Resolved`, which holds every place it would name.
+
 ## Names across files
 
 ```rust
