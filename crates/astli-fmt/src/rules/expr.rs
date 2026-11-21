@@ -9,11 +9,8 @@ use crate::doc::Doc;
 impl Writer<'_> {
     /// `min:typ:max`, written tight as a range in a dimension is.
     pub(super) fn min_typ_max(&mut self, expr: &SyntaxNode) -> Doc {
-        let tight = std::mem::replace(&mut self.tight, true);
         let children = significant_children(expr);
-        let doc = Doc::concat(children.iter().map(|it| self.element(it)));
-        self.tight = tight;
-        doc
+        self.tightly(|this| Doc::concat(children.iter().map(|it| this.element(it))))
     }
 
     /// `{` and elements between commas, then `}`, packed as
@@ -67,9 +64,7 @@ impl Writer<'_> {
             return self.verbatim(expr);
         }
         let open = open.map_or_else(Doc::nil, |it| self.element(it));
-        let tight = std::mem::replace(&mut self.tight, true);
-        let count = self.node(count);
-        self.tight = tight;
+        let count = self.tightly(|this| this.node(count));
         let concat = self.node(concat);
         let close = close.map_or_else(Doc::nil, |it| self.element(it));
         Doc::concat([open, count, concat, close])
@@ -174,15 +169,16 @@ impl Writer<'_> {
             return self.verbatim(expr);
         }
         let base = self.element(&children[0]);
-        let tight = std::mem::replace(&mut self.tight, true);
-        let mut docs = vec![base];
-        for child in &children[1..] {
-            let spaced = matches!(child.kind(), PLUS_COLON | MINUS_COLON);
-            let space = || if spaced { Doc::Space } else { Doc::nil() };
-            docs.extend([space(), self.element(child), space()]);
-        }
-        self.tight = tight;
-        Doc::concat(docs)
+        let select = self.tightly(|this| {
+            let mut docs = Vec::new();
+            for child in &children[1..] {
+                let spaced = matches!(child.kind(), PLUS_COLON | MINUS_COLON);
+                let space = || if spaced { Doc::Space } else { Doc::nil() };
+                docs.extend([space(), this.element(child), space()]);
+            }
+            Doc::concat(docs)
+        });
+        Doc::concat([base, select])
     }
 
     /// A name or a literal, its tokens as they are, or the macro call that

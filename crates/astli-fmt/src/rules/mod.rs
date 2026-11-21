@@ -50,6 +50,14 @@ struct Writer<'a> {
 }
 
 impl Writer<'_> {
+    /// What `write` writes, as inside `[…]`: see [`Writer::tight`].
+    fn tightly(&mut self, write: impl FnOnce(&mut Self) -> Doc) -> Doc {
+        let tight = std::mem::replace(&mut self.tight, true);
+        let doc = write(self);
+        self.tight = tight;
+        doc
+    }
+
     /// `node` with the comments around it.
     fn node(&mut self, node: &SyntaxNode) -> Doc {
         self.with_comments(node, Self::layout)
@@ -80,7 +88,7 @@ impl Writer<'_> {
             }
             SPECIFY_BLOCK | UDP_TABLE => self.keyword_block(node),
             UDP_ENTRY => self.udp_entry(node),
-            UDP_EDGE => self.tight(&significant_children(node)),
+            UDP_EDGE => self.unspaced(&significant_children(node)),
             SPECIFY_PATH => self.specify_path(node),
             TIMING_CHECK => self.timing_check(node),
             PULSE_DECL => self.spaced(&significant_children(node)),
