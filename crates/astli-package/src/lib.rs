@@ -32,7 +32,7 @@
 //!
 //! let package = Root::find(&dir.join("hw")).unwrap().unwrap().package;
 //! assert_eq!(package.manifest.name.as_deref(), Some("soc"));
-//! assert_eq!(package.sources, [package.root.join("hw")]);
+//! assert_eq!(package.manifest.sources, ["hw"]);
 //! # std::fs::remove_dir_all(&dir).unwrap();
 //! ```
 

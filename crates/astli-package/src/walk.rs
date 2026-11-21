@@ -45,12 +45,13 @@ impl Walk {
 
 impl Package {
     /// The SystemVerilog files the package holds, absolute and sorted: those
-    /// under its `sources` or named by `dev` or a feature's `sources`, less
-    /// the files only disabled features name, what a `.gitignore` or
-    /// `exclude` names, and what a package nested in it, one it depends on
-    /// by `path`, or one patched to a directory inside it holds. A package nested in it is a
+    /// its `sources`, `dev` or a feature's `sources` name, less the files
+    /// only disabled features name, what a `.gitignore` or `exclude` names,
+    /// and what a package nested in it, one it depends on by `path`, or one
+    /// patched to a directory inside it holds. A package nested in it is a
     /// directory below the root with an `astli.toml`, or with a `Bender.yml`
-    /// that no source is at or inside.
+    /// that the fixed part of no pattern is at or inside; inside one that
+    /// such a pattern reaches, only those patterns name files.
     ///
     /// Only the `.gitignore` files at or below the root apply, whether or not
     /// the root is in a repository, so that a dependency reads the same from
@@ -65,10 +66,17 @@ impl Package {
     /// one would otherwise leave a feature empty, or its files in every run.
     pub fn walk(&self, walk: &Walk) -> Result<Vec<PathBuf>, Error> {
         let claims = self.claims();
+        let sources =
+            (self.manifest.sources.iter()).map(|pattern| ("sources".to_string(), pattern.clone()));
+        let every: Vec<_> = sources.chain(claims.iter().cloned()).collect();
+        let prefixes: Vec<PathBuf> = (every.iter())
+            .map(|(_, pattern)| clean(&self.root.join(literal(pattern))))
+            .collect();
         let filter = Arc::new(Filter {
             root: self.root.clone(),
-            reached: reached(&self.root, &self.sources),
-            sources: self.sources.clone(),
+            reached: reached(&self.root, &prefixes),
+            named: claimed(&self.manifest_path, &every)?,
+            prefixes,
             exclude: patterns(&self.manifest_path, "exclude", &self.manifest.exclude)?,
             enabled: self.feature_sources(&walk.enabled, true)?,
             disabled: self.feature_sources(&walk.enabled, false)?,
@@ -250,7 +258,7 @@ fn matching(root: &Path, set: &GlobSet, path: &Path) -> Vec<usize> {
         .collect()
 }
 
-/// `claims`' patterns as one set, each refused under its own key.
+/// The patterns of `claims` as one set, each refused under its own key.
 fn claimed(manifest: &Option<PathBuf>, claims: &[(String, String)]) -> Result<GlobSet, Error> {
     let mut set = GlobSetBuilder::new();
     for (key, pattern) in claims {
@@ -258,6 +266,39 @@ fn claimed(manifest: &Option<PathBuf>, claims: &[(String, String)]) -> Result<Gl
     }
     (set.build())
         .map_err(|err| Error::Manifest(manifest.clone().unwrap_or_default(), err.to_string()))
+}
+
+/// The part of `pattern` before its first wildcard, relative to the root:
+/// the file, or the directory holding every file, it can name.
+pub(crate) fn literal(pattern: &str) -> PathBuf {
+    (normal(pattern).split('/'))
+        .take_while(|part| !part.contains(WILDCARDS))
+        .collect()
+}
+
+/// The characters that make a part of a pattern a glob rather than a name.
+const WILDCARDS: [char; 5] = ['*', '?', '[', '{', '\\'];
+
+/// `pattern` with its fixed part read as a path, so that `./hw/`, `hw/x/..`
+/// and `hw` name the same directory; the root, `.`, names every file.
+fn normal(pattern: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    let mut fixed = true;
+    for part in pattern.split('/') {
+        fixed &= !part.contains(WILDCARDS);
+        match part {
+            "" => {}
+            "." if fixed => {}
+            ".." if fixed && parts.last().is_some_and(|it| *it != "..") => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+    }
+    match parts.is_empty() {
+        true => "**".to_string(),
+        false => parts.join("/"),
+    }
 }
 
 /// The patterns the manifest at `manifest` gives for `key`, matched against
@@ -277,40 +318,53 @@ pub(crate) fn patterns(
 
 /// `pattern`, given for `key` by the manifest at `manifest`.
 fn glob(manifest: &Option<PathBuf>, key: &str, pattern: &str) -> Result<Glob, Error> {
-    (GlobBuilder::new(pattern).literal_separator(true).build()).map_err(|err| {
+    let wrong = |why: String| {
         Error::Manifest(
             manifest.clone().unwrap_or_default(),
-            format!("{}: {}: {err}", mark::code(key), mark::code(pattern)),
+            format!("{}: {}: {why}", mark::code(key), mark::code(pattern)),
         )
-    })
+    };
+    // Matched against a path relative to the root, which an absolute
+    // pattern never is.
+    if pattern.starts_with('/') {
+        return Err(wrong("is absolute, not relative to the root".to_string()));
+    }
+    (GlobBuilder::new(&normal(pattern))
+        .literal_separator(true)
+        .build())
+    .map_err(|err| wrong(err.to_string()))
 }
 
 /// What the walk enters or yields, decided before it reads a directory, so
 /// that what it leaves out costs nothing.
 struct Filter {
     root: PathBuf,
-    sources: Vec<PathBuf>,
+    /// Every pattern of `sources`, a feature's `sources` and `dev`, and the
+    /// fixed part of each, absolute and in the same order: the walk enters
+    /// only the directories on the way to or below one.
+    named: GlobSet,
+    prefixes: Vec<PathBuf>,
     exclude: GlobSet,
     /// The sources of the enabled features, and of the others.
     enabled: GlobSet,
     disabled: GlobSet,
     /// Every pattern of a feature's `sources` and of `dev`, in the order
-    /// [`Package::claims`] gives them: the files the walk takes besides
-    /// those under `sources`.
+    /// [`Package::claims`] gives them, each of which has to name a file.
     claimed: GlobSet,
     /// The directories of the packages it depends on by `path` or reads
     /// from a patch, absolute.
     dependencies: Vec<PathBuf>,
-    /// The directories below the root holding a `Bender.yml` that a source
-    /// is at or inside, absolute: nested packages the walk enters anyway.
+    /// The directories below the root holding a `Bender.yml` that the fixed
+    /// part of a pattern is at or inside, absolute: nested packages the walk
+    /// enters anyway.
     reached: Vec<PathBuf>,
 }
 
 /// The directories strictly below `root` holding a `Bender.yml` that one of
-/// `sources` is at or inside.
-fn reached(root: &Path, sources: &[PathBuf]) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = (sources.iter())
-        .flat_map(|source| source.ancestors().take_while(|dir| *dir != root))
+/// `prefixes` is at or inside.
+fn reached(root: &Path, prefixes: &[PathBuf]) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = (prefixes.iter())
+        .flat_map(|prefix| prefix.ancestors().take_while(|dir| *dir != root))
         .filter(|dir| dir.starts_with(root) && dir.join(BENDER_MANIFEST).is_file())
         .map(Path::to_path_buf)
         .collect();
@@ -346,8 +400,9 @@ impl Filter {
         }
         // Another package too, since most IP marks itself with a
         // `Bender.yml` alone. A bender package may list a nested one's files
-        // as its own, so a source named at or inside the directory still
-        // reaches it: only what the walk finds by itself stops here.
+        // as its own, so a pattern whose fixed part is at or inside the
+        // directory still reaches it: only what a pattern finds by searching
+        // the package stops here.
         if is_dir
             && path.join(BENDER_MANIFEST).is_file()
             && !self.reached.iter().any(|dir| dir == path)
@@ -359,17 +414,23 @@ impl Filter {
         if is_dir && self.dependencies.iter().any(|dir| dir == path) {
             return false;
         }
-        // Under a source, or a directory on the way to one. Inside a nested
-        // package a source reaches, only the sources inside it count, so
-        // that one enclosing it does not take the rest.
+        // Inside a nested package a pattern reaches, only the patterns whose
+        // fixed part is inside it count, so that one enclosing it does not
+        // take the rest.
         let within = (self.reached.iter())
             .filter(|dir| path.starts_with(dir) && path != *dir)
             .max_by_key(|dir| dir.components().count());
-        let sourced = (self.sources.iter())
-            .filter(|source| within.is_none_or(|dir| source.starts_with(dir)))
-            .any(|source| path.starts_with(source) || (is_dir && source.starts_with(path)));
-        // A pattern may name a file in any directory, so with one, every
-        // directory is entered.
-        sourced || (!self.claimed.is_empty() && (is_dir || named(&self.root, &self.claimed, path)))
+        let counts = |index: &usize| {
+            let prefix = &self.prefixes[*index];
+            within.is_none_or(|dir| prefix.starts_with(dir))
+        };
+        if is_dir {
+            // Below a pattern's fixed part, or on the way to one.
+            return (0..self.prefixes.len()).filter(counts).any(|index| {
+                let prefix = &self.prefixes[index];
+                path.starts_with(prefix) || prefix.starts_with(path)
+            });
+        }
+        matching(&self.root, &self.named, path).iter().any(counts)
     }
 }

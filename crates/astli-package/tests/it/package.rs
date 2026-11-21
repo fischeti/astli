@@ -67,7 +67,7 @@ fn without_a_manifest_the_git_root_is_the_root() {
 
     assert_eq!(package.root, fixture.path());
     assert_eq!(package.manifest_path, None);
-    assert_eq!(package.sources, [fixture.path()]);
+    assert_eq!(package.manifest.sources, ["."]);
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn the_package_section_is_read_relative_to_the_root() {
     let root = fixture.path();
     assert_eq!(package.root, root);
     assert_eq!(package.manifest.name.as_deref(), Some("soc"));
-    assert_eq!(package.sources, [root.join("hw"), root.join("hw/top.sv")]);
+    assert_eq!(package.manifest.sources, ["hw", "./hw/top.sv"]);
     assert_eq!(package.include_dirs, [root.join("hw/include")]);
     assert_eq!(package.manifest.exclude, ["hw/scripts/**"]);
     assert_eq!(package.manifest.dev, ["hw/tb/**"]);
@@ -143,7 +143,7 @@ fn an_empty_manifest_takes_the_defaults() {
 
     let package = Package::read(&manifest).expect("a valid manifest");
 
-    assert_eq!(package.sources, [fixture.path()]);
+    assert_eq!(package.manifest.sources, ["."]);
     assert!(package.include_dirs.is_empty() && package.manifest.exclude.is_empty());
     assert!(package.manifest.fmt.is_empty() && package.manifest.lint.is_empty());
     assert!(!root_at(&manifest).is_virtual());
@@ -191,10 +191,15 @@ fn a_path_that_does_not_exist_is_refused() {
     let fixture = Fixture::new("missing");
 
     let said = refusal(&fixture, "[package]\nsources = [\"rtl\"]\n");
+    let glob = refusal(&fixture, "[package]\nsources = [\"rtl/**/*.sv\"]\n");
 
     assert!(
         said.contains("astli.toml: `sources`: `rtl` does not exist"),
         "{said}"
+    );
+    assert!(
+        glob.contains("astli.toml: `sources`: `rtl/**/*.sv` does not exist"),
+        "{glob}"
     );
 }
 
@@ -243,10 +248,17 @@ fn a_malformed_pattern_is_refused() {
 
     let exclude = refusal(&fixture, "[package]\nexclude = [\"hw/[ab\"]\n");
     let dev = refusal(&fixture, "[package]\ndev = [\"tb/{a\"]\n");
+    let sources = refusal(&fixture, "[package]\nsources = [\"hw/[ab\"]\n");
+    let absolute = refusal(&fixture, "[package]\ndev = [\"/tb/**\"]\n");
     let workspace = refusal(&fixture, "[workspace]\nexclude = [\"ip/[ab\"]\n");
 
     assert!(exclude.contains("`exclude`: `hw/[ab`"), "{exclude}");
     assert!(dev.contains("`dev`: `tb/{a`"), "{dev}");
+    assert!(sources.contains("`sources`: `hw/[ab`"), "{sources}");
+    assert!(
+        absolute.contains("`dev`: `/tb/**`: is absolute, not relative to the root"),
+        "{absolute}"
+    );
     assert!(
         workspace.contains("`workspace.exclude`: `ip/[ab`"),
         "{workspace}"
@@ -483,10 +495,12 @@ fn a_source_reaches_into_a_nested_bender_package() {
     let fixture = Fixture::new("walk-nested-source");
     fixture.file(
         "astli.toml",
-        "[package]\nsources = [\"core\", \"core/pmp/src\", \"vendored/ip/rtl\", \"vendored/tc/tc.sv\"]\n",
+        "[package]\nsources = [\"core\", \"core/pmp/src\", \"vendored/ip/rtl\", \"vendored/tc/tc.sv\"]\n\
+         dev = [\"vendored/ip/tb/*.sv\", \"**/loose.sv\"]\n",
     );
     fixture.file("core/top.sv", "");
-    // Reached by the source inside it, and by that one alone.
+    fixture.file("core/loose.sv", "");
+    // Reached by the patterns inside it, and by those alone.
     fixture.file("core/pmp/Bender.yml", "package:\n  name: pmp\n");
     fixture.file("core/pmp/src/pmp.sv", "");
     fixture.file("core/pmp/tb/pmp_tb.sv", "");
@@ -507,9 +521,11 @@ fn a_source_reaches_into_a_nested_bender_package() {
     assert_eq!(
         walked(fixture.path()),
         [
+            "core/loose.sv",
             "core/pmp/src/pmp.sv",
             "core/top.sv",
             "vendored/ip/rtl/ip.sv",
+            "vendored/ip/tb/ip_tb.sv",
             "vendored/tc/tc.sv"
         ]
     );
@@ -534,9 +550,11 @@ fn sources_narrow_the_walk_and_exclude_removes_from_it() {
     let fixture = Fixture::new("walk-sources");
     fixture.file(
         "astli.toml",
-        "[package]\nsources = [\"hw\", \"util/one.sv\"]\nexclude = [\"hw/scripts/**\", \"**/*_tb.sv\"]\n",
+        "[package]\nsources = [\"hw\", \"util/one.sv\", \"./rtl/*.sv\"]\nexclude = [\"hw/scripts/**\", \"**/*_tb.sv\"]\n",
     );
     fixture.file("hw/top.sv", "");
+    fixture.file("rtl/core.sv", "");
+    fixture.file("rtl/legacy/old.sv", "");
     fixture.file("hw/top_tb.sv", "");
     fixture.file("hw/sub/core_tb.sv", "");
     fixture.file("hw/scripts/gen/tmpl.sv", "");
@@ -544,7 +562,10 @@ fn sources_narrow_the_walk_and_exclude_removes_from_it() {
     fixture.file("util/two.sv", "");
     fixture.file("sw/model.sv", "");
 
-    assert_eq!(walked(fixture.path()), ["hw/top.sv", "util/one.sv"]);
+    assert_eq!(
+        walked(fixture.path()),
+        ["hw/top.sv", "rtl/core.sv", "util/one.sv"]
+    );
 }
 
 #[test]
