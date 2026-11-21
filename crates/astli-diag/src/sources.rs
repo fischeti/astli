@@ -30,14 +30,6 @@ impl<'a> Sources<'a> {
     pub fn origins(&self) -> &'a Origins {
         self.origins
     }
-
-    /// Returns the display name for a given file buffer.
-    pub fn name(&self, file: SourceId) -> String {
-        match self.origins.path(file) {
-            Some(path) => path.display().to_string(),
-            None => "<expansion>".to_string(),
-        }
-    }
 }
 
 impl<'a> Cache<SourceId> for Sources<'a> {
@@ -53,6 +45,6 @@ impl<'a> Cache<SourceId> for Sources<'a> {
     }
 
     fn display<'b>(&self, id: &'b SourceId) -> Option<impl fmt::Display + 'b> {
-        Some(self.name(*id))
+        Some(crate::resolve::name(self.origins, *id))
     }
 }

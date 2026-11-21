@@ -253,26 +253,26 @@ fn written(
     // A tool reading lines wants every one, and nothing between them.
     match FORMAT.get() {
         Some(DiagnosticFormat::Short) => {
-            for (at, one) in &resolved {
-                write_short(to, &sources[*at], one)?;
+            for (_, one) in &resolved {
+                write_short(to, one)?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Github) => {
-            for (at, one) in &resolved {
-                write_github(to, &sources[*at], one)?;
+            for (_, one) in &resolved {
+                write_github(to, one)?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Json) => {
             for (at, one) in &resolved {
-                writeln!(to, "{}", json::line(&sources[*at], one))?;
+                writeln!(to, "{}", json::line(sources[*at].origins(), one))?;
             }
             return Ok(errors);
         }
         Some(DiagnosticFormat::Gitlab) => {
-            for (at, one) in &resolved {
-                json::find(&sources[*at], one);
+            for (_, one) in &resolved {
+                json::find(one);
             }
             return Ok(errors);
         }

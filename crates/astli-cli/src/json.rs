@@ -12,8 +12,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use astli_diag::{Resolved, Sources};
-use astli_text::{Severity, Span};
+use astli_diag::{Place, Resolved};
+use astli_text::{Origins, Severity, Span};
 
 /// A diagnostic as one line of JSON, every key present in every record:
 ///
@@ -28,35 +28,35 @@ use astli_text::{Severity, Span};
 /// `spelled` is the text a macro call stands for, and `expansion` the calls
 /// it went through, innermost first. `fix` holds the edits that fix it, each
 /// the `text` to put where it is placed, for an editor to offer.
-pub fn line(sources: &Sources, one: &Resolved) -> String {
+pub fn line(origins: &Origins, one: &Resolved) -> String {
     let diagnostic = one.diagnostic;
     let labels = list(one.labels.iter().map(|(at, message)| {
         format!(
             r#"{{"message":{},{}}}"#,
             string(message),
-            place(sources, *at)
+            elsewhere(origins, *at)
         )
     }));
     let notes = list(diagnostic.notes.iter().map(|note| string(note)));
     let help = list(diagnostic.help.iter().map(|help| string(help)));
     let spelled = match one.spelled {
-        Some(at) => format!("{{{}}}", place(sources, at)),
+        Some(at) => format!("{{{}}}", elsewhere(origins, at)),
         None => "null".to_string(),
     };
     let expansion = list(one.through.iter().map(|through| {
         format!(
             r#"{{"macro":{},{}}}"#,
             string(&through.name),
-            place(sources, through.call)
+            elsewhere(origins, through.call)
         )
     }));
     let included_from =
-        list((one.included_from.iter()).map(|&at| format!("{{{}}}", place(sources, at))));
+        list((one.included_from.iter()).map(|&at| format!("{{{}}}", elsewhere(origins, at))));
     let fix = list((diagnostic.fix.iter()).map(|edit| {
         format!(
             r#"{{"text":{},{}}}"#,
             string(&edit.text),
-            place(sources, edit.at)
+            elsewhere(origins, edit.at)
         )
     }));
     format!(
@@ -64,7 +64,7 @@ pub fn line(sources: &Sources, one: &Resolved) -> String {
         diagnostic.severity,
         string(diagnostic.code.as_str()),
         string(&diagnostic.message),
-        place(sources, one.at),
+        place(&one.place, one.at),
         diagnostic
             .label
             .as_deref()
@@ -83,13 +83,11 @@ pub fn unplaced(severity: Severity, message: &str, notes: &[String], help: &[Str
     )
 }
 
-/// The `path`, `start` and `end` keys of `at`, a position being its line
-/// and column, both from one and the column in characters, and its byte
-/// offset.
-fn place(sources: &Sources, at: Span) -> String {
-    let origins = sources.origins();
-    let position = |offset: u32| {
-        let at = origins.line_col(at.src_id, offset);
+/// The `path`, `start` and `end` keys of `at`, which is at `place`, a
+/// position being its line and column, both from one and the column in
+/// characters, and its byte offset.
+fn place(place: &Place, at: Span) -> String {
+    let position = |at: astli_text::LineCol, offset: u32| {
         format!(
             r#"{{"line":{},"column":{},"offset":{offset}}}"#,
             at.line, at.col
@@ -97,10 +95,16 @@ fn place(sources: &Sources, at: Span) -> String {
     };
     format!(
         r#""path":{},"start":{},"end":{}"#,
-        string(&sources.name(at.src_id)),
-        position(at.start),
-        position(at.end)
+        string(&place.path),
+        position(place.start, at.start),
+        position(place.end, at.end)
     )
+}
+
+/// The [`place`] keys of `at`, a span other than the one reported, such as
+/// a label's or a macro call's.
+fn elsewhere(origins: &Origins, at: Span) -> String {
+    place(&Place::of(origins, at), at)
 }
 
 /// A JSON value, built up and then written whole, indented for a person
@@ -236,14 +240,14 @@ struct Finding {
 }
 
 /// Keeps `one` for the report [`write_gitlab`] writes.
-pub fn find(sources: &Sources, one: &Resolved) {
+pub fn find(one: &Resolved) {
     let diagnostic = one.diagnostic;
     let finding = Finding {
         severity: diagnostic.severity,
         code: diagnostic.code.to_string(),
         message: diagnostic.message.clone(),
-        path: relative(&sources.name(one.at.src_id)),
-        line: sources.origins().line_col(one.at.src_id, one.at.start).line,
+        path: relative(&one.place.path),
+        line: one.place.start.line,
     };
     FOUND
         .lock()

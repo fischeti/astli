@@ -9,7 +9,7 @@ use std::io;
 use ariadne::{Color, Config, IndexType, Label, Report, ReportKind};
 use astli_text::{Severity, Span};
 
-use crate::resolve::Resolved;
+use crate::resolve::{Place, Resolved};
 use crate::sources::Sources;
 
 /// Output styling configuration for diagnostic rendering.
@@ -126,12 +126,8 @@ pub fn write(
         report = report.with_help(help);
     }
     for site in &resolved.included_from {
-        let origins = sources.origins();
-        let place = origins.line_col(site.src_id, site.start);
-        report = report.with_note(format!(
-            "included from {}:{place}",
-            sources.name(site.src_id)
-        ));
+        let place = Place::of(sources.origins(), *site);
+        report = report.with_note(format!("included from {}:{}", place.path, place.start));
     }
 
     report.finish().write(sources, out)
@@ -142,21 +138,13 @@ pub fn write(
 ///
 /// The place is where the user wrote the text, as in [`write()`]. The source,
 /// the macro chain, and the notes are left out: a line holds one location.
-pub fn write_short(
-    out: &mut dyn io::Write,
-    sources: &Sources,
-    resolved: &Resolved,
-) -> io::Result<()> {
+pub fn write_short(out: &mut dyn io::Write, resolved: &Resolved) -> io::Result<()> {
     let diagnostic = resolved.diagnostic;
-    let at = resolved.at;
-    let place = sources.origins().line_col(at.src_id, at.start);
+    let place = &resolved.place;
     writeln!(
         out,
-        "{}:{place}: {}[{}]: {}",
-        sources.name(at.src_id),
-        diagnostic.severity,
-        diagnostic.code,
-        diagnostic.message
+        "{}:{}: {}[{}]: {}",
+        place.path, place.start, diagnostic.severity, diagnostic.code, diagnostic.message
     )
 }
 
@@ -166,24 +154,18 @@ pub fn write_short(
 /// The command's message is the line [`write_short`] writes, since the log
 /// shows the message alone, and the place in it is what a reader of the log
 /// looks for.
-pub fn write_github(
-    out: &mut dyn io::Write,
-    sources: &Sources,
-    resolved: &Resolved,
-) -> io::Result<()> {
+pub fn write_github(out: &mut dyn io::Write, resolved: &Resolved) -> io::Result<()> {
     let diagnostic = resolved.diagnostic;
-    let at = resolved.at;
-    let origins = sources.origins();
-    let (start, end) = (
-        origins.line_col(at.src_id, at.start),
-        origins.line_col(at.src_id, at.end),
-    );
+    let Place {
+        path: file,
+        start,
+        end,
+    } = &resolved.place;
     let command = match diagnostic.severity {
         Severity::Error => "error",
         Severity::Warning => "warning",
         Severity::Note | Severity::Help => "notice",
     };
-    let file = sources.name(at.src_id);
     let message = format!(
         "{file}:{start}: {}[{}]: {}",
         diagnostic.severity, diagnostic.code, diagnostic.message
@@ -192,7 +174,7 @@ pub fn write_github(
         out,
         "::{command} title={},file={},line={},col={},endLine={},endColumn={}::{}",
         property(&diagnostic.code.to_string()),
-        property(&file),
+        property(file),
         start.line,
         start.col,
         end.line,

@@ -99,9 +99,8 @@ fn a_short_report_is_one_line_at_the_place_the_user_wrote() {
         panic!("one diagnostic expected: {:?}", expanded.diagnostics)
     };
 
-    let sources = Sources::new(session.origins());
     let mut out = Vec::new();
-    write_short(&mut out, &sources, &resolve(session.origins(), diagnostic)).unwrap();
+    write_short(&mut out, &resolve(session.origins(), diagnostic)).unwrap();
     assert_eq!(
         String::from_utf8(out).unwrap(),
         "top.sv:2:12: error[undefined-macro]: `NOPE is not defined\n"
@@ -120,9 +119,8 @@ fn a_github_report_is_a_workflow_command_with_its_properties_escaped() {
         panic!("one diagnostic expected: {:?}", expanded.diagnostics)
     };
 
-    let sources = Sources::new(session.origins());
     let mut out = Vec::new();
-    write_github(&mut out, &sources, &resolve(session.origins(), diagnostic)).unwrap();
+    write_github(&mut out, &resolve(session.origins(), diagnostic)).unwrap();
     assert_eq!(
         String::from_utf8(out).unwrap(),
         "::error title=undefined-macro,file=a%2Cb.sv,line=2,col=12,endLine=2,endColumn=16\
