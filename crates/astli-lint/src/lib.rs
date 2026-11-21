@@ -209,8 +209,8 @@ impl<'d> Linter<'d> {
                     }
                 }
             }
-            let mut spell = |name: &astli_sema::Name| {
-                let entry = spelled.entry(name.text.clone()).or_insert(Some(file));
+            let mut spell = |name: &str| {
+                let entry = spelled.entry(name.into()).or_insert(Some(file));
                 if *entry != Some(file) {
                     *entry = None;
                 }
@@ -223,26 +223,26 @@ impl<'d> Linter<'d> {
                         members.insert(name.text.clone());
                     }
                     astli_sema::ExprKind::Opaque(opaque) => {
-                        opaque.names.iter().for_each(&mut spell)
+                        hir.spelled(opaque).for_each(&mut spell)
                     }
                     _ => {}
                 }
             }
             for (_, symbol) in hir.symbols() {
                 if let astli_sema::SymbolKind::Other(opaque) = &symbol.kind {
-                    opaque.names.iter().for_each(&mut spell);
+                    hir.spelled(opaque).for_each(&mut spell);
                 }
             }
             for (_, scope) in hir.scopes() {
                 for member in &scope.members {
                     if let astli_sema::Member::Opaque(opaque) = member {
-                        opaque.names.iter().for_each(&mut spell);
+                        hir.spelled(opaque).for_each(&mut spell);
                     }
                 }
             }
             for (_, stmt) in hir.stmts() {
                 if let astli_sema::StmtKind::Opaque(opaque) = &stmt.kind {
-                    opaque.names.iter().for_each(&mut spell);
+                    hir.spelled(opaque).for_each(&mut spell);
                 }
             }
         }

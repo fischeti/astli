@@ -65,9 +65,7 @@ pub enum Searched {
 #[derive(Debug, Clone)]
 pub struct Names {
     exprs: Vec<Option<Resolution>>,
-    loose: Vec<(Name, Resolution)>,
-    /// Where each loose name is written, and its place in `loose`.
-    at: FxHashMap<Span, usize>,
+    loose: Vec<ExprId>,
     /// What each port of a `.*` connects, by where the `.*` is written:
     /// each port the instance does not connect otherwise, and what its
     /// name means where the instance stands.
@@ -78,24 +76,18 @@ pub struct Names {
 }
 
 impl Names {
-    /// What `expr` refers to, if it is a name, a `pkg::name`, or a member
-    /// `a.b` of an instance, a generate block or an interface port; `None`
-    /// for any other expression, and for a struct's member.
+    /// What `expr` refers to, if it is a name, loose or not, a `pkg::name`,
+    /// or a member `a.b` of an instance, a generate block or an interface
+    /// port; `None` for any other expression, and for a struct's member.
     pub fn expr(&self, expr: ExprId) -> Option<Resolution> {
         self.exprs.get(expr.index()).copied().flatten()
     }
 
-    /// Names with no expression of their own, and what each refers to: an
-    /// implicit connection's `.name`, and the names opaque regions spell,
-    /// which are never [`Resolution::Undeclared`] since what they are is not
-    /// known.
-    pub fn loose(&self) -> &[(Name, Resolution)] {
+    /// The names opaque regions spell, each [`Loose`](ExprKind::Loose):
+    /// `expr` says what each refers to, never [`Resolution::Undeclared`]
+    /// since what it is is not known.
+    pub fn loose(&self) -> &[ExprId] {
         &self.loose
-    }
-
-    /// What the loose name written at `at` refers to.
-    pub fn loose_at(&self, at: Span) -> Option<Resolution> {
-        self.at.get(&at).map(|&index| self.loose[index].1)
     }
 
     /// The names used above their declaration where nothing declares them
@@ -107,11 +99,6 @@ impl Names {
     /// What the `.*` written at `at` connects to each port left to it.
     pub fn wildcard(&self, at: Span) -> &[(SymbolRef, Resolution)] {
         self.wildcards.get(&at).map_or(&[], Vec::as_slice)
-    }
-
-    fn push_loose(&mut self, name: &Name, found: Resolution) {
-        self.at.insert(name.span, self.loose.len());
-        self.loose.push((name.clone(), found));
     }
 }
 
@@ -224,7 +211,6 @@ impl<'d> Resolver<'d> {
             names: Names {
                 exprs: vec![None; hir.exprs.len()],
                 loose: Vec::new(),
-                at: FxHashMap::default(),
                 wildcards: FxHashMap::default(),
                 early: Vec::new(),
             },
@@ -821,13 +807,7 @@ impl<'d> Resolver<'d> {
         for arg in args {
             match arg {
                 Arg::Positional(value) | Arg::Named { value, .. } => self.value(scope, *value),
-                Arg::Implicit(name) => {
-                    let (found, below) = self.find(scope, &name.text, true);
-                    if let Some(symbol) = below {
-                        self.names.early.push((name.span, symbol));
-                    }
-                    self.names.push_loose(name, found);
-                }
+                Arg::Implicit { value, .. } => self.expr(scope, *value),
                 Arg::Wildcard(_) => {}
             }
         }
@@ -872,12 +852,8 @@ impl<'d> Resolver<'d> {
     }
 
     fn opaque(&mut self, scope: ScopeId, opaque: &Opaque) {
-        for name in &opaque.names {
-            let found = match self.lookup(scope, &name.text) {
-                Resolution::Undeclared(_) => Resolution::Unknown,
-                found => found,
-            };
-            self.names.push_loose(name, found);
+        for &name in &opaque.names {
+            self.expr(scope, name);
         }
     }
 
@@ -1051,6 +1027,14 @@ impl<'d> Resolver<'d> {
                 }
             }
             ExprKind::Opaque(opaque) => self.opaque(scope, opaque),
+            ExprKind::Loose(name) => {
+                let found = match self.lookup(scope, name) {
+                    Resolution::Undeclared(_) => Resolution::Unknown,
+                    found => found,
+                };
+                self.names.exprs[expr.index()] = Some(found);
+                self.names.loose.push(expr);
+            }
         }
     }
 

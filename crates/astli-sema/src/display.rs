@@ -148,7 +148,7 @@ impl Printer<'_> {
                 self.line(format_args!("default clocking {}", self.expr(*clocking)));
             }
             Member::ElaborationTask(call) => self.line(self.expr(*call)),
-            Member::Opaque(opaque) => self.line(opaque_text(opaque)),
+            Member::Opaque(opaque) => self.line(opaque_text(self.hir, opaque)),
         }
     }
 
@@ -401,7 +401,7 @@ impl Printer<'_> {
             SymbolKind::Block(_) => {}
             SymbolKind::Label(_) => self.line(format_args!("label {name}")),
             SymbolKind::Other(body) => {
-                self.line(format_args!("other {name} {}", opaque_text(body)))
+                self.line(format_args!("other {name} {}", opaque_text(self.hir, body)))
             }
         }
     }
@@ -577,7 +577,7 @@ impl Printer<'_> {
                     self.branch(Some(*fail));
                 }
             }
-            StmtKind::Opaque(opaque) => self.line(opaque_text(opaque)),
+            StmtKind::Opaque(opaque) => self.line(opaque_text(self.hir, opaque)),
         }
     }
 
@@ -772,7 +772,7 @@ impl Printer<'_> {
                 });
                 format!("matched({}{})", self.expr(*value), path.collect::<String>())
             }
-            TypeKind::Opaque(opaque) => opaque_text(opaque),
+            TypeKind::Opaque(opaque) => opaque_text(self.hir, opaque),
         };
         format!("{kind}{}", self.dims(&ty.dims))
     }
@@ -798,7 +798,7 @@ impl Printer<'_> {
                 let value = value.map(|value| self.expr(value)).unwrap_or_default();
                 format!(".{}({value})", name.text)
             }
-            Arg::Implicit(name) => format!(".{}", name.text),
+            Arg::Implicit { name, .. } => format!(".{}", name.text),
             Arg::Wildcard(_) => ".*".to_string(),
         }))
     }
@@ -806,9 +806,10 @@ impl Printer<'_> {
     fn expr(&self, id: ExprId) -> String {
         let expr = |id: &ExprId| self.expr(*id);
         match &self.hir[id].kind {
-            ExprKind::Name(text) | ExprKind::System(text) | ExprKind::Literal { text, .. } => {
-                text.to_string()
-            }
+            ExprKind::Name(text)
+            | ExprKind::Loose(text)
+            | ExprKind::System(text)
+            | ExprKind::Literal { text, .. } => text.to_string(),
             ExprKind::Time { text, value } => match value {
                 Some(value) => format!("{text} ({value:?})"),
                 None => format!("{text} (?)"),
@@ -925,7 +926,7 @@ impl Printer<'_> {
             },
             ExprKind::Type(ty) => self.ty(ty),
             ExprKind::Property(property) => self.property(property),
-            ExprKind::Opaque(opaque) => opaque_text(opaque),
+            ExprKind::Opaque(opaque) => opaque_text(self.hir, opaque),
         }
     }
 }
@@ -975,7 +976,7 @@ impl Printer<'_> {
             StmtKind::Foreach { array, body, .. } => {
                 format!("foreach ({}) {}", self.expr(*array), inner(body))
             }
-            StmtKind::Opaque(opaque) => opaque_text(opaque),
+            StmtKind::Opaque(opaque) => opaque_text(self.hir, opaque),
             StmtKind::Empty => String::new(),
             _ => "?".to_string(),
         }
@@ -1001,9 +1002,11 @@ fn list(items: impl Iterator<Item = impl Display>) -> String {
         .join(", ")
 }
 
-fn opaque_text(opaque: &Opaque) -> String {
-    let names = opaque.names.iter().map(|name| name.text.to_string());
-    format!("opaque({})", names.collect::<Vec<_>>().join(" "))
+fn opaque_text(hir: &Hir, opaque: &Opaque) -> String {
+    format!(
+        "opaque({})",
+        hir.spelled(opaque).collect::<Vec<_>>().join(" ")
+    )
 }
 
 fn spelling(kind: SyntaxKind) -> &'static str {

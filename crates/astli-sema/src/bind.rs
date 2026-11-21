@@ -38,7 +38,7 @@ pub(crate) fn formals(hir: &Hir, formals: &[SymbolId], args: &[Arg]) -> Vec<Opti
                 position += 1;
                 formals.get(position - 1).copied()
             }
-            Arg::Named { name, .. } | Arg::Implicit(name) => named(name),
+            Arg::Named { name, .. } | Arg::Implicit { name, .. } => named(name),
             Arg::Wildcard(_) => None,
         })
         .collect()
@@ -59,7 +59,9 @@ pub fn bind(
     for (arg, formal) in args.iter().zip(self::formals(hir, formals, args)) {
         let given = match arg {
             Arg::Positional(value) | Arg::Named { value, .. } => value.map(Bound::Expr),
-            Arg::Implicit(name) => (names.loose_at(name.span)).map(|it| Bound::Name(it, name.span)),
+            Arg::Implicit { name, value } => {
+                (names.expr(*value)).map(|it| Bound::Name(it, name.span))
+            }
             Arg::Wildcard(_) => None,
         };
         if let (Some(formal), Some(given)) = (formal, given) {
