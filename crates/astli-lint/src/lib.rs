@@ -74,9 +74,7 @@ pub use rule::{Group, Layer, RULES, Rule};
 pub use waiver::{INVALID_WAIVER, Waivers};
 
 use astli_parse::SyntaxTree;
-use astli_sema::{
-    Access, Built, Elaboration, FileId, Member, Resolution, SymbolKind, SymbolRef, accesses,
-};
+use astli_sema::{Access, Built, Elaboration, FileId, Resolution, SymbolRef, accesses};
 use astli_text::{Diagnostic, Origins, Severity};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -166,8 +164,6 @@ pub struct Linter<'d> {
     /// Each name any file accesses as a member of a path that does not
     /// resolve, `up.name`, which may be one through the instance tree.
     members: FxHashSet<Box<str>>,
-    /// The package each package member is declared in.
-    packages: FxHashMap<SymbolRef, Box<str>>,
     /// The widths that differ in each file, in what the tops build; `None`
     /// without them.
     widths: Option<Vec<Vec<Width>>>,
@@ -192,23 +188,8 @@ impl<'d> Linter<'d> {
         }
         let mut spelled: FxHashMap<Box<str>, Option<FileId>> = FxHashMap::default();
         let mut members = FxHashSet::default();
-        let mut packages = FxHashMap::default();
         for (file, hir) in design.files() {
             let names = design.names(file);
-            for (_, symbol) in hir.symbols() {
-                let SymbolKind::Definition { keyword, scope, .. } = &symbol.kind else {
-                    continue;
-                };
-                if *keyword != astli_syntax::SyntaxKind::PACKAGE_KW {
-                    continue;
-                }
-                for member in &hir[*scope].members {
-                    if let Member::Declare(id) = member {
-                        let at = SymbolRef { file, symbol: *id };
-                        packages.insert(at, symbol.name.text.clone());
-                    }
-                }
-            }
             for (id, expr) in hir.exprs() {
                 if let astli_sema::ExprKind::Member { name, .. } = &expr.kind
                     && names.expr(id) == Some(Resolution::Unknown)
@@ -238,7 +219,6 @@ impl<'d> Linter<'d> {
             remote,
             spelled,
             members,
-            packages,
             widths,
         }
     }
@@ -259,11 +239,6 @@ impl<'d> Linter<'d> {
     /// writes it, through a hierarchical name.
     pub(crate) fn remote(&self, symbol: SymbolRef) -> (bool, bool) {
         self.remote.get(&symbol).copied().unwrap_or_default()
-    }
-
-    /// The package `symbol` is declared in, if it is a package's member.
-    pub(crate) fn package_of(&self, symbol: SymbolRef) -> Option<&str> {
-        self.packages.get(&symbol).map(|name| &**name)
     }
 
     /// What the design and built rules `config` leaves on find in `file`,
