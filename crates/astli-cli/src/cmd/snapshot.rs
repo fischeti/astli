@@ -158,7 +158,9 @@ impl RunWith<Ctx<'_>> for Snapshot {
 }
 
 /// `package`'s manifest, to require `name` in; refused if its dependencies
-/// come from a `Bender.yml`.
+/// come from a `Bender.yml` and `name` would be written among them. One
+/// without a `[dependencies]` table or a `Bender.yml` has none, and gets the
+/// table.
 fn editable(here: &Here, package: &Package, name: &str, commit: &str) -> Result<Editable> {
     let bender = |why: &str| {
         Error::failed(format!(
@@ -170,11 +172,12 @@ fn editable(here: &Here, package: &Package, name: &str, commit: &str) -> Result<
             mark::code(format!("astli patch --remove {name}"))
         ))
     };
-    if package.manifest_path.is_none() {
+    let from_bender = package.manifest.listed_by == ListedBy::Bender;
+    if package.manifest_path.is_none() && from_bender {
         return Err(bender(""));
     }
     let manifest = Editable::open(package)?;
-    if package.manifest.listed_by != ListedBy::Astli {
+    if from_bender && !manifest.holds("dev-dependencies", name) {
         let why = format!(
             ", since its {MANIFEST} has no {} table",
             mark::code("[dependencies]")

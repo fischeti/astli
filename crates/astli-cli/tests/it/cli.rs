@@ -5433,6 +5433,11 @@ fn a_snapshot_in_a_workspace_requires_the_commit_in_each_member_and_pins_at_its_
         &format!("package:\n  name: legacy\ndependencies:\n  cells: {{ git: '{cells}', version: 1.0.0 }}\n"),
     );
     fixture.file("ws/ip/legacy/astli.toml", "[package]\nname = 'legacy'\n");
+    // Without a `[dependencies]` table or a `Bender.yml`, it has none.
+    fixture.file(
+        "ws/ip/dev/astli.toml",
+        &format!("[package]\nname = 'dev'\n\n[dev-dependencies]\ncells = {{ git = '{cells}', version = '1' }}\n"),
+    );
     let member = ws.join("ip/other");
     let patched = astli_with_cache(&fixture, &member, &["patch", "cells"]);
     let commit = commit_in_clone(&fixture, &ws);
@@ -5468,13 +5473,21 @@ fn a_snapshot_in_a_workspace_requires_the_commit_in_each_member_and_pins_at_its_
         )
     );
     assert_eq!(
+        std::fs::read_to_string(ws.join("ip/dev/astli.toml")).expect("a manifest"),
+        format!(
+            "[package]\nname = 'dev'\n\n[dev-dependencies]\ncells = {{ git = '{cells}', rev = \"{commit}\" }}\n"
+        )
+    );
+    assert_eq!(
         std::fs::read_to_string(ws.join("astli.toml")).expect("a manifest"),
         "[package]\nname = 'soc'\n\n[workspace]\n\n[dependencies]\ndma = { path = 'ip/dma' }\n\n\
          [resolve]\npinned = [\"cells\"]\n"
     );
     let said = said_in(&fixture, &snapshot);
     assert!(
-        said.contains("in ip/dma/astli.toml") && said.contains("in ip/other/astli.toml"),
+        said.contains("in ip/dma/astli.toml")
+            && said.contains("in ip/dev/astli.toml")
+            && said.contains("in ip/other/astli.toml"),
         "{said}"
     );
     let lock = std::fs::read_to_string(ws.join("astli.lock")).expect("a lock");
