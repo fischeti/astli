@@ -501,17 +501,20 @@ impl Problem {
 
 impl Problem {
     /// The problem rendered as a diagnostic at `at`, if the file still holds
-    /// the place.
+    /// the place. Its names are in backticks, as a diagnostic from the
+    /// source writes them, whether or not stderr takes colour: a `short` or
+    /// `github` line is for a tool, which takes no style.
     fn located(&self, at: &At) -> Option<Vec<u8>> {
         let text = std::fs::read_to_string(&at.path).ok()?;
         let range = at.place.range(&text)?;
         let mut origins = Origins::new();
         let file = origins.add_file(&at.path, text);
         let span = Span::new(file, range.start as u32, range.end as u32);
-        let mut diagnostic = Diagnostic::new(self.severity, at.code, span, styled(&self.message));
-        diagnostic.label = at.label.as_deref().map(styled);
-        diagnostic.notes = self.notes.iter().map(|note| styled(note)).collect();
-        diagnostic.help = self.help.iter().map(|help| styled(help)).collect();
+        let message = mark::plain(&self.message);
+        let mut diagnostic = Diagnostic::new(self.severity, at.code, span, message);
+        diagnostic.label = at.label.as_deref().map(mark::plain);
+        diagnostic.notes = self.notes.iter().map(|note| mark::plain(note)).collect();
+        diagnostic.help = self.help.iter().map(|help| mark::plain(help)).collect();
         let mut out = Vec::new();
         render::diagnostics(&mut out, &origins, &[diagnostic]).ok()?;
         Some(out)

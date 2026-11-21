@@ -1209,6 +1209,20 @@ fn files_refuses_a_name_declared_twice_that_is_used() {
     );
     assert!(said.contains("[ ff.sv:1:8 ]"), "{said}");
     assert!(said.contains("also declared at latch.sv:1:8"), "{said}");
+
+    // A line for a tool holds no style, whatever colour stderr takes.
+    let files = ["top.sv", "ff.sv", "latch.sv"];
+    for (format, starts) in [("short", "ff.sv:1:8: "), ("github", "::error ")] {
+        let output = files_in(
+            &fixture,
+            &[&["--color", "always", "--diag", format], &files[..]].concat(),
+        );
+        let said = stderr(&output);
+        let line = said.lines().find(|line| line.starts_with(starts));
+        let line = line.unwrap_or_else(|| panic!("no {format} line: {said}"));
+        assert!(line.contains("`regfile` is declared 2 times"), "{line}");
+        assert!(!line.contains('\u{1b}'), "{line:?}");
+    }
 }
 
 #[test]
