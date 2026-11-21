@@ -773,7 +773,7 @@ A sweep on a parameter in a generate block, or on anything but a parameter,
 is not read and says nothing, nor does `test --list`, which runs no check,
 report the parser's error for one in a `#( ... )` list: the test is listed
 without it. **Revisit when** a bench is found sweeping one of those.
-**Where** `astli-index/src/summary.rs`
+**Where** `astli-cli/src/marks.rs`
 
 ### `-D` and `+define+` on one command line ignore their relative order
 
