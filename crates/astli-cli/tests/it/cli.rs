@@ -1704,7 +1704,7 @@ fn lint_refuses_a_name_that_is_no_rule() {
 }
 
 #[test]
-fn lint_list_names_every_rule_with_its_group() {
+fn lint_list_names_every_rule_with_its_group_and_options() {
     let output = astli(["lint", "--list"]);
 
     assert!(output.status.success(), "{}", stderr(&output));
@@ -1716,6 +1716,23 @@ fn lint_list_names_every_rule_with_its_group() {
     assert_eq!(
         row,
         Some(vec!["always-ff-non-blocking", "correctness", "deny"]),
+        "{listed}"
+    );
+    // A rule's options follow it, each set to its default as `astli.toml`
+    // writes it.
+    let options: Vec<&str> = (listed.lines())
+        .skip_while(|line| !line.starts_with("port-name-suffix "))
+        .skip(1)
+        .take_while(|line| line.starts_with(' '))
+        .map(|line| line.trim().split("  ").next().unwrap())
+        .collect();
+    assert_eq!(
+        options,
+        [
+            r#"input = ["*_i", "*_ni", "*_pi"]"#,
+            r#"output = ["*_o", "*_no", "*_po"]"#,
+            r#"inout = ["*_io", "*_nio", "*_pio"]"#,
+        ],
         "{listed}"
     );
 }

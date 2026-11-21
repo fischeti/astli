@@ -62,7 +62,7 @@ astli fmt -              # stdin to stdout
 
 ```sh
 astli lint                       # the package and its dependencies
-astli lint --list                # every rule, its group and level
+astli lint --list                # every rule, its group, level and options
 astli lint --fix rtl/*.sv        # apply the fixes rules offer
 astli lint --top chip_top        # also run the width rules, which elaborate
 astli lint --allow lowrisc --warn parameter-name-style rtl/*.sv

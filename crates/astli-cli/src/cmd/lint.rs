@@ -31,7 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use astli_lint::{Config, Layer, Level, Linter, RULES, Waivers, lint};
+use astli_lint::{Config, Layer, Level, Linter, RULES, RuleOption, Waivers, lint};
 use astli_parse::{NOT_PARSED, SyntaxTree};
 use astli_sema::Built;
 use astli_text::{Diagnostic, Edit, apply};
@@ -64,7 +64,7 @@ pub struct Lint {
     /// Path to a custom configuration file instead of searching for astli.toml
     #[usage(long, value_name = "FILE")]
     pub config: Option<PathBuf>,
-    /// List all available lint rules with their rule group and default severity level
+    /// List all available lint rules with their rule group and default severity level, and the options each takes with their defaults
     #[usage(long)]
     pub list: bool,
     /// Automatically apply safe fixes for supported lint findings in place
@@ -345,9 +345,22 @@ impl<'a> Read<'a> {
     }
 }
 
-/// Prints each rule's name, group and default level, and what it finds.
+/// Prints each rule's name, group and default level, and what it finds;
+/// under it, each option it takes, set to its default as `astli.toml`
+/// writes it, and what the option is.
 fn list(out: &mut dyn Write) -> Result {
+    let setting = |option: &RuleOption| {
+        let values: Vec<String> = (option.default.iter())
+            .map(|value| format!("{value:?}"))
+            .collect();
+        format!("{} = [{}]", option.key, values.join(", "))
+    };
     let wide = RULES.iter().map(|rule| rule.name.len()).max().unwrap_or(0);
+    let set_wide = (RULES.iter())
+        .flat_map(|rule| rule.options)
+        .map(|option| setting(option).len())
+        .max()
+        .unwrap_or(0);
     for rule in RULES {
         let level = match rule.group.level() {
             Level::Allow => "allow",
@@ -362,6 +375,9 @@ fn list(out: &mut dyn Write) -> Result {
             level,
             rule.summary
         )?;
+        for option in rule.options {
+            writeln!(out, "    {:set_wide$}  {}", setting(option), option.summary)?;
+        }
     }
     Ok(())
 }
