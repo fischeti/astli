@@ -11,7 +11,7 @@ endmodule
 
 module m #(parameter Name = "rom", parameter e_t Q = 1);
   e_t v;
-  enum logic [2:0] {G = 4'h2, H = 3'h3} wide;
+  enum logic [2:0] {G = 4'h2, H = 3'h3, U = 4'b2} wide;
   enum bit [1:0] {K = 0, L = 2'bxx, M = 1} two_state;
   enum integer {N = 0, O = {32{1'bx}}, R} after_x;
   enum logic [1:0] {S, T = 0} twice;

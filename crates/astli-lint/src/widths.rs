@@ -5,7 +5,7 @@
 use astli_sema::{
     Arg, Bits, Bound, Built, Elaboration, ExprId, ExprKind, FileId, Frame, Literal, Member,
     Operator, Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef,
-    Ty, TypeKind, Value, Walked, literal,
+    Ty, TypeKind, Value, Walked,
 };
 use astli_syntax::SyntaxKind::*;
 use astli_text::Span;
@@ -152,7 +152,7 @@ impl Walk<'_> {
         let elaboration = self.elaboration;
         let hir = &elaboration.design()[frame.file];
         let own = self.walked.expr_type(expr).width()?;
-        let ExprKind::Literal(text) = &hir[expr].kind else {
+        let ExprKind::Literal { value, size, .. } = &hir[expr].kind else {
             return Some(match self.walked.eval(expr) {
                 // A time counts time units, and what it scales is meant to
                 // reach all of its 64 bits.
@@ -171,20 +171,14 @@ impl Walk<'_> {
                 _ => self.operation(frame, expr, own),
             });
         };
-        Some(match literal(text) {
+        Some(match &**value {
             Literal::Fill(_) => Range::constant(1, own),
             // The width written is the one it has.
-            Literal::Bits(bits)
-                if text
-                    .split_once('\'')
-                    .is_some_and(|(size, _)| !size.is_empty()) =>
-            {
-                Range {
-                    room: own,
-                    ..Range::constant(needed(&bits), own)
-                }
-            }
-            Literal::Bits(bits) => Range::constant(needed(&bits), own),
+            Literal::Bits(bits) if size.is_some() => Range {
+                room: own,
+                ..Range::constant(needed(bits), own)
+            },
+            Literal::Bits(bits) => Range::constant(needed(bits), own),
             _ => Range::constant(own, own),
         })
     }
@@ -292,7 +286,7 @@ impl Walk<'_> {
         let hir = &elaboration.design()[frame.file];
         let all = |exprs: &[ExprId]| exprs.iter().all(|&expr| self.constant(frame, expr));
         match &hir[expr].kind {
-            ExprKind::Literal(_) | ExprKind::Time { .. } => true,
+            ExprKind::Literal { .. } | ExprKind::Time { .. } => true,
             ExprKind::Name(_) | ExprKind::Scoped { .. } => {
                 match elaboration.names(frame.file).expr(expr) {
                     Some(Resolution::Declared(at)) => match elaboration.design().symbol(at).kind {

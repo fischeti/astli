@@ -804,8 +804,8 @@ impl Printer<'_> {
     fn expr(&self, id: ExprId) -> String {
         let expr = |id: &ExprId| self.expr(*id);
         match &self.hir[id].kind {
-            ExprKind::Name(name) | ExprKind::System(name) | ExprKind::Literal(name) => {
-                name.to_string()
+            ExprKind::Name(text) | ExprKind::System(text) | ExprKind::Literal { text, .. } => {
+                text.to_string()
             }
             ExprKind::Time { text, value } => match value {
                 Some(value) => format!("{text} ({value:?})"),

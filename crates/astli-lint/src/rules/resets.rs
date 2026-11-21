@@ -7,7 +7,7 @@
 //! written one, and reported at the call.
 
 use astli_sema::{
-    Event, ExprId, ExprKind, Hir, Literal, Member, Process, StmtId, StmtKind, Timing, literal,
+    Event, ExprId, ExprKind, Hir, Literal, Member, Process, StmtId, StmtKind, Timing,
 };
 use astli_syntax::SyntaxKind::{ALWAYS_FF_KW, BANG, BANG_EQ, EQ_EQ, NEGEDGE_KW, POSEDGE_KW, TILDE};
 
@@ -171,10 +171,10 @@ fn tested(hir: &Hir, condition: ExprId) -> Option<(ExprId, bool)> {
 
 /// The value of `expr`, if it is a literal of 0 or 1.
 fn bit(hir: &Hir, expr: ExprId) -> Option<bool> {
-    let ExprKind::Literal(text) = &hir[expr].kind else {
+    let ExprKind::Literal { value, .. } = &hir[expr].kind else {
         return None;
     };
-    match literal(text) {
+    match &**value {
         Literal::Bits(bits) if !bits.has_unknown() => match bits.to_u64()? {
             0 => Some(false),
             1 => Some(true),
@@ -188,9 +188,8 @@ fn bit(hir: &Hir, expr: ExprId) -> Option<bool> {
 /// select of one by the same index.
 fn same(hir: &Hir, a: ExprId, b: ExprId) -> bool {
     match (&hir[a].kind, &hir[b].kind) {
-        (ExprKind::Name(a), ExprKind::Name(b)) | (ExprKind::Literal(a), ExprKind::Literal(b)) => {
-            a == b
-        }
+        (ExprKind::Name(a), ExprKind::Name(b))
+        | (ExprKind::Literal { text: a, .. }, ExprKind::Literal { text: b, .. }) => a == b,
         (ExprKind::Member { base: a, name: x }, ExprKind::Member { base: b, name: y }) => {
             x == y && same(hir, *a, *b)
         }

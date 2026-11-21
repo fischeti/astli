@@ -18,7 +18,7 @@ use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
-use crate::value::{Bit, Bits, Literal, Value, literal};
+use crate::value::{Bit, Bits, Literal, Value};
 
 impl Elaboration {
     /// `expr`'s type by itself, before the expression around it sizes it.
@@ -37,7 +37,7 @@ impl Elaboration {
     fn own_type(&self, cx: Cx, expr: ExprId) -> Ty {
         let hir = &self.design[cx.file];
         match &hir[expr].kind {
-            ExprKind::Literal(text) => literal_type(&literal(text)),
+            ExprKind::Literal { value, .. } => literal_type(value),
             // A `realtime`.
             ExprKind::Time { .. } => Ty::REAL,
             ExprKind::Keyword(NULL_KW) => Ty::Null,
@@ -95,15 +95,9 @@ impl Elaboration {
                 // that has one of its own: a fill, as `'0`, has none either.
                 let untyped =
                     |arm: ExprId| matches!(hir[arm].kind, ExprKind::Pattern { ty: None, .. });
-                let fill = |arm: ExprId| match &hir[arm].kind {
-                    ExprKind::Literal(text) => matches!(literal(text), Literal::Fill(_)),
-                    _ => false,
-                };
+                let fill = |arm: ExprId| hir[arm].kind.is_fill();
                 // A string literal against a `string` is one too.
-                let text = |arm: ExprId| match &hir[arm].kind {
-                    ExprKind::Literal(text) => matches!(literal(text), Literal::String(_)),
-                    _ => false,
-                };
+                let text = |arm: ExprId| hir[arm].kind.is_string();
                 match (untyped(*then_value), untyped(*else_value)) {
                     (false, true) if !fill(*then_value) => self.self_type(cx, *then_value),
                     (true, false) if !fill(*else_value) => self.self_type(cx, *else_value),
@@ -298,15 +292,15 @@ impl Elaboration {
     fn value_at(&self, cx: Cx, expr: ExprId, ty: &Ty) -> Value {
         let hir = &self.design[cx.file];
         let value = match &hir[expr].kind {
-            ExprKind::Literal(text) => match literal(text) {
-                Literal::Bits(bits) => Value::Bits(bits),
+            ExprKind::Literal { value, .. } => match &**value {
+                Literal::Bits(bits) => Value::Bits(bits.clone()),
                 Literal::Fill(bit) => match ty {
-                    Ty::Packed(ty) => return Value::Bits(Bits::filled(ty.width, ty.signed, bit)),
-                    _ => Value::Bits(Bits::bit_value(bit)),
+                    Ty::Packed(ty) => return Value::Bits(Bits::filled(ty.width, ty.signed, *bit)),
+                    _ => Value::Bits(Bits::bit_value(*bit)),
                 },
-                Literal::Real(real) => Value::Real(real),
-                Literal::String(bytes) if *ty == Ty::String => Value::String(bytes),
-                Literal::String(bytes) => Value::Bits(string_bits(&bytes)),
+                Literal::Real(real) => Value::Real(*real),
+                Literal::String(bytes) if *ty == Ty::String => Value::String(bytes.clone()),
+                Literal::String(bytes) => Value::Bits(string_bits(bytes)),
                 Literal::Unknown => Value::Unknown,
             },
             ExprKind::Time { value, .. } => value.map_or(Value::Unknown, Value::Real),
