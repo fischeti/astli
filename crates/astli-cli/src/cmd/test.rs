@@ -191,6 +191,8 @@ struct Case<'a> {
     /// The point as the run shows it: with its package's name before it
     /// where the run reads several.
     shown: String,
+    /// Its package's name, where the run reads several.
+    named: Option<&'a str>,
     point: &'a Point,
     package: &'a Selected,
     builder: &'a Builder,
@@ -304,14 +306,6 @@ impl RunWith<Ctx<'_>> for Test {
             }
             return checked;
         }
-        if several {
-            for package in &mut selected {
-                if let Some(built) = &mut package.built {
-                    built.builder.shown_package = Some(package.package.clone());
-                }
-            }
-        }
-
         let mut cases = Vec::new();
         for package in &selected {
             let Some(Built { builder, lists }) = &package.built else {
@@ -330,6 +324,7 @@ impl RunWith<Ctx<'_>> for Test {
                         true => format!("{} {point}", package.package),
                         false => point.to_string(),
                     },
+                    named: several.then_some(package.package.as_str()),
                     point,
                     package,
                     builder,
@@ -516,7 +511,7 @@ impl Test {
         let builds = jobs.min(cases.len());
         let built = parallel(cases, builds, |case| {
             case.builder
-                .build(case.listed, (jobs / builds).max(1))
+                .build(case.listed, case.named, (jobs / builds).max(1))
                 .map_err(|err| {
                     let mut problem = err.problem();
                     let why = mark::plain(&problem.message);

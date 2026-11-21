@@ -107,7 +107,7 @@ pub(crate) fn built_tops(
     let checked =
         |_: &Plan, analysis: &mut Analysis, flags: &mut Flags| flags.check(analysis).map(|()| true);
     (listed_tops(out, plan, designs, run, checked)?.iter())
-        .map(|listed| builder.build(listed, run.args.jobs))
+        .map(|listed| builder.build(listed, None, run.args.jobs))
         .collect()
 }
 
@@ -162,9 +162,6 @@ pub(crate) struct Builder {
     named: Vec<PathBuf>,
     /// What names the package's builds among the workspace's.
     package_dir: String,
-    /// The package's name, shown before each top's where a run builds the
-    /// tops of several packages, which may each hold one of a name.
-    pub(crate) shown_package: Option<String>,
 }
 
 impl Builder {
@@ -195,7 +192,6 @@ impl Builder {
             root,
             named,
             package_dir: dir_name(&package.package),
-            shown_package: None,
         })
     }
 
@@ -206,8 +202,15 @@ impl Builder {
     }
 
     /// Builds the top `listed` lists, unless it is fresh, on `jobs`
-    /// threads, and hands back where its executable is.
-    pub(crate) fn build(&self, listed: &Listed, jobs: usize) -> Result<PathBuf> {
+    /// threads, and hands back where its executable is. The top is shown
+    /// after `package`, the name of its package, where a run builds the
+    /// tops of several, which may each hold one of a name.
+    pub(crate) fn build(
+        &self,
+        listed: &Listed,
+        package: Option<&str>,
+        jobs: usize,
+    ) -> Result<PathBuf> {
         let Builder {
             backend,
             profile_name,
@@ -226,7 +229,7 @@ impl Builder {
         let stamp = dir.join("fingerprint");
         let built = std::fs::read_to_string(&stamp).is_ok_and(|it| it == fingerprint);
         let executable = backend.executable(&dir, &top.module);
-        let shown = match &self.shown_package {
+        let shown = match package {
             Some(package) => mark::name(format!("{package} {}", top.name)),
             None => mark::name(&top.name),
         };
