@@ -117,7 +117,7 @@ fn corpus_lowers_and_resolves() {
                 theirs.insert(hirs.len());
             }
             hirs.push(lower(&parsed));
-            summaries.push(Summary::new(&session, file, &parsed));
+            summaries.push(Summary::new(session.origins(), file, &parsed));
             sessions.push(session);
         }
         lowered += hirs.len() - theirs.len();

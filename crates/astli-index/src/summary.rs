@@ -4,10 +4,9 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use astli_parse::Parsed;
-use astli_preproc::Session;
 use astli_syntax::SyntaxKind::ENVELOPE;
 use astli_syntax::{SyntaxNode, SyntaxToken};
-use astli_text::{LineCol, SourceId};
+use astli_text::{LineCol, Origins, SourceId};
 
 use crate::names::{Role, names, package_checkers, stub};
 
@@ -127,13 +126,13 @@ pub struct Summary {
 }
 
 impl Summary {
-    /// Reads the summary of `file` off `parsed`, its tree in either mode.
+    /// Reads the summary of `file` off `parsed`, its tree in either mode,
+    /// with `origins` from the session that read it.
     ///
     /// In expanded mode what the macros write and the headers declare is part
     /// of it, and only the branches the build takes. In raw mode neither is,
     /// and every branch is.
-    pub fn new(session: &Session, file: SourceId, parsed: &Parsed) -> Summary {
-        let origins = session.origins();
+    pub fn new(origins: &Origins, file: SourceId, parsed: &Parsed) -> Summary {
         let locate = |token: &SyntaxToken| {
             let span = parsed.span(token)?;
             let at = origins.spelled(origins.reported_at(span));

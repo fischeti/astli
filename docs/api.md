@@ -93,8 +93,9 @@ astli_index::renamed(&parsed.root, |name| Some(format!("p_{name}")));
 A `Summary` holds names and `path:line:col` locations, not spans, so it is
 `Send` and outlives its session: summaries are made per file in parallel, as
 each file is its own unit, and one index is built from them. A file is its
-position in the summaries. `Summary::new` reads a tree in either mode;
-`summarize` expands and parses first, which is what a filelist needs.
+position in the summaries. `Summary::new` reads a tree in either mode,
+with the `Origins` its spans resolve against, the one part of a session it
+needs; `summarize` expands and parses first, which is what a filelist needs.
 `names` is the walk a `Summary` is read from, and `renamed` writes a tree's
 text with the names its closure answers for replaced.
 
