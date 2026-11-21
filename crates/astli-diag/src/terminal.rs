@@ -6,6 +6,7 @@
 
 use std::io;
 
+use anstyle::{Ansi256Color, AnsiColor};
 use ariadne::{Color, Config, IndexType, Label, Report, ReportKind};
 use astli_text::{Severity, Span};
 
@@ -40,6 +41,49 @@ impl Style {
     }
 }
 
+/// The colour a diagnostic of `severity` is drawn in: its header, and the
+/// caret at what it reports. These are the colours `ariadne` heads each kind
+/// of report with, so that a tool drawing a problem with no source beside
+/// these draws it alike.
+pub fn colour(severity: Severity) -> anstyle::Color {
+    match severity {
+        Severity::Error => AnsiColor::Red.into(),
+        Severity::Warning => AnsiColor::Yellow.into(),
+        Severity::Note | Severity::Help => Ansi256Color(147).into(),
+    }
+}
+
+/// The colour of what explains a diagnostic, such as the text a macro call
+/// stands for: quieter than its severity's, so the eye finds the problem
+/// first.
+pub const EXPLAINING: anstyle::Color = anstyle::Color::Ansi(AnsiColor::Blue);
+
+/// `colour` as `ariadne` takes it, which writes the same escape for it.
+fn ariadne(colour: anstyle::Color) -> Color {
+    match colour {
+        anstyle::Color::Ansi(colour) => match colour {
+            AnsiColor::Black => Color::Black,
+            AnsiColor::Red => Color::Red,
+            AnsiColor::Green => Color::Green,
+            AnsiColor::Yellow => Color::Yellow,
+            AnsiColor::Blue => Color::Blue,
+            AnsiColor::Magenta => Color::Magenta,
+            AnsiColor::Cyan => Color::Cyan,
+            AnsiColor::White => Color::White,
+            AnsiColor::BrightBlack => Color::BrightBlack,
+            AnsiColor::BrightRed => Color::BrightRed,
+            AnsiColor::BrightGreen => Color::BrightGreen,
+            AnsiColor::BrightYellow => Color::BrightYellow,
+            AnsiColor::BrightBlue => Color::BrightBlue,
+            AnsiColor::BrightMagenta => Color::BrightMagenta,
+            AnsiColor::BrightCyan => Color::BrightCyan,
+            AnsiColor::BrightWhite => Color::BrightWhite,
+        },
+        anstyle::Color::Ansi256(Ansi256Color(index)) => Color::Fixed(index),
+        anstyle::Color::Rgb(anstyle::RgbColor(r, g, b)) => Color::Rgb(r, g, b),
+    }
+}
+
 /// Converts a [`Span`] into the `(SourceId, Range<usize>)` tuple expected by `ariadne`.
 fn span(at: Span) -> (astli_text::SourceId, std::ops::Range<usize>) {
     (at.src_id, at.start as usize..at.end as usize)
@@ -53,12 +97,12 @@ pub fn write(
     style: Style,
 ) -> io::Result<()> {
     let diagnostic = resolved.diagnostic;
-    let (kind, color) = match diagnostic.severity {
-        Severity::Error => (ReportKind::Error, Color::Red),
-        Severity::Warning => (ReportKind::Warning, Color::Yellow),
-        // The shade ariadne gives the header of advice.
-        Severity::Note | Severity::Help => (ReportKind::Advice, Color::Fixed(147)),
+    let kind = match diagnostic.severity {
+        Severity::Error => ReportKind::Error,
+        Severity::Warning => ReportKind::Warning,
+        Severity::Note | Severity::Help => ReportKind::Advice,
     };
+    let (color, explaining) = (ariadne(colour(diagnostic.severity)), ariadne(EXPLAINING));
 
     let config = Config::default()
         .with_color(style.color)
@@ -75,7 +119,7 @@ pub fn write(
         labels.push((
             spelled,
             "this is the text it stands for".to_string(),
-            Color::Blue,
+            explaining,
         ));
     }
     for through in resolved
@@ -84,10 +128,10 @@ pub fn write(
         .filter(|link| link.call != resolved.at)
     {
         let message = format!("in this expansion of {}", through.name);
-        labels.push((through.call, message, Color::Blue));
+        labels.push((through.call, message, explaining));
     }
     for (at, message) in &resolved.labels {
-        labels.push((*at, message.to_string(), Color::Blue));
+        labels.push((*at, message.to_string(), explaining));
     }
 
     // ariadne starts a new snippet whenever a label sits above the one before

@@ -16,8 +16,8 @@ use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
 use anstream::{AutoStream, ColorChoice};
-use anstyle::{Ansi256Color, AnsiColor};
-use astli_diag::Style;
+use anstyle::AnsiColor;
+use astli_diag::{EXPLAINING, Style};
 use astli_package::mark::{self, Kind};
 use astli_resolve::{Report, Step, canonical};
 use astli_text::{Code, Diagnostic, LineCol, Origins, Severity, Span};
@@ -474,14 +474,9 @@ impl Problem {
             Some(DiagnosticFormat::Gitlab) => return,
             _ => {}
         }
-        let colour = match self.severity {
-            Severity::Error => AnsiColor::Red.into(),
-            Severity::Warning => AnsiColor::Yellow.into(),
-            // The shade ariadne gives the header of advice.
-            Severity::Note | Severity::Help => Ansi256Color(147).into(),
-        };
         // The message is not bold, as a diagnostic's is not, so that a name
         // in it stands out.
+        let colour = astli_diag::colour(self.severity);
         let label = anstyle::Style::new().fg_color(Some(colour)).bold();
         let bold = anstyle::Style::new().bold();
         let mut text = format!(
@@ -489,7 +484,7 @@ impl Problem {
             self.severity,
             styled(&self.message)
         );
-        let blue = AnsiColor::Blue.on_default().bold();
+        let blue = anstyle::Style::new().fg_color(Some(EXPLAINING)).bold();
         let lines = (self.notes.iter().map(|it| ("note", it)))
             .chain(self.help.iter().map(|it| ("help", it)));
         for (kind, said) in lines {
