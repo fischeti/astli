@@ -53,10 +53,7 @@ mod summary;
 
 pub use index::{Index, Redeclared, Step, UnknownTop};
 pub use names::{Name, Role, names, renamed};
-pub use summary::{
-    Declaration, Declares, FailMark, Include, Location, Reference, Summary, SweepMark, SweepValues,
-    TestMark, Uses,
-};
+pub use summary::{Declaration, Declares, Include, Location, Reference, Summary, Uses};
 
 use astli_parse::parse_expanded;
 use astli_preproc::Session;
