@@ -1,9 +1,10 @@
 //! Tabular alignment, a pass over the printed text.
 //!
 //! A rule marks the end of each cell of a row with [`Doc::Cell`], and the rows
-//! that line up with each other with [`Doc::Table`]. Line breaking has already
-//! happened, so this pass only pads: what follows the cells of one column
-//! starts at the same place on every row, columns taken left to right. A row
+//! that line up with each other with [`Doc::Table`]; a [`Doc::Trailing`]
+//! comment starts a row's last column. Line breaking has already happened,
+//! so this pass only pads: what follows the cells of one column starts at
+//! the same place on every row, columns taken left to right. A row
 //! may leave out a column. An empty line ends a table and starts another; any
 //! other line between two rows, such as a comment, leaves it whole. Unless the
 //! table is strict, a column lines up only among consecutive rows that need
@@ -15,9 +16,16 @@
 //!
 //! [`Doc::Cell`]: crate::doc::Doc::Cell
 //! [`Doc::Table`]: crate::doc::Doc::Table
+//! [`Doc::Trailing`]: crate::doc::Doc::Trailing
 
-/// The column of a comment at the end of a line, after every other.
-pub(crate) const COMMENT: usize = usize::MAX;
+/// A column of a table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Column {
+    /// The column a rule numbered, left to right.
+    At(usize),
+    /// A comment at the end of a line, after every other.
+    Comment,
+}
 
 /// Where the printer wrote the end of a cell.
 #[derive(Debug, Clone, Copy)]
@@ -27,7 +35,7 @@ pub(crate) struct Cell {
     /// Whether the table keeps a row that sticks out.
     pub strict: bool,
     /// The column of the table the cell ends.
-    pub index: usize,
+    pub index: Column,
     /// How many empty lines were printed before the cell.
     pub block: usize,
     /// The line it is on.
@@ -71,7 +79,7 @@ pub(crate) fn align(
     cells.sort_by_key(|cell| (cell.table, cell.block));
     cells.retain(|cell| !matches!(out.as_bytes().get(cell.offset), Some(b'\n' | b'\r')));
     let mut comments: Vec<usize> = (cells.iter())
-        .filter(|cell| cell.index == COMMENT)
+        .filter(|cell| cell.index == Column::Comment)
         .map(|cell| cell.offset)
         .collect();
     comments.sort_unstable();
@@ -155,7 +163,7 @@ fn table(rows: &[&[Cell]], text: &Text, pads: &mut Vec<(usize, usize)>) {
         .map(|(row, row_pads)| fitting(row, row_pads, text))
         .collect();
     let whole: Vec<bool> = (rows.iter().zip(&cells))
-        .map(|(row, &cells)| cells >= row.iter().filter(|cell| cell.index != COMMENT).count())
+        .map(|(row, &cells)| cells >= row.iter().filter(|it| it.index != Column::Comment).count())
         .collect();
     if whole.iter().any(|&it| it) && whole.iter().any(|&it| !it) {
         let mut at = 0;
@@ -195,7 +203,7 @@ fn comments(rows: &[&[Cell]], row_pads: &mut [Vec<usize>], cells: &mut [usize], 
     let mut runs: Vec<Run> = Vec::new();
     let mut open = false;
     for (row_at, row) in rows.iter().enumerate() {
-        let Some(at) = row.iter().position(|cell| cell.index == COMMENT) else {
+        let Some(at) = row.iter().position(|cell| cell.index == Column::Comment) else {
             continue;
         };
         let Some(room) = (cells[row_at] == at)
@@ -263,7 +271,7 @@ fn room(row: &[Cell], row_pads: &[usize], at: usize, text: &Text) -> Option<usiz
 /// no cell but a comment takes more, and a run that starts in one column
 /// starts in every column after it.
 fn targets(rows: &[&[Cell]], max_pad: usize) -> Vec<Vec<usize>> {
-    let mut indices: Vec<usize> = rows
+    let mut indices: Vec<Column> = rows
         .iter()
         .flat_map(|row| row.iter().map(|cell| cell.index))
         .collect();
@@ -290,7 +298,7 @@ fn targets(rows: &[&[Cell]], max_pad: usize) -> Vec<Vec<usize>> {
             let (mut first, mut last) = (ends[from].2, ends[from].2);
             let mut to = from + 1;
             while let Some(&(row_at, _, end)) = ends.get(to) {
-                let limited = !strict && index != COMMENT;
+                let limited = !strict && index != Column::Comment;
                 let started = starts[ends[to - 1].0 + 1..=row_at].contains(&true);
                 if limited && (started || last.max(end) - first.min(end) > max_pad) {
                     break;
@@ -317,7 +325,7 @@ fn targets(rows: &[&[Cell]], max_pad: usize) -> Vec<Vec<usize>> {
 fn fitting(row: &[Cell], row_pads: &[usize], text: &Text) -> usize {
     let first = row[0];
     let code = (row.iter())
-        .position(|cell| cell.index == COMMENT)
+        .position(|cell| cell.index == Column::Comment)
         .unwrap_or(row.len());
     // The comment's own later lines are placed by text after its cell.
     let comment = row.get(code).map_or(usize::MAX, |cell| cell.offset);
