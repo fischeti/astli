@@ -651,9 +651,6 @@ impl<'d> Resolver<'d> {
     fn stmt(&mut self, scope: ScopeId, stmt: StmtId) {
         let hir = self.hir;
         match &hir[stmt].kind {
-            StmtKind::Empty | StmtKind::Break | StmtKind::Continue => {}
-            StmtKind::Expr(expr) | StmtKind::Trigger(expr) => self.expr(scope, *expr),
-            StmtKind::ProceduralAssign { expr, .. } => self.expr(scope, *expr),
             StmtKind::Block {
                 scope: inner,
                 stmts,
@@ -699,34 +696,7 @@ impl<'d> Resolver<'d> {
                 self.expr(scope, *array);
                 self.stmts(*inner, [*body]);
             }
-            StmtKind::Loop {
-                condition, body, ..
-            }
-            | StmtKind::Wait { condition, body } => {
-                self.value(scope, *condition);
-                self.stmts(scope, [*body]);
-            }
-            StmtKind::Timed { timing, body } => {
-                self.timing(scope, timing);
-                self.stmts(scope, [*body]);
-            }
-            StmtKind::Disable(target) | StmtKind::Return(target) => self.value(scope, *target),
-            StmtKind::Assertion {
-                condition,
-                pass,
-                fail,
-                ..
-            } => {
-                self.expr(scope, *condition);
-                self.stmts(scope, [*pass, *fail]);
-            }
-            StmtKind::ConcurrentAssertion {
-                spec, pass, fail, ..
-            } => {
-                self.spec(scope, spec);
-                self.stmts(scope, [*pass, *fail]);
-            }
-            StmtKind::Opaque(opaque) => self.opaque(scope, opaque),
+            _ => hir.stmt_children(stmt, |child| self.child(scope, child)),
         }
     }
 
@@ -889,18 +859,6 @@ impl<'d> Resolver<'d> {
                 };
                 self.names.exprs[expr.index()] = Some(found);
             }
-            ExprKind::System(_)
-            | ExprKind::Keyword(_)
-            | ExprKind::Literal { .. }
-            | ExprKind::Time { .. }
-            | ExprKind::Bind(_) => {}
-            ExprKind::Unary { operand, .. } | ExprKind::Postfix { operand, .. } => {
-                self.expr(scope, *operand);
-            }
-            ExprKind::Binary { lhs, rhs, .. } => {
-                self.expr(scope, *lhs);
-                self.expr(scope, *rhs);
-            }
             ExprKind::Conditional {
                 matched,
                 condition,
@@ -944,19 +902,6 @@ impl<'d> Resolver<'d> {
                 self.args(scope, args);
                 self.object = outer;
             }
-            ExprKind::Concat(parts) => {
-                for &part in parts {
-                    self.expr(scope, part);
-                }
-            }
-            ExprKind::Replication { count, concat } => {
-                self.expr(scope, *count);
-                self.expr(scope, *concat);
-            }
-            ExprKind::Stream { slice, concat, .. } => {
-                self.value(scope, *slice);
-                self.expr(scope, *concat);
-            }
             ExprKind::Pattern { ty, items } => {
                 self.value(scope, *ty);
                 for item in items {
@@ -964,29 +909,6 @@ impl<'d> Resolver<'d> {
                         self.expr_at(scope, key, Place::Key);
                     }
                     self.expr(scope, item.value);
-                }
-            }
-            ExprKind::Cast { ty, operand } => {
-                self.expr(scope, *ty);
-                self.expr(scope, *operand);
-            }
-            ExprKind::Range { lo, hi, .. } => {
-                self.expr(scope, *lo);
-                self.expr(scope, *hi);
-            }
-            ExprKind::Inside { expr: tested, set } => {
-                self.expr(scope, *tested);
-                for &value in set {
-                    self.expr(scope, value);
-                }
-            }
-            ExprKind::Assign {
-                lhs, rhs, timing, ..
-            } => {
-                self.expr(scope, *lhs);
-                self.expr(scope, *rhs);
-                if let Some(timing) = timing {
-                    self.timing(scope, timing);
                 }
             }
             ExprKind::With { base, with } => {
@@ -1004,29 +926,7 @@ impl<'d> Resolver<'d> {
                 self.stmt(scope, *constraints);
                 self.object = outer;
             }
-            ExprKind::Dist { expr: tested, set } => {
-                self.expr(scope, *tested);
-                for &value in set {
-                    self.expr(scope, value);
-                }
-            }
-            ExprKind::Binsof { bins, intersect } => {
-                self.expr(scope, *bins);
-                for &value in intersect {
-                    self.expr(scope, value);
-                }
-            }
-            ExprKind::Tagged { value, .. } => self.value(scope, *value),
             ExprKind::Type(ty) => self.ty(scope, ty),
-            ExprKind::Property(property) => {
-                if let Property::Clocked { clock, .. } = property {
-                    self.timing(scope, clock);
-                }
-                for operand in property.operands() {
-                    self.expr(scope, operand);
-                }
-            }
-            ExprKind::Opaque(opaque) => self.opaque(scope, opaque),
             ExprKind::Loose(name) => {
                 let found = match self.lookup(scope, name) {
                     Resolution::Undeclared(_) => Resolution::Unknown,
@@ -1035,6 +935,14 @@ impl<'d> Resolver<'d> {
                 self.names.exprs[expr.index()] = Some(found);
                 self.names.loose.push(expr);
             }
+            _ => hir.expr_children(expr, |child| self.child(scope, child)),
+        }
+    }
+
+    fn child(&mut self, scope: ScopeId, child: Node) {
+        match child {
+            Node::Expr(expr) => self.expr(scope, expr),
+            Node::Stmt(stmt) => self.stmt(scope, stmt),
         }
     }
 
