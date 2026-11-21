@@ -73,8 +73,10 @@ impl RunWith<Ctx<'_>> for Add {
         let root = &here.package.package;
         let mut manifest = Editable::open(root)?;
         let (table, other) = tables(self.dev);
-        if !self.dev {
-            manifest.refuse_if_bender()?;
+        if !self.dev
+            && let Some(problem) = manifest::from_bender(&here, root)
+        {
+            return Err(problem.into());
         }
         let at = match (&self.version, &self.rev) {
             (Some(_), Some(_)) => {

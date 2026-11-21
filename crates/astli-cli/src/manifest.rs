@@ -14,7 +14,7 @@ use toml_edit::{Array, DocumentMut, InlineTable, Item, Table, TableLike, Value};
 use crate::error::{Error, Result};
 use crate::lockfile::{self, Here, Target, Tell, Write};
 use crate::run::Run;
-use crate::term;
+use crate::term::{self, Problem};
 
 /// The keys of an entry that say where it comes from and which commit, in
 /// the order an entry is written with.
@@ -26,16 +26,12 @@ pub struct Editable {
     /// The text as read, to put back; `None` for one not written yet.
     text: Option<String>,
     doc: DocumentMut,
-    /// Whether the package's dependencies are its `Bender.yml`'s.
-    from_bender: bool,
 }
 
 impl Editable {
     /// `package`'s manifest. A package without one is refused.
     pub fn open(package: &Package) -> Result<Editable> {
-        let mut manifest = Editable::read(path(package)?)?;
-        manifest.from_bender = package.manifest.listed_by == ListedBy::Bender;
-        Ok(manifest)
+        Editable::read(path(package)?)
     }
 
     /// The manifest at `path`, read as text, without the package around it.
@@ -47,7 +43,6 @@ impl Editable {
             path: path.to_path_buf(),
             text: Some(text),
             doc,
-            from_bender: false,
         })
     }
 
@@ -75,7 +70,6 @@ impl Editable {
             path: dir.join(MANIFEST),
             text: None,
             doc,
-            from_bender: false,
         };
         Ok((name, manifest))
     }
@@ -83,25 +77,6 @@ impl Editable {
     /// Where the manifest is.
     pub fn path(&self) -> &Path {
         &self.path
-    }
-
-    /// Refuses a package whose dependencies come from its `Bender.yml`:
-    /// a `[dependencies]` table would replace that list.
-    pub fn refuse_if_bender(&self) -> Result {
-        if !self.from_bender {
-            return Ok(());
-        }
-        Err(term::error(format!(
-            "the root's dependencies come from its {BENDER_MANIFEST}, since its {MANIFEST} has no {} \
-             table, and the {BENDER_MANIFEST} is the bender build's to edit",
-            mark::code("[dependencies]")
-        ))
-        .help(format!(
-            "a {} table replaces the {BENDER_MANIFEST}'s list, and {} copies that list in",
-            mark::code("[dependencies]"),
-            mark::code("astli bender import")
-        ))
-        .into())
     }
 
     /// Whether the manifest has the table `table`.
@@ -227,6 +202,30 @@ impl Editable {
     pub fn save(&self) -> Result {
         std::fs::write(&self.path, self.doc.to_string()).map_err(|err| Error::io(&self.path, err))
     }
+}
+
+/// Why `package`'s dependencies are not astli's to change, if its
+/// `Bender.yml` lists them: a `[dependencies]` table would replace that
+/// list, which is the bender build's to edit. `here` says what to call it.
+pub fn from_bender(here: &Here, package: &Package) -> Option<Problem> {
+    if package.manifest.listed_by != ListedBy::Bender {
+        return None;
+    }
+    let since = match package.manifest_path {
+        Some(_) => format!(
+            "its {MANIFEST} has no {} table",
+            mark::code("[dependencies]")
+        ),
+        None => format!("it has no {MANIFEST}"),
+    };
+    let problem = term::error(format!(
+        "{}'s dependencies come from its {BENDER_MANIFEST}, since {since}",
+        here.called(package)
+    ));
+    Some(problem.help(format!(
+        "{} copies them into {MANIFEST}, which then lists them",
+        mark::code("astli bender import")
+    )))
 }
 
 /// Where `package`'s manifest is, for a command that needs one: a package

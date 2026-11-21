@@ -37,10 +37,13 @@ impl RunWith<Ctx<'_>> for Remove {
         let run = ctx.run;
         let target = cmd::choose(self.package.package.as_deref(), false)?;
         let here = target.here(run)?;
-        let mut manifest = Editable::open(&here.package.package)?;
+        let root = &here.package.package;
+        let mut manifest = Editable::open(root)?;
         let (table, other) = tables(self.dev);
-        if !self.dev {
-            manifest.refuse_if_bender()?;
+        if !self.dev
+            && let Some(problem) = manifest::from_bender(&here, root)
+        {
+            return Err(problem.into());
         }
         for name in &self.names {
             if !manifest.unrequire(table, name) {
