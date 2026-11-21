@@ -113,12 +113,8 @@ impl Writer<'_> {
             self.body(then),
         ];
         if let Some((keyword, branch)) = otherwise {
-            let labelled = last_significant(then).is_some_and(|it| it.kind() == IDENT);
-            docs.push(match then.kind() {
-                BLOCK if !labelled => Doc::Space,
-                CONSTRAINT_BLOCK => Doc::Space,
-                _ => Doc::HardLine,
-            });
+            let shares = is_unlabelled_block(then) || then.kind() == CONSTRAINT_BLOCK;
+            docs.push(if shares { Doc::Space } else { Doc::HardLine });
             docs.push(self.token(keyword));
             docs.push(match branch.kind() {
                 IF_STMT => Doc::concat([Doc::Space, self.node(branch)]),
@@ -206,11 +202,7 @@ impl Writer<'_> {
             None => Doc::nil(),
         });
         if let Some((keyword, fail)) = fail {
-            let shares = pass.is_none_or(|pass| {
-                is_empty_stmt(pass)
-                    || (pass.kind() == BLOCK
-                        && last_significant(pass).is_none_or(|it| it.kind() != IDENT))
-            });
+            let shares = pass.is_none_or(|pass| is_empty_stmt(pass) || is_unlabelled_block(pass));
             if pass.is_none_or(is_empty_stmt) && fail.kind() != BLOCK {
                 // One that does not fit puts `else` on the next line, one
                 // level in, before breaking inside what it runs.
@@ -318,13 +310,13 @@ impl Writer<'_> {
         {
             return self.verbatim(stmt);
         }
-        let labelled = last_significant(body).is_some_and(|it| it.kind() == IDENT);
         Doc::concat([
             self.token(keyword),
             self.body(body),
-            match body.kind() {
-                BLOCK if !labelled => Doc::Space,
-                _ => Doc::HardLine,
+            if is_unlabelled_block(body) {
+                Doc::Space
+            } else {
+                Doc::HardLine
             },
             self.token(while_kw),
             Doc::Space,
@@ -638,4 +630,10 @@ impl Writer<'_> {
 pub(super) fn is_empty_stmt(node: &SyntaxNode) -> bool {
     node.kind() == EXPR_STMT
         && matches!(&significant_children(node)[..], [semicolon] if semicolon.kind() == SEMICOLON)
+}
+
+/// Whether `stmt` is a block whose `end` has no label, so that what follows
+/// it, an `else` or a `while`, shares the line of the `end`.
+fn is_unlabelled_block(stmt: &SyntaxNode) -> bool {
+    stmt.kind() == BLOCK && last_significant(stmt).is_none_or(|it| it.kind() != IDENT)
 }
