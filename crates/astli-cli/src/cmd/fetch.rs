@@ -34,7 +34,7 @@ impl RunWith<Ctx<'_>> for Fetch {
         )?;
         let store = run.store()?;
         let fetched: Vec<_> = (resolution.packages.iter())
-            .filter(|it| it.commit.is_some())
+            .filter(|it| it.origin.commit().is_some())
             .collect();
         for package in &fetched {
             package.checkout(&store)?;

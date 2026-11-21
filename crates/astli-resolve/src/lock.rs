@@ -49,11 +49,11 @@ impl Lock {
     /// The lock `resolution` makes.
     pub fn of(resolution: &Resolution) -> Lock {
         let packages = (resolution.packages.iter())
-            .filter_map(|it| match (&it.origin, it.commit) {
-                (Origin::Git { url }, Some(commit)) => Some(Locked {
+            .filter_map(|it| match &it.origin {
+                Origin::Git { url, commit } => Some(Locked {
                     name: it.name.clone(),
                     source: url.clone(),
-                    commit,
+                    commit: *commit,
                     version: it.version.clone(),
                     revs: it.revs.clone(),
                     dependencies: it.needs.clone(),

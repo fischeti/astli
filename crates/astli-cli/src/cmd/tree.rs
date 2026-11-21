@@ -142,7 +142,7 @@ fn branches<'a>(
 /// said from there, the same on every machine.
 fn label(package: &Resolved, base: &Path) -> String {
     let name = &package.name;
-    let label = match (&package.version, package.commit) {
+    let label = match (&package.version, package.origin.commit()) {
         (Some(version), _) => format!("{name} {version}"),
         (None, Some(commit)) => format!("{name} {}", commit.to_hex_with_len(10)),
         (None, None) => name.clone(),
@@ -155,7 +155,7 @@ fn label(package: &Resolved, base: &Path) -> String {
         Origin::Git { .. } => return label,
         Origin::Dir(dir) => from(dir),
         Origin::Patched(dir) => format!("{}, patched", from(dir)),
-        origin @ Origin::Within { .. } => origin.to_string(),
+        Origin::Within { url, subdir, .. } => format!("{} in {url}", subdir.display()),
     };
     label + &format!(" ({place})")
 }

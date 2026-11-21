@@ -50,7 +50,7 @@ fn locked(
 /// Each package and the version or commit chosen for it.
 fn chosen(resolution: &Resolution) -> Vec<String> {
     (resolution.packages.iter())
-        .map(|it| match (&it.version, &it.commit) {
+        .map(|it| match (&it.version, it.origin.commit()) {
             (Some(version), _) => format!("{} {version}", it.name),
             (None, Some(commit)) => format!("{} {}", it.name, &commit.to_string()[..8]),
             (None, None) => format!("{} on disk", it.name),
@@ -156,7 +156,7 @@ fn a_fork_is_another_package_unless_the_root_pins_it() {
 
     assert!(refused.contains("two packages of one name"), "{refused}");
     let cells_of = &pinned.packages[1];
-    assert!(matches!(&cells_of.origin, Origin::Git { url } if *url == fork.url()));
+    assert!(matches!(&cells_of.origin, Origin::Git { url, .. } if *url == fork.url()));
     assert_eq!(pinned.warnings.len(), 1, "{:?}", pinned.warnings);
     assert!(
         pinned.warnings[0].message.contains(&cells.url()),
@@ -201,7 +201,7 @@ fn a_path_in_a_repository_is_a_directory_of_it_at_the_same_commit() {
 
     let pd = &resolution.packages[0];
     assert_eq!(pd.name, "pd");
-    assert_eq!(pd.commit.map(|it| it.to_string()), Some(commit));
+    assert_eq!(pd.origin.commit().map(|it| it.to_string()), Some(commit));
     let at = pd.checkout(&fixture.store()).expect("checked out");
     assert!(at.dir.join("pd.sv").is_file(), "{}", at.dir.display());
     // The whole repository's files, the directory's among them.
@@ -299,15 +299,15 @@ fn a_locked_branch_stays_at_its_commit_until_the_rev_changes() {
 
     assert_eq!(lock.packages[0].revs, ["main"]);
     assert_eq!(
-        kept.packages[0].commit.map(|it| it.to_string()),
+        kept.packages[0].origin.commit().map(|it| it.to_string()),
         Some(first)
     );
     assert_eq!(
-        other.packages[0].commit.map(|it| it.to_string()),
+        other.packages[0].origin.commit().map(|it| it.to_string()),
         Some(third)
     );
     assert_eq!(
-        updated.packages[0].commit.map(|it| it.to_string()),
+        updated.packages[0].origin.commit().map(|it| it.to_string()),
         Some(second)
     );
 }

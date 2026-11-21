@@ -356,7 +356,7 @@ mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a chec
 mirror.checkout(commit)?;                // Checkout: its dir, written once and read-only, and the files it holds
 let lock = Lock::read(&path)?;           // Option<Lock>: astli.lock, the commit each package resolved to
 let resolution = resolve(&store, &roots, &Overrides { pinned, patches }, &lock)?;  // Resolution: one version of each, for the root and then a workspace's members, preferring the lock
-resolution.packages[0];                  // Resolved: name, origin, commit, version, needs, revs
+resolution.packages[0];                  // Resolved: name, origin (with its commit, from a repository), version, needs, revs
 resolution.packages[0].checkout(&store)?;  // Located: where its files are, checked out on demand
 Lock::of(&resolution);                   // the lock it makes, to write
 
