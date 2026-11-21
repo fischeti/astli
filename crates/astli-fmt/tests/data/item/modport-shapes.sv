@@ -1,0 +1,8 @@
+// A modport's `(.*)` stays on its line with no space inside, and a
+// subroutine it names by a macro takes its ports after the macro, as after
+// any name.
+`define NAME t
+interface i;
+  modport a ( .* );
+  modport b (import task `NAME (input int x), export g);
+endinterface

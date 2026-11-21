@@ -232,18 +232,21 @@ impl Writer<'_> {
         let (Some(header), Some(closer)) = (header, closer) else {
             return self.verbatim(decl);
         };
-        let plain = children[..header]
-            .iter()
-            .all(|it| it.as_token().is_some() || it.kind() == PORT_LIST)
-            && children[closer..].iter().all(|it| it.as_token().is_some());
+        let plain = children[closer..].iter().all(|it| it.as_token().is_some());
         if !plain || header >= closer {
             return self.verbatim(decl);
         }
-        self.shell(
-            &children[..=header],
-            &children[header + 1..closer],
-            &children[closer..],
-        )
+        let Some(name) = self.named_header(&children[..header]) else {
+            return self.verbatim(decl);
+        };
+        Doc::concat([
+            name,
+            self.shell(
+                &children[header..=header],
+                &children[header + 1..closer],
+                &children[closer..],
+            ),
+        ])
     }
 
     /// `return` or `disable`, what it returns or ends, and `;`.

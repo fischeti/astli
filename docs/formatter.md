@@ -163,6 +163,15 @@ We take the second, and the first only where the second cannot fit.
   [`plan.md`](plan.md#3-formatter-model) handles separation between tokens,
   but not whether a 140-column port list breaks and where. `ruff_formatter`
   and `biome_formatter` are Rust implementations worth reading.
+- **A header is laid out from its parts.** Each kind of scope names its
+  header, as do a property, a sequence, a modport and the subroutines it
+  names, and `rules/header.rs` writes it: its attributes, its words (the
+  tokens and the types among them, up to a name or a base class), and the
+  imports and lists among them. The header tells each list where it is
+  written whether it breaks an entry per line and whether it follows the
+  word before it with no space, as a call's arguments do, so `separation`
+  is about tokens alone. A header of a shape it does not know is written as
+  it was read.
 - **Alignment comes after line breaking** ([D4](plan.md#4-decisions)), after
   gofmt's `text/tabwriter`. A rule marks the ends of cells with `Doc::Cell`,
   numbering their columns left to right, and the rows that align together

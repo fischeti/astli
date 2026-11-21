@@ -93,9 +93,8 @@ impl Writer<'_> {
             FUNCTION_DECL | TASK_DECL | CHECKER_DECL => self.scope(node, Self::subroutine_header),
             COVERGROUP_DECL => self.scope(node, Self::covergroup_header),
             CLOCKING_DECL | CONFIG_DECL => self.scope(node, Self::clocking_header),
-            CLOCKING_ITEM | CONFIG_RULE | MODPORT_METHOD => {
-                self.spaced(&significant_children(node))
-            }
+            CLOCKING_ITEM | CONFIG_RULE => self.spaced(&significant_children(node)),
+            MODPORT_METHOD => self.modport_method(node),
             SPECIFY_BLOCK | UDP_TABLE => self.keyword_block(node),
             UDP_ENTRY => self.udp_entry(node),
             UDP_EDGE => self.unspaced(&significant_children(node)),
@@ -166,20 +165,19 @@ impl Writer<'_> {
                     .map(|it| self.element(it))
                     .collect::<Vec<_>>(),
             ),
-            // `(.*)` takes the ports an `extern` prototype declared.
-            PORT_LIST if is_wildcard(node) => Doc::concat(
-                significant_children(node)
-                    .iter()
-                    .map(|it| self.element(it))
-                    .collect::<Vec<_>>(),
-            ),
-            PARAM_PORT_LIST | ARG_LIST | PORT_LIST if header_list(node).is_some() => {
-                self.list(node, header_list(node).is_some_and(|it| it.broken))
-            }
             INSTANTIATION | GATE_INSTANTIATION => self.instantiation(node),
             DEFPARAM => self.continuous_assign(node),
             BIND_DIRECTIVE => self.bind_directive(node),
             INSTANCE => self.instance(node),
+            // The parameters a configuration overrides stay on its line if
+            // they fit.
+            ARG_LIST
+                if node
+                    .parent()
+                    .is_some_and(|parent| parent.kind() == CONFIG_RULE) =>
+            {
+                self.list(node, false)
+            }
             // Named connections go one per line, so that they can be aligned.
             ARG_LIST
                 if node
@@ -247,59 +245,18 @@ impl Writer<'_> {
 }
 
 /// A space between two elements on a line, but none before `,`, `;` or `)`,
-/// none after `#` or `(`, and none around `::` or `.`. None either between a
-/// name and the ports [`header_list`] says follow it, which read as a call.
-/// What comes before the first is its parent's to separate.
+/// none after `#` or `(`, and none around `::` or `.`. What comes before the
+/// first is its parent's to separate.
 fn separation(prev: Option<&SyntaxElement>, next: &SyntaxElement) -> Doc {
     let Some(prev) = prev else {
         return Doc::nil();
     };
-    let call = match next.kind() {
-        PORT_LIST => (next.as_node().and_then(header_list)).is_some_and(|it| it.after_name),
-        _ => false,
-    };
-    let tight = call
-        || matches!(prev.kind(), HASH | L_PAREN | COLON_COLON | DOT)
+    let tight = matches!(prev.kind(), HASH | L_PAREN | COLON_COLON | DOT)
         || matches!(next.kind(), COMMA | SEMICOLON | R_PAREN | COLON_COLON | DOT);
     match tight {
         true => Doc::nil(),
         false => Doc::Space,
     }
-}
-
-/// How a header lays out a list of its parameters, ports or arguments.
-struct HeaderList {
-    /// Whether it breaks, an entry per line, even where it would fit.
-    broken: bool,
-    /// Whether it follows the name with no space, as a call's arguments do.
-    after_name: bool,
-}
-
-/// How `list` is laid out, if it is a header's.
-fn header_list(list: &SyntaxNode) -> Option<HeaderList> {
-    let (broken, after_name) = match (list.kind(), list.parent()?.kind()) {
-        // The parameters a configuration overrides, and a modport's ports,
-        // after a space `modport` writes itself.
-        (PARAM_PORT_LIST | ARG_LIST | PORT_LIST, CONFIG_RULE | MODPORT) => (false, false),
-        // The prototypes in a modport, and the formals of a property or a
-        // sequence.
-        (
-            PARAM_PORT_LIST | ARG_LIST | PORT_LIST,
-            MODPORT_METHOD | PROPERTY_DECL | SEQUENCE_DECL,
-        ) => (false, true),
-        _ => return None,
-    };
-    Some(HeaderList { broken, after_name })
-}
-
-/// Whether `list` is `(.*)`.
-fn is_wildcard(list: &SyntaxNode) -> bool {
-    let children = significant_children(list);
-    let [_, NodeOrToken::Node(port), _] = &children[..] else {
-        return false;
-    };
-    let port = significant_children(port);
-    matches!(&port[..], [dot, star] if dot.kind() == DOT && star.kind() == STAR)
 }
 
 /// The child nodes, and the child tokens other than trivia, in order.
