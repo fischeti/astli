@@ -207,10 +207,7 @@ pub(crate) fn listed(run: &Run, plan: &Plan, index: &Index, told: Option<&[usize
         None => index.summaries().iter().collect(),
         Some(told) => told.iter().map(|&file| &index.summaries()[file]).collect(),
     };
-    let incdirs = match told {
-        None => plan.incdirs.clone(),
-        Some(_) => listing::used(&plan.incdirs, listed.iter().copied()),
-    };
+    let incdirs = listing::incdirs(plan, index, told);
     listing::misfound(run, &incdirs, listed.into_iter());
 }
 

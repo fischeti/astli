@@ -10,7 +10,7 @@
 //! give, and then makes each top's list, fingerprint and build of its own.
 
 use std::ffi::OsString;
-use std::io::{ErrorKind, Write};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -26,9 +26,8 @@ use crate::cmd::check::Found;
 use crate::cmd::{self, Ctx, check};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
-use crate::filelist::quoted;
 use crate::json;
-use crate::listing;
+use crate::listing::Listing;
 use crate::render::Out;
 use crate::run::Run;
 use crate::sim::Backend;
@@ -334,25 +333,13 @@ impl Listed {
         let top = &elaborated.top;
         let kept = (index.reachable(std::slice::from_ref(&top.module)))
             .map_err(|err| Error::failed(err.to_string()))?;
-        // Left out as `files` leaves it out, without a note on every build.
-        let mut kept = listing::without_stubs(run, index, kept, false);
-        kept.sort_by_key(|&file| plan.group(file));
-        let kept = index.ordered(&kept);
-        let summaries: Vec<&Summary> = kept.iter().map(|&file| &index.summaries()[file]).collect();
-        let incdirs = listing::used(&plan.incdirs, summaries.iter().copied());
-        if plan.is_package() {
-            listing::misfound(run, &incdirs, summaries.iter().copied());
-        }
+        // The list `files` writes for the top, without a note on every
+        // build of each stub it leaves out.
+        let listing = Listing::of(plan, index, Some(kept), true);
+        listing.misfound(run, plan, index);
         let mut text = Vec::new();
-        for dir in &incdirs {
-            writeln!(text, "{}", quoted(&format!("+incdir+{}", dir.display())))?;
-        }
-        for define in &plan.defines {
-            writeln!(text, "{}", quoted(&format!("+define+{define}")))?;
-        }
-        for summary in &summaries {
-            writeln!(text, "{}", quoted(&summary.path.display().to_string()))?;
-        }
+        listing.write(&mut text, index)?;
+        let summaries: Vec<&Summary> = listing.summaries(index).collect();
         let mut read: Vec<PathBuf> = summaries.iter().map(|it| it.path.clone()).collect();
         let mut headers: Vec<&Path> = (summaries.iter())
             .flat_map(|it| &it.includes)
