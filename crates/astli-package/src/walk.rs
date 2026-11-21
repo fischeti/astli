@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use astli_text::clean;
-use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
+use globset::{Glob, GlobBuilder, GlobSet, GlobSetBuilder};
 use ignore::{DirEntry, WalkBuilder, WalkState};
 
 use crate::{BENDER_MANIFEST, Error, MANIFEST, Package, Patches, Source, mark};
@@ -45,9 +45,10 @@ impl Walk {
 
 impl Package {
     /// The SystemVerilog files the package holds, absolute and sorted: those
-    /// under its `sources`, less what a `.gitignore` or `exclude` names and
-    /// what a package nested in it, one it depends on by `path`, or one
-    /// patched to a directory inside it holds. A package nested in it is a
+    /// under its `sources` or named by `dev` or a feature's `sources`, less
+    /// the files only disabled features name, what a `.gitignore` or
+    /// `exclude` names, and what a package nested in it, one it depends on
+    /// by `path`, or one patched to a directory inside it holds. A package nested in it is a
     /// directory below the root with an `astli.toml`, or with a `Bender.yml`
     /// that no source is at or inside.
     ///
@@ -58,7 +59,12 @@ impl Package {
     /// ignore file and `.git/info/exclude` do not apply, since they differ
     /// between machines. A virtual workspace root has no sources, so holds
     /// none.
+    ///
+    /// A pattern of `dev` or a feature's `sources` that names none of these
+    /// files, whether its feature is enabled or not, is an error: a misspelt
+    /// one would otherwise leave a feature empty, or its files in every run.
     pub fn walk(&self, walk: &Walk) -> Result<Vec<PathBuf>, Error> {
+        let claims = self.claims();
         let filter = Arc::new(Filter {
             root: self.root.clone(),
             reached: reached(&self.root, &self.sources),
@@ -66,6 +72,7 @@ impl Package {
             exclude: patterns(&self.manifest_path, "exclude", &self.manifest.exclude)?,
             enabled: self.feature_sources(&walk.enabled, true)?,
             disabled: self.feature_sources(&walk.enabled, false)?,
+            claimed: claimed(&self.manifest_path, &claims)?,
             dependencies: (self.manifest.dependencies.values())
                 .filter_map(|requirement| match &requirement.source {
                     Some(Source::Path(dir)) => Some(clean(&self.root.join(dir))),
@@ -93,8 +100,8 @@ impl Package {
         builder.threads(rayon::current_num_threads());
         builder.build_parallel().run(|| {
             Box::new(|entry| {
-                let kept = (entry.map_err(|err| err.to_string()))
-                    .and_then(|entry| kept(entry, &filter, walk));
+                let kept =
+                    (entry.map_err(|err| err.to_string())).and_then(|entry| kept(entry, walk));
                 let mut found = found.lock().expect("a walk thread panicked");
                 match kept {
                     Ok(Some(path)) => found.0.push(path),
@@ -109,7 +116,42 @@ impl Package {
             return Err(Error::Walk(problem));
         }
         files.sort();
+
+        // Before the disabled features' files go, since a pattern of one
+        // still has to name something.
+        let mut unclaimed: BTreeSet<usize> = (0..claims.len()).collect();
+        for path in &files {
+            if unclaimed.is_empty() {
+                break;
+            }
+            for index in matching(&self.root, &filter.claimed, path) {
+                unclaimed.remove(&index);
+            }
+        }
+        if let Some(&index) = unclaimed.first() {
+            let (key, pattern) = &claims[index];
+            return Err(Error::Manifest(
+                self.manifest_path.clone().unwrap_or_default(),
+                format!(
+                    "{}: {} names no SystemVerilog file of the package",
+                    mark::code(key),
+                    mark::code(pattern)
+                ),
+            ));
+        }
+        files.retain(|path| filter.selected(path));
         Ok(files)
+    }
+
+    /// Each pattern of a feature's `sources` and of `dev`, with the key it
+    /// is written under.
+    fn claims(&self) -> Vec<(String, String)> {
+        let features = (self.manifest.features.iter()).flat_map(|(name, feature)| {
+            let key = format!("features.{name}.sources");
+            (feature.sources.iter()).map(move |pattern| (key.clone(), pattern.clone()))
+        });
+        let dev = (self.manifest.dev.iter()).map(|pattern| ("dev".to_string(), pattern.clone()));
+        features.chain(dev).collect()
     }
 
     /// The `sources` of the features `enabled` names, or of those it does
@@ -123,10 +165,10 @@ impl Package {
     }
 }
 
-/// The file `entry` is, if the walk yields it: a SystemVerilog file the
-/// features select. A problem if it is a file of a checkout no commit
-/// holds.
-fn kept(entry: DirEntry, filter: &Filter, walk: &Walk) -> Result<Option<PathBuf>, String> {
+/// The file `entry` is, if the walk yields it: a SystemVerilog file, which
+/// the features select later. A problem if it is a file of a checkout no
+/// commit holds.
+fn kept(entry: DirEntry, walk: &Walk) -> Result<Option<PathBuf>, String> {
     let path = entry.path();
     if let Some(held) = &walk.held
         && entry.file_type().is_some_and(|kind| !kind.is_dir())
@@ -143,7 +185,7 @@ fn kept(entry: DirEntry, filter: &Filter, walk: &Walk) -> Result<Option<PathBuf>
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| EXTENSIONS.contains(&extension));
     // Follows a link, which the walk itself does not.
-    Ok((wanted && path.is_file() && filter.selected(path)).then(|| entry.into_path()))
+    Ok((wanted && path.is_file()).then(|| entry.into_path()))
 }
 
 impl Package {
@@ -198,6 +240,26 @@ pub(crate) fn named(root: &Path, set: &GlobSet, path: &Path) -> bool {
         .any(|it| set.is_match(it))
 }
 
+/// The indices of the patterns in `set` that name `path`, or a directory
+/// holding it, relative to `root`.
+fn matching(root: &Path, set: &GlobSet, path: &Path) -> Vec<usize> {
+    let relative = path.strip_prefix(root).unwrap_or(path);
+    (relative.ancestors())
+        .take_while(|it| !it.as_os_str().is_empty())
+        .flat_map(|it| set.matches(it))
+        .collect()
+}
+
+/// `claims`' patterns as one set, each refused under its own key.
+fn claimed(manifest: &Option<PathBuf>, claims: &[(String, String)]) -> Result<GlobSet, Error> {
+    let mut set = GlobSetBuilder::new();
+    for (key, pattern) in claims {
+        set.add(glob(manifest, key, pattern)?);
+    }
+    (set.build())
+        .map_err(|err| Error::Manifest(manifest.clone().unwrap_or_default(), err.to_string()))
+}
+
 /// The patterns the manifest at `manifest` gives for `key`, matched against
 /// a path relative to the root.
 pub(crate) fn patterns(
@@ -205,22 +267,22 @@ pub(crate) fn patterns(
     key: &str,
     patterns: &[String],
 ) -> Result<GlobSet, Error> {
-    let wrong = |what: String| Error::Manifest(manifest.clone().unwrap_or_default(), what);
     let mut set = GlobSetBuilder::new();
     for pattern in patterns {
-        let glob = GlobBuilder::new(pattern)
-            .literal_separator(true)
-            .build()
-            .map_err(|err| {
-                wrong(format!(
-                    "{}: {}: {err}",
-                    mark::code(key),
-                    mark::code(pattern)
-                ))
-            })?;
-        set.add(glob);
+        set.add(glob(manifest, key, pattern)?);
     }
-    set.build().map_err(|err| wrong(err.to_string()))
+    (set.build())
+        .map_err(|err| Error::Manifest(manifest.clone().unwrap_or_default(), err.to_string()))
+}
+
+/// `pattern`, given for `key` by the manifest at `manifest`.
+fn glob(manifest: &Option<PathBuf>, key: &str, pattern: &str) -> Result<Glob, Error> {
+    (GlobBuilder::new(pattern).literal_separator(true).build()).map_err(|err| {
+        Error::Manifest(
+            manifest.clone().unwrap_or_default(),
+            format!("{}: {}: {err}", mark::code(key), mark::code(pattern)),
+        )
+    })
 }
 
 /// What the walk enters or yields, decided before it reads a directory, so
@@ -232,6 +294,10 @@ struct Filter {
     /// The sources of the enabled features, and of the others.
     enabled: GlobSet,
     disabled: GlobSet,
+    /// Every pattern of a feature's `sources` and of `dev`, in the order
+    /// [`Package::claims`] gives them: the files the walk takes besides
+    /// those under `sources`.
+    claimed: GlobSet,
     /// The directories of the packages it depends on by `path` or reads
     /// from a patch, absolute.
     dependencies: Vec<PathBuf>,
@@ -299,8 +365,11 @@ impl Filter {
         let within = (self.reached.iter())
             .filter(|dir| path.starts_with(dir) && path != *dir)
             .max_by_key(|dir| dir.components().count());
-        (self.sources.iter())
+        let sourced = (self.sources.iter())
             .filter(|source| within.is_none_or(|dir| source.starts_with(dir)))
-            .any(|source| path.starts_with(source) || (is_dir && source.starts_with(path)))
+            .any(|source| path.starts_with(source) || (is_dir && source.starts_with(path)));
+        // A pattern may name a file in any directory, so with one, every
+        // directory is entered.
+        sourced || (!self.claimed.is_empty() && (is_dir || named(&self.root, &self.claimed, path)))
     }
 }

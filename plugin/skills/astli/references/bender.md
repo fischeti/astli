@@ -13,7 +13,7 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
 
 | Bender | astli |
 | :--- | :--- |
-| `sources` | found by scanning `[package] sources`, minus `exclude` |
+| `sources` | found below the root: `[package] sources`, `dev` and features, minus `exclude` |
 | `export_include_dirs` | `[package] include-dirs` |
 | `include_dirs` (private) | headers next to the including file, or `include-dirs` |
 | `defines` | `defines` in a `[top.NAME]` table |
@@ -65,8 +65,8 @@ astli takes from `Bender.yml` only its dependencies: `git` with `version` or
    astli files --top TOP > astli.f
    ```
 
-   A file only Bender lists is usually missing from `sources` or caught by
-   `exclude`. A file only astli lists is one Bender left out by `target` or
+   A file only Bender lists is usually missing from `sources`, `dev` or its
+   feature, or caught by `exclude`. A file only astli lists is one Bender left out by `target` or
    by never naming it: exclude it, or move it into `dev` or a feature. A
    duplicate module across dependencies (ASIC and FPGA variants side by side)
    needs `[described.NAME] exclude` for a dependency without an

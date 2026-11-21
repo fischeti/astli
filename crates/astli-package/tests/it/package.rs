@@ -924,6 +924,58 @@ fn a_file_only_disabled_features_name_is_not_walked() {
     assert!(package.search_dirs(&Default::default()).is_empty());
 }
 
+#[test]
+fn feature_and_dev_files_add_to_the_sources() {
+    let fixture = Fixture::new("features-add");
+    fixture.file(
+        "astli.toml",
+        "[package]\nsources = [\"rtl\"]\ndev = [\"tb/**\"]\n\n\
+         [features]\nextra = { sources = [\"extra\"] }\n",
+    );
+    fixture.file("rtl/top.sv", "");
+    fixture.file("extra/helper.sv", "");
+    fixture.file("tb/tb_top.sv", "");
+    fixture.file("sw/model.sv", "");
+    let package = found(fixture.path());
+
+    assert_eq!(
+        walked(fixture.path()),
+        ["extra/helper.sv", "rtl/top.sv", "tb/tb_top.sv"]
+    );
+    assert_eq!(walked_of(&package, &[]), ["rtl/top.sv", "tb/tb_top.sv"]);
+    let as_dependency = package.as_dependency();
+    assert_eq!(
+        walked_of(&as_dependency, &["extra"]),
+        ["extra/helper.sv", "rtl/top.sv"]
+    );
+}
+
+#[test]
+fn a_pattern_that_names_no_file_is_refused() {
+    let fixture = Fixture::new("features-unclaimed");
+    fixture.file("rtl/top.sv", "");
+    fixture.file("extra/helper.sv", "");
+    let refused = |manifest: &str| {
+        fixture.file("astli.toml", manifest);
+        let package = found(fixture.path());
+        // Disabled, the feature's pattern still has to name a file.
+        let walk = Walk::default();
+        match package.walk(&walk) {
+            Ok(files) => panic!("walked {files:?}"),
+            Err(err) => err.to_string(),
+        }
+    };
+
+    let feature = refused("[features]\nextra = { sources = [\"extar/**\"] }\n");
+    let dev = refused("[package]\ndev = [\"**/*_tb.sv\"]\n");
+
+    assert!(
+        feature.contains("`features.extra.sources`: `extar/**` names no SystemVerilog file"),
+        "{feature}"
+    );
+    assert!(dev.contains("`dev`: `**/*_tb.sv` names no"), "{dev}");
+}
+
 /// A root that depends on `axi`, which depends on `cells`, each with the
 /// manifest given.
 fn design(fixture: &Fixture, root: &str, cells: &str) -> (Package, Dependencies) {

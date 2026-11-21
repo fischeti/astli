@@ -78,10 +78,10 @@ Defines basic package identity and file discovery boundaries.
 | Key | Default | Description |
 | :--- | :--- | :--- |
 | `name` | *(optional)* | Name identifier of the package. |
-| `sources` | `["."]` | Directories scanned recursively for `.sv`, `.svh`, `.v`, and `.vh` source files. |
+| `sources` | `["."]` | Directories whose `.sv`, `.svh`, `.v` and `.vh` files are the design, but those `dev` or a feature's `sources` names. |
 | `include-dirs` | `["include"]` | Header search directories exported to downstream packages depending on this one. |
 | `exclude` | `[]` | Glob patterns of files to ignore (applied in addition to `.gitignore`). |
-| `dev` | `[]` | Glob patterns of internal files (such as testbenches) compiled only when working directly in this package, never by downstream dependents. |
+| `dev` | `[]` | Glob patterns of internal files (such as testbenches) compiled only when working directly in this package, never by downstream dependents. They name files anywhere below the root, under `sources` or not; a pattern that matches no file is an error. |
 | `default-top` | *(optional)* | Default top module or `[top.NAME]` table that `files`, `build`, `run` and `elab` elaborate from when `--top` is omitted. `check` and `lint` check every table instead. |
 
 See [Packages](../packages.md) for details.
@@ -143,7 +143,7 @@ The special `default` key lists features automatically enabled when another pack
 
 | Key | Description |
 | :--- | :--- |
-| `sources` | Glob patterns of files added to the design when this feature is activated. |
+| `sources` | Glob patterns of the files this feature adds to the design. They name files anywhere below the root, under `[package] sources` or not; a pattern that matches no file is an error, even while the feature is off. |
 | `include-dirs` | Additional header include paths activated with this feature. |
 | `dependencies` | Activates dependent features (`"dep/feature"`) or makes an entire dependency optional (`"dep"`). |
 
