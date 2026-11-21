@@ -1,0 +1,8 @@
+14:14: [width-expand] `4'd1` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+17:21: [width-expand] `4'd2` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+18:21: [width-expand] `4'd3` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+19:14: [width-expand] `4'd4` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+20:18: [width-expand] `4'd5` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+21:19: [width-expand] `4'd6` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+22:17: [width-expand] `4'd7` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with
+25:34: [width-expand] `4'd8` is 4 bits wide, and is extended to the 8 of `a_i`, which it is compared with

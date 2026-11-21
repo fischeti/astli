@@ -4,8 +4,8 @@
 
 use astli_sema::{
     Arg, Bits, Bound, Built, Elaboration, ExprId, ExprKind, FileId, Frame, Literal, Member,
-    Operator, Parameter, Resolution, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind, SymbolRef,
-    Ty, TypeKind, Value, Walked,
+    Operator, Parameter, Resolution, ScopeId, ScopeKind, StmtId, StmtKind, SymbolId, SymbolKind,
+    SymbolRef, Timing, Ty, TypeKind, Value, Walked,
 };
 use astli_syntax::SyntaxKind::*;
 use astli_text::Span;
@@ -100,24 +100,43 @@ impl Walk<'_> {
                 }
                 Member::Process(process) => self.stmt(frame, process.body),
                 Member::Declare(symbol) => match &hir[*symbol].kind {
-                    SymbolKind::Net(data) | SymbolKind::Variable(data) => {
-                        if let Some(init) = data.init {
-                            let span = hir[*symbol].name.span;
-                            let at = SymbolRef {
-                                file: frame.file,
-                                symbol: *symbol,
-                            };
-                            let target = self.elaboration.symbol_type(frame.body, at);
-                            self.assignment(frame, span, &target, init);
-                            self.expr(frame, init);
-                        }
-                    }
+                    SymbolKind::Net(_) | SymbolKind::Variable(_) => self.init(frame, *symbol),
                     SymbolKind::Instance(instance) if instance.dims.is_empty() => {
                         self.instance(frame, *symbol);
                     }
                     _ => {}
                 },
                 _ => {}
+            }
+        }
+    }
+
+    /// The initialiser of the net or variable `symbol`, an assignment.
+    fn init(&mut self, frame: &Frame, symbol: SymbolId) {
+        let hir = &self.elaboration.design()[frame.file];
+        let (SymbolKind::Net(data) | SymbolKind::Variable(data)) = &hir[symbol].kind else {
+            return;
+        };
+        let Some(init) = data.init else {
+            return;
+        };
+        let at = SymbolRef {
+            file: frame.file,
+            symbol,
+        };
+        let target = self.elaboration.symbol_type(frame.body, at);
+        self.assignment(frame, hir[symbol].name.span, &target, init);
+        self.expr(frame, init);
+    }
+
+    /// The initialisers of the variables a block or a loop declares.
+    fn locals(&mut self, frame: &Frame, scope: ScopeId) {
+        let hir = &self.elaboration.design()[frame.file];
+        for member in &hir[scope].members {
+            if let Member::Declare(symbol) = member
+                && let SymbolKind::Variable(_) = hir[*symbol].kind
+            {
+                self.init(frame, *symbol);
             }
         }
     }
@@ -338,8 +357,13 @@ impl Walk<'_> {
             }
         };
         match &hir[stmt].kind {
-            StmtKind::Expr(expr) => self.expr(frame, *expr),
-            StmtKind::Block { stmts: list, .. } => {
+            StmtKind::Expr(expr) | StmtKind::ProceduralAssign { expr, .. } => {
+                self.expr(frame, *expr)
+            }
+            StmtKind::Block {
+                scope, stmts: list, ..
+            } => {
+                self.locals(frame, *scope);
                 for &stmt in list {
                     self.stmt(frame, stmt);
                 }
@@ -360,11 +384,16 @@ impl Walk<'_> {
                     self.expr(frame, *selector);
                 }
                 for item in items {
+                    for &label in &item.labels {
+                        self.expr(frame, label);
+                    }
                     stmts(&[item.body], self);
                 }
             }
             StmtKind::For { header, body } => {
-                for &expr in header.init.iter().chain(&header.condition) {
+                self.locals(frame, header.scope);
+                let exprs = header.init.iter().chain(&header.condition);
+                for &expr in exprs.chain(&header.step) {
                     self.expr(frame, expr);
                 }
                 stmts(&[*body], self);
@@ -378,9 +407,15 @@ impl Walk<'_> {
                 }
                 stmts(&[*body], self);
             }
-            StmtKind::Foreach { body, .. } | StmtKind::Timed { body, .. } => {
+            StmtKind::Foreach { body, .. } => stmts(&[*body], self),
+            StmtKind::Timed { timing, body } => {
+                for expr in timed(timing) {
+                    self.expr(frame, expr);
+                }
                 stmts(&[*body], self);
             }
+            // What a property's operators build is not sized.
+            StmtKind::ConcurrentAssertion { pass, fail, .. } => stmts(&[*pass, *fail], self),
             StmtKind::Assertion {
                 condition,
                 pass,
@@ -397,41 +432,66 @@ impl Walk<'_> {
     /// The assignments and comparisons in `expr`.
     fn expr(&mut self, frame: &Frame, expr: ExprId) {
         let hir = &self.elaboration.design()[frame.file];
+        let mut children = Vec::new();
         match &hir[expr].kind {
             ExprKind::Assign {
-                op: EQ | LT_EQ,
+                op,
                 lhs,
                 rhs,
-                ..
+                timing,
             } => {
-                let target = self.walked.expr_type(*lhs);
-                self.assignment(frame, hir[*lhs].span, &target, *rhs);
-                self.expr(frame, *rhs);
+                if matches!(op, EQ | LT_EQ) {
+                    let target = self.walked.expr_type(*lhs);
+                    self.assignment(frame, hir[*lhs].span, &target, *rhs);
+                }
+                children.extend([*lhs, *rhs]);
+                children.extend(timing.iter().flat_map(timed));
             }
             ExprKind::Binary { op, lhs, rhs } => {
                 if Operator::of(*op) == Some(Operator::Compare) {
                     self.comparison(frame, *lhs, *rhs);
                 }
-                self.expr(frame, *lhs);
-                self.expr(frame, *rhs);
+                children.extend([*lhs, *rhs]);
             }
-            ExprKind::Unary { operand, .. } => self.expr(frame, *operand),
+            ExprKind::Unary { operand, .. }
+            | ExprKind::Postfix { operand, .. }
+            | ExprKind::Cast { operand, .. } => children.push(*operand),
             ExprKind::Conditional {
                 condition,
                 then_value,
                 else_value,
                 ..
-            } => {
-                for &part in [condition, then_value, else_value] {
-                    self.expr(frame, part);
-                }
+            } => children.extend([*condition, *then_value, *else_value]),
+            ExprKind::Select { base, index, range } => {
+                children.extend([*base, *index]);
+                children.extend(range.map(|(_, end)| end));
             }
-            ExprKind::Concat(parts) => {
-                for &part in parts {
-                    self.expr(frame, part);
-                }
+            ExprKind::Member { base, .. } => children.push(*base),
+            ExprKind::Call { callee, args } => {
+                children.push(*callee);
+                children.extend(args.iter().filter_map(|arg| match arg {
+                    Arg::Positional(value) | Arg::Named { value, .. } => *value,
+                    _ => None,
+                }));
             }
+            ExprKind::Concat(parts) => children.extend(parts),
+            ExprKind::Replication { count, concat } => children.extend([*count, *concat]),
+            ExprKind::Stream { slice, concat, .. } => {
+                children.extend(*slice);
+                children.push(*concat);
+            }
+            ExprKind::Pattern { items, .. } => children.extend(items.iter().map(|it| it.value)),
+            ExprKind::Inside { expr, set } => {
+                children.push(*expr);
+                children.extend(set);
+            }
+            ExprKind::Range { lo, hi, .. } => children.extend([*lo, *hi]),
+            ExprKind::With { base, with } => children.extend([*base, with.expr]),
+            ExprKind::Tagged { value, .. } => children.extend(*value),
             _ => {}
+        }
+        for child in children {
+            self.expr(frame, child);
         }
     }
 
@@ -516,6 +576,25 @@ impl Walk<'_> {
             });
         }
     }
+}
+
+/// The expressions of a timing.
+fn timed(timing: &Timing) -> Vec<ExprId> {
+    let mut exprs = Vec::new();
+    let events = match timing {
+        Timing::Delay(_, values) => return values.clone(),
+        Timing::Star => return exprs,
+        Timing::Events(events) => events,
+        Timing::Repeat(count, events) => {
+            exprs.push(*count);
+            events
+        }
+    };
+    for event in events {
+        exprs.push(event.expr);
+        exprs.extend(event.iff);
+    }
+    exprs
 }
 
 /// The widths an expression may be taken at without a word.
