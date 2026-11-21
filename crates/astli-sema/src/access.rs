@@ -484,8 +484,6 @@ impl Walk<'_> {
     fn stmt(&mut self, stmt: StmtId) {
         let hir = self.hir;
         match &hir[stmt].kind {
-            StmtKind::Empty | StmtKind::Break | StmtKind::Continue => {}
-            StmtKind::Expr(expr) => self.expr(*expr, READ),
             // `-> ev` triggers the event, which waiting on it reads.
             StmtKind::Trigger(event) => self.expr(*event, both(Write::Other)),
             // A procedural continuous assignment overrides what drives its
@@ -498,31 +496,13 @@ impl Walk<'_> {
                     _ => walk.expr(expr, READ),
                 });
             }
-            StmtKind::Block { scope, stmts, .. } => {
+            StmtKind::Block { scope, .. } => {
                 self.scope(*scope);
-                self.stmts(stmts);
+                self.children(stmt);
             }
-            StmtKind::If {
-                condition,
-                then_branch,
-                else_branch,
-                ..
-            } => {
-                self.expr(*condition, READ);
-                self.branches([*then_branch, *else_branch]);
-            }
-            StmtKind::Case {
-                selector, items, ..
-            } => {
-                self.value(*selector, READ);
-                for item in items {
-                    self.exprs(&item.labels, READ);
-                    self.branches([item.body]);
-                }
-            }
-            StmtKind::For { header, body } => {
-                self.header(header);
-                self.branches([*body]);
+            StmtKind::For { header, .. } => {
+                self.scope(header.scope);
+                self.children(stmt);
             }
             StmtKind::Foreach { scope, array, body } => {
                 self.expr(*array, READ);
@@ -541,40 +521,21 @@ impl Walk<'_> {
                 }
                 self.branches([*body]);
             }
-            StmtKind::Loop {
-                condition, body, ..
-            }
-            | StmtKind::Wait { condition, body } => {
-                self.value(*condition, READ);
-                self.branches([*body]);
-            }
-            StmtKind::Timed { timing, body } => {
-                self.timing(timing);
-                self.branches([*body]);
-            }
-            StmtKind::Disable(target) | StmtKind::Return(target) => self.value(*target, READ),
-            StmtKind::Assertion {
-                condition,
-                pass,
-                fail,
-                ..
-            } => {
-                self.expr(*condition, READ);
-                self.branches([*pass, *fail]);
-            }
-            StmtKind::ConcurrentAssertion {
-                spec, pass, fail, ..
-            } => {
-                self.spec(spec);
-                self.branches([*pass, *fail]);
-            }
             StmtKind::Opaque(opaque) => self.opaque(opaque),
+            _ => self.children(stmt),
         }
     }
 
-    fn stmts(&mut self, stmts: &[StmtId]) {
-        for &stmt in stmts {
-            self.stmt(stmt);
+    /// What `stmt` holds, each expression read.
+    fn children(&mut self, stmt: StmtId) {
+        self.hir
+            .stmt_children(stmt, |child| self.child(child, READ));
+    }
+
+    fn child(&mut self, child: Node, mode: Mode) {
+        match child {
+            Node::Expr(expr) => self.expr(expr, mode),
+            Node::Stmt(stmt) => self.stmt(stmt),
         }
     }
 
@@ -682,11 +643,6 @@ impl Walk<'_> {
                     self.access(self.names.expr(base), hir[base].span, READ, true);
                 }
             }
-            ExprKind::System(_)
-            | ExprKind::Keyword(_)
-            | ExprKind::Literal { .. }
-            | ExprKind::Time { .. }
-            | ExprKind::Bind(None) => {}
             // A match assigns the variable what it matches.
             ExprKind::Bind(Some(symbol)) => {
                 let at = hir[*symbol].name.span;
@@ -704,13 +660,6 @@ impl Walk<'_> {
                 };
                 self.expr(*operand, mode);
             }
-            ExprKind::Binary { lhs, rhs, .. } => self.exprs(&[*lhs, *rhs], READ),
-            ExprKind::Conditional {
-                condition,
-                then_value,
-                else_value,
-                ..
-            } => self.exprs(&[*condition, *then_value, *else_value], READ),
             ExprKind::Select { base, index, range } => {
                 self.part(*base, mode, outer);
                 self.expr(*index, READ);
@@ -734,7 +683,6 @@ impl Walk<'_> {
                     self.part(part, mode, place);
                 }
             }
-            ExprKind::Replication { count, concat } => self.exprs(&[*count, *concat], READ),
             ExprKind::Stream { slice, concat, .. } => {
                 self.value(*slice, READ);
                 self.part(*concat, mode, place);
@@ -745,12 +693,6 @@ impl Walk<'_> {
                     self.value(item.key, READ);
                     self.part(item.value, mode, place);
                 }
-            }
-            ExprKind::Cast { ty, operand } => self.exprs(&[*ty, *operand], READ),
-            ExprKind::Range { lo, hi, .. } => self.exprs(&[*lo, *hi], READ),
-            ExprKind::Inside { expr: tested, set } => {
-                self.expr(*tested, READ);
-                self.exprs(set, READ);
             }
             ExprKind::Assign {
                 op,
@@ -769,33 +711,11 @@ impl Walk<'_> {
                 }
             }
             ExprKind::Call { callee, args } => self.call(*callee, args),
-            ExprKind::With { base, with } => self.exprs(&[*base, with.expr], READ),
-            ExprKind::Constrained {
-                call, constraints, ..
-            } => {
-                self.expr(*call, READ);
-                self.stmt(*constraints);
-            }
-            ExprKind::Dist { expr: tested, set } => {
-                self.expr(*tested, READ);
-                self.exprs(set, READ);
-            }
-            ExprKind::Binsof { bins, intersect } => {
-                self.expr(*bins, READ);
-                self.exprs(intersect, READ);
-            }
-            ExprKind::Tagged { value, .. } => self.value(*value, READ),
             ExprKind::Type(ty) => self.ty(ty),
-            // What a match assigns is an assignment of its own.
-            ExprKind::Property(property) => {
-                if let Property::Clocked { clock, .. } = property {
-                    self.timing(clock);
-                }
-                self.exprs(&property.operands(), READ);
-            }
             ExprKind::Opaque(opaque) => self.opaque(opaque),
             // Not known to be all of what it names.
             ExprKind::Loose(_) => self.access(self.names.expr(expr), at, mode, false),
+            _ => hir.expr_children(expr, |child| self.child(child, READ)),
         }
     }
 
