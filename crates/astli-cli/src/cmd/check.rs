@@ -33,7 +33,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use astli_index::{Index, Summary};
+use astli_index::Index;
 use astli_sema::{Built, check, check_built};
 use astli_text::Diagnostic;
 use rayon::prelude::*;
@@ -44,7 +44,7 @@ use crate::cli::{BuildArgs, FeatureArgs, Members, Sources};
 use crate::cmd::{self, Ctx};
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
-use crate::listing;
+use crate::listing::{self, Listing};
 use crate::points;
 use crate::render::Out;
 use crate::run::Run;
@@ -196,19 +196,14 @@ fn checked(out: &mut Out, run: &Run, plan: &Plan, analysis: &mut Analysis) -> Re
     Ok(passed)
 }
 
-/// Checks the list `files` writes for the design `plan` holds, as `files`
-/// checks it, given what `index` says of its units and those `told` it
-/// lists, or `None` for every one.
+/// Warns of the list `files` writes for the design `plan` holds, given
+/// what `index` says of its units and those `told` it lists, or `None` for
+/// every one.
 pub(crate) fn listed(run: &Run, plan: &Plan, index: &Index, told: Option<&[usize]>) {
     if !plan.is_package() {
         return;
     }
-    let listed: Vec<&Summary> = match told {
-        None => index.summaries().iter().collect(),
-        Some(told) => told.iter().map(|&file| &index.summaries()[file]).collect(),
-    };
-    let incdirs = listing::incdirs(plan, index, told);
-    listing::misfound(run, &incdirs, listed.into_iter());
+    Listing::of(plan, index, told.map(<[usize]>::to_vec), false).misfound(run, plan, index);
 }
 
 /// What `analysis`, which a check summarizes, says of each unit.
