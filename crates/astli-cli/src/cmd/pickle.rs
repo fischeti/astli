@@ -16,7 +16,7 @@ use astli_index::{Index, Summary, renamed};
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Resolved, Session};
 use astli_syntax::SyntaxNode;
-use astli_text::Disk;
+use astli_text::{Code, Diagnostic, Disk, Origins, Severity, Span};
 use rowan::GreenNode;
 use usage_rs::{Args, RunWith};
 
@@ -26,7 +26,7 @@ use crate::error::Result;
 use crate::listing;
 use crate::session;
 use crate::sources;
-use crate::term::{self, Place};
+use crate::term;
 
 /// Bundle design sources into a single self-contained SystemVerilog file
 #[derive(Args)]
@@ -185,12 +185,11 @@ fn inlined(
     let mut written = 0;
     for (directive, named) in astli_preproc::scan(&input).includes(&input) {
         let start = tokens[directive.tokens.start as usize].start as usize;
-        let at = session.origins().line_col(file, start as u32);
         let Some((name, angle)) = named else {
             left(
                 sink,
-                path,
-                at,
+                session.origins(),
+                Span::new(file, start as u32, start as u32),
                 "a macro names this header, so it is left as a directive".into(),
                 "left-macro-include",
             )?;
@@ -204,8 +203,8 @@ fn inlined(
         if open.contains(&header) {
             left(
                 sink,
-                path,
-                at,
+                session.origins(),
+                Span::new(file, start as u32, start as u32),
                 format!("`{name}` includes itself, so it is left as a directive"),
                 "left-self-include",
             )?;
@@ -230,18 +229,19 @@ fn inlined(
 }
 
 /// Warns of an `` `include `` at `at` that is left as a directive, with the
-/// rest of the file's output.
+/// rest of the file's output, the whole line under it.
 fn left(
     sink: &mut cmd::Sink,
-    path: &Path,
-    at: astli_text::LineCol,
+    origins: &Origins,
+    at: Span,
     message: String,
     code: &'static str,
 ) -> Result<()> {
-    let problem = term::warning(message).at(code, path, Place::Line(at.line as usize));
-    match problem.rendered() {
-        Some(text) => sink.report.said.extend(text),
-        None => problem.report(sink.run),
-    }
-    Ok(())
+    let text = origins.text(at.src_id);
+    let start = at.start as usize;
+    let line = text[..start].rfind('\n').map_or(0, |at| at + 1);
+    let end = text[start..].find('\n').map_or(text.len(), |at| start + at);
+    let at = Span::new(at.src_id, line as u32, end as u32);
+    let warning = Diagnostic::new(Severity::Warning, Code(code), at, message);
+    sink.report.render(origins, &[warning])
 }
