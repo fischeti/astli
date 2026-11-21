@@ -461,9 +461,8 @@ impl Walk<'_> {
                 Arg::Positional(value) | Arg::Named { value, .. } => {
                     self.value(*value, mode(index));
                 }
-                Arg::Implicit(name) => {
-                    let found = self.names.loose_at(name.span);
-                    self.access(found, name.span, mode(index), true);
+                Arg::Implicit { name, value } => {
+                    self.access(self.names.expr(*value), name.span, mode(index), true);
                 }
                 Arg::Wildcard(_) => {}
             }
@@ -649,10 +648,7 @@ impl Walk<'_> {
     /// The names a region not lowered spells, each of which it may read or
     /// write.
     fn opaque(&mut self, opaque: &Opaque) {
-        for name in &opaque.names {
-            let found = self.names.loose_at(name.span);
-            self.access(found, name.span, guess(Write::Other), false);
-        }
+        self.exprs(&opaque.names, guess(Write::Other));
     }
 
     fn value(&mut self, expr: Option<ExprId>, mode: Mode) {
@@ -798,6 +794,8 @@ impl Walk<'_> {
                 self.exprs(&property.operands(), READ);
             }
             ExprKind::Opaque(opaque) => self.opaque(opaque),
+            // Not known to be all of what it names.
+            ExprKind::Loose(_) => self.access(self.names.expr(expr), at, mode, false),
         }
     }
 

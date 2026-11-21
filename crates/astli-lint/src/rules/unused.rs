@@ -186,12 +186,9 @@ fn brought<'a>(cx: &DesignCx<'a, '_>) -> FxHashSet<(&'a str, &'a str)> {
         }
     };
     for (id, expr) in hir.exprs() {
-        if let astli_sema::ExprKind::Name(_) = expr.kind {
+        if let astli_sema::ExprKind::Name(_) | astli_sema::ExprKind::Loose(_) = expr.kind {
             add(cx.names.expr(id));
         }
-    }
-    for (_, resolution) in cx.names.loose() {
-        add(Some(*resolution));
     }
     found
 }

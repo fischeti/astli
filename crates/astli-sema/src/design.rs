@@ -168,7 +168,7 @@ impl Design {
 
             for member in &hir[hir.root()].members {
                 if let Member::Opaque(body) = member {
-                    opaque.extend(body.names.iter().map(|name| name.text.clone()));
+                    opaque.extend(hir.spelled(body).map(Box::from));
                 }
                 let Member::Declare(symbol) = member else {
                     continue;

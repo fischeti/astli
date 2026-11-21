@@ -189,12 +189,15 @@ impl Lower<'_> {
     }
 
     /// Every name spelled in `node` but `except`, the one it declares.
-    fn opaque(&self, node: &SyntaxNode, except: Option<&SyntaxToken>) -> Opaque {
+    fn opaque(&mut self, node: &SyntaxNode, except: Option<&SyntaxToken>) -> Opaque {
         let names = (node.descendants_with_tokens())
             .filter_map(|element| element.into_token())
             .filter(|token| matches!(token.kind(), IDENT | ESCAPED_IDENT))
             .filter(|token| Some(token) != except)
-            .map(|token| self.name(&token))
+            .map(|token| {
+                let name = self.name(&token);
+                self.expr(ExprKind::Loose(name.text), name.span)
+            })
             .collect();
         Opaque { names }
     }
@@ -1700,7 +1703,10 @@ impl Lower<'_> {
                 (Some(_), Some(name)) => {
                     let name = self.name(&name);
                     match arg.type_or_expr() {
-                        None => Arg::Implicit(name),
+                        None => {
+                            let value = self.expr(ExprKind::Name(name.text.clone()), name.span);
+                            Arg::Implicit { name, value }
+                        }
                         Some(ast::TypeOrExpr::Expr(ast::Expr::ParenExpr(value))) => Arg::Named {
                             name,
                             value: self.paren_inner(scope, &value),

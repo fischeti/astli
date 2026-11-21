@@ -25,8 +25,8 @@ use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Session};
 use astli_sema::{
-    BodyId, ChildKind, Design, Elaboration, ExprKind, FileId, Hir, Member, Resolution, ScopeId,
-    StmtKind, SymbolId, SymbolKind, SymbolRef, Value, lower,
+    Arg, BodyId, ChildKind, Design, Elaboration, ExprId, ExprKind, FileId, Hir, Member, Resolution,
+    ScopeId, StmtKind, SymbolId, SymbolKind, SymbolRef, Value, lower,
 };
 
 /// Repositories every other one builds with, as a simulator supplies them:
@@ -201,15 +201,29 @@ fn corpus_lowers_and_resolves() {
                     _ => None,
                 })
                 .collect();
+            let connected = connected(hir);
             for (id, expr) in hir.exprs() {
                 match &expr.kind {
+                    ExprKind::Name(_) if connected.contains(&id) => {}
                     ExprKind::Name(_) => names += 1,
                     ExprKind::Opaque(body) => opaque += body.names.len(),
+                    // Counted with the region that spells it.
+                    ExprKind::Loose(_) => continue,
                     _ => {}
                 }
                 let Some(resolution) = resolved.expr(id) else {
                     continue;
                 };
+                // An implicit `.name` is counted apart, so that the bounds
+                // keep measuring the names they were set on.
+                if connected.contains(&id) {
+                    let kind = match resolution {
+                        Resolution::Declared(_) => "connection declared",
+                        _ => "connection unknown",
+                    };
+                    *resolutions.entry(kind).or_default() += 1;
+                    continue;
+                }
                 // A member through the hierarchy is counted apart, as it
                 // was not resolved at all before.
                 if let ExprKind::Member { .. } = expr.kind {
@@ -273,6 +287,34 @@ fn corpus_lowers_and_resolves() {
         "{} names unknown, up from {UNKNOWN}",
         count("unknown")
     );
+}
+
+/// The names implicit `.name` connections and arguments connect.
+fn connected(hir: &Hir) -> BTreeSet<ExprId> {
+    let mut args: Vec<&Arg> = Vec::new();
+    for (_, symbol) in hir.symbols() {
+        match &symbol.kind {
+            SymbolKind::Instance(instance) => {
+                args.extend(&instance.parameters);
+                args.extend(&instance.connections);
+            }
+            SymbolKind::Class(class) => {
+                args.extend(class.extends.iter().flat_map(|(_, args)| args));
+            }
+            _ => {}
+        }
+    }
+    for (_, expr) in hir.exprs() {
+        if let ExprKind::Call { args: called, .. } = &expr.kind {
+            args.extend(called);
+        }
+    }
+    (args.into_iter())
+        .filter_map(|arg| match arg {
+            Arg::Implicit { value, .. } => Some(*value),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Each parameter and enum member `hir` declares in a definition, and that

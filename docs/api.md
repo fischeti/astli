@@ -131,7 +131,7 @@ debugging, and its format may change.
 ```rust
 let design = Design::new(hirs);        // Vec<Arc<Hir>>, in filelist order
 let names = design.names(file);        // &Names, for one FileId, resolved when first asked
-names.expr(id);                        // Option<Resolution>, a name's or a hierarchical member's
+names.expr(id);                        // Option<Resolution>, a name's, an opaque region's or a hierarchical member's
 design.symbol(symbol_ref).scope;       // ScopeId: where it is declared
 hir.enclosing(scope, ScopeKind::Class); // Option<ScopeId>: the class around it, or definition, generate block
 accesses(&design, file, names);        // Vec<Access>: what reads and writes what, how, and where
@@ -145,7 +145,11 @@ thread asks first. A
 `Resolution` is `Declared(SymbolRef)`, `Implicit`, `Unknown` or
 `Undeclared(Searched)`, which says where the name was looked for: the scopes
 around it, a package, or a class. The lints and `check` read it, and only
-`check` reports the last, worded by where it looked.
+`check` reports the last, worded by where it looked. Every name is an
+expression, so `expr` is the one lookup: an implicit `.name` connects an
+`ExprKind::Name`, and a name an opaque region spells is an
+`ExprKind::Loose`, which says what it may refer to but not how it is used.
+`names.loose()` lists those.
 
 ```rust
 let found = astli_sema::check(&elaboration, file, None);  // Vec<Diagnostic>

@@ -244,12 +244,13 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
 
     let mut found = Vec::new();
     for (id, expr) in hir.exprs() {
+        let loose = match expr.kind {
+            ExprKind::Loose(_) => "loose ",
+            _ => "",
+        };
         if let Some(resolution) = names.expr(id) {
-            found.push((expr.span, "", resolution));
+            found.push((expr.span, loose, resolution));
         }
-    }
-    for (name, resolution) in names.loose() {
-        found.push((name.span, "loose ", *resolution));
     }
     found.sort_by_key(|(span, _, _)| (span.start, span.end));
     found.dedup();

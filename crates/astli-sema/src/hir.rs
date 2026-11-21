@@ -121,6 +121,14 @@ impl Hir {
         types
     }
 
+    /// How each name `opaque` spells is spelled.
+    pub fn spelled<'a>(&'a self, opaque: &'a Opaque) -> impl Iterator<Item = &'a str> {
+        (opaque.names.iter()).map(|&name| match &self[name].kind {
+            ExprKind::Loose(text) => &**text,
+            _ => unreachable!("an opaque region's names are loose"),
+        })
+    }
+
     /// The nearest scope of `kind` that `scope` is or is inside: the
     /// definition, the class or the generate block around it.
     pub fn enclosing(&self, scope: ScopeId, kind: ScopeKind) -> Option<ScopeId> {
@@ -613,8 +621,9 @@ pub enum Arg {
     Positional(Option<ExprId>),
     /// `.name(value)`, `.name()` leaving it unconnected.
     Named { name: Name, value: Option<ExprId> },
-    /// `.name`, connecting the name in scope.
-    Implicit(Name),
+    /// `.name`, connecting the name in scope: `value`, a
+    /// [`Name`](ExprKind::Name) spelled as `name`.
+    Implicit { name: Name, value: ExprId },
     /// `.*`.
     Wildcard(Span),
 }
@@ -1001,6 +1010,9 @@ pub enum ExprKind {
     /// sequence too, so one stands alone where a property may.
     Property(Property),
     Opaque(Opaque),
+    /// A name an [`Opaque`] region spells, which may be a use of anything
+    /// by that name: what it refers to is known, how it is used not.
+    Loose(Box<str>),
 }
 
 impl ExprKind {
@@ -1154,5 +1166,6 @@ pub struct PatternItem {
 /// name, and an analysis must not conclude from its absence.
 #[derive(Debug, Clone, Default)]
 pub struct Opaque {
-    pub names: Vec<Name>,
+    /// Each a [`Loose`](ExprKind::Loose) name.
+    pub names: Vec<ExprId>,
 }

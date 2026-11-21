@@ -81,11 +81,6 @@ pub fn check(elaboration: &Elaboration, file: FileId, built: Option<&Built>) -> 
             _ => {}
         }
     }
-    for (name, resolution) in names.loose() {
-        if let Resolution::Undeclared(_) = resolution {
-            found.push(diagnostics::undeclared_name(&name.text, name.span));
-        }
-    }
     for &(at, symbol) in names.early() {
         let declared = &hir[symbol].name;
         found.push(diagnostics::used_before_declaration(
@@ -698,7 +693,7 @@ impl Takes<'_> {
         }
         let mut seen: FxHashMap<&str, Span> = FxHashMap::default();
         for (arg, formal) in args.iter().zip(&bound) {
-            let (Arg::Named { name, .. } | Arg::Implicit(name)) = arg else {
+            let (Arg::Named { name, .. } | Arg::Implicit { name, .. }) = arg else {
                 continue;
             };
             if let Some(&first) = seen.get(&*name.text) {
