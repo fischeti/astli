@@ -53,6 +53,13 @@ which PULP follows too.
 - **Ports align** in four columns: the direction, the type, the name, and a
   default's `=`. The direction is padded so that types start together, as
   1223 port lists in the corpus have it to 362 that follow it with one space.
+- **Every broken list is a table**, whether or not a directive stands in it:
+  a module's, interface's or program's ports and parameters, a function's,
+  task's, covergroup's, property's, sequence's or checker's arguments, a
+  class's parameters, and a modport's ports, laid out as a block's items
+  are. A blank line between entries is kept and ends the run, and so does a
+  modport's subroutine. A module's lists always break; any other stays on
+  its line if it fits, where a table of one row pads nothing.
 - **An `enum`, `struct` or `union` has one entry per line**, as 1253 enums
   and 5474 structs in the corpus do to 84 and 27 on one line. Members line up
   as declarations do, variants on their `=`, and the name follows the `}`.

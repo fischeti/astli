@@ -1,12 +1,20 @@
-// A modport's ports go on its line, or one per line if they do not fit.
+// A modport's ports go on its line, or one per line if they do not fit,
+// their directions aligned up to a subroutine among them.
 interface bus_if;
   modport master (output req, input gnt);
   modport slave (input req, output gnt), monitor (input req, input gnt);
   modport a_modport_with_a_long_name (
-    input request_valid,
-    input request_data,
+    input  request_valid,
+    input  request_data,
     output grant_q,
     output error_q
+  );
+  modport driver (
+    input  clk_i,
+    rst_ni,
+    output req_valid,
+    import task send(input int id),
+    input gnt_q
   );
 endinterface
 // A modport imports and exports subroutines by name or as a prototype.
