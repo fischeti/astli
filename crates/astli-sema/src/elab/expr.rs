@@ -18,7 +18,7 @@ use crate::design::SymbolRef;
 use crate::hir::*;
 use crate::resolve::Resolution;
 use crate::types::{Packed, Shape, Ty};
-use crate::value::{Bit, Bits, Literal, Value};
+use crate::value::{Bit, Bits, Literal, Value, bits_string, string_bits};
 
 impl Elaboration {
     /// `expr`'s type by itself, before the expression around it sizes it.
@@ -1064,8 +1064,6 @@ fn reduce(op: SyntaxKind, bits: &Bits) -> Bit {
     }
 }
 
-/// A string as bits, eight a character, the first most significant; an
-/// empty string is one zero byte.
 /// The type `literal` has by itself.
 pub(crate) fn literal_type(literal: &Literal) -> Ty {
     match literal {
@@ -1083,26 +1081,4 @@ pub(crate) fn literal_type(literal: &Literal) -> Ty {
         }
         Literal::Unknown => Ty::Unknown,
     }
-}
-
-pub(crate) fn string_bits(bytes: &[u8]) -> Bits {
-    if bytes.is_empty() {
-        return Bits::from_u64(8, false, 0);
-    }
-    let parts: Vec<Bits> = (bytes.iter())
-        .map(|&byte| Bits::from_u64(8, false, u64::from(byte)))
-        .collect();
-    Bits::concat(&parts)
-}
-
-/// Bits as a string, eight a character, its zero bytes left out.
-pub(crate) fn bits_string(bits: &Bits) -> Box<[u8]> {
-    let bytes = bits.width().div_ceil(8);
-    let wide = bits.resize(bytes * 8);
-    (0..bytes)
-        .rev()
-        .filter_map(|index| wide.slice(i64::from(index) * 8, 8).to_u64())
-        .map(|byte| byte as u8)
-        .filter(|&byte| byte != 0)
-        .collect()
 }

@@ -70,3 +70,27 @@ impl fmt::Display for Value {
         }
     }
 }
+
+/// A string as bits, eight a character, the first most significant; an
+/// empty string is one zero byte.
+pub(crate) fn string_bits(bytes: &[u8]) -> Bits {
+    if bytes.is_empty() {
+        return Bits::from_u64(8, false, 0);
+    }
+    let parts: Vec<Bits> = (bytes.iter())
+        .map(|&byte| Bits::from_u64(8, false, u64::from(byte)))
+        .collect();
+    Bits::concat(&parts)
+}
+
+/// Bits as a string, eight a character, its zero bytes left out.
+pub(crate) fn bits_string(bits: &Bits) -> Box<[u8]> {
+    let bytes = bits.width().div_ceil(8);
+    let wide = bits.resize(bytes * 8);
+    (0..bytes)
+        .rev()
+        .filter_map(|index| wide.slice(i64::from(index) * 8, 8).to_u64())
+        .map(|byte| byte as u8)
+        .filter(|&byte| byte != 0)
+        .collect()
+}
