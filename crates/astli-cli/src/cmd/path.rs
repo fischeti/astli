@@ -37,6 +37,7 @@ impl RunWith<Ctx<'_>> for Path {
         let resolution = lockfile::settle(
             run,
             &here,
+            &here.overrides(),
             Lock::clone,
             Write::Manifest,
             lockfile::Tell::Design,

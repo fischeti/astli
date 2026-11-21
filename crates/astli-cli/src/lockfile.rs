@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use astli_package::{
     Dependencies, Dependency, MANIFEST, Package, Patches, Root, Walk, Workspace, mark,
 };
-use astli_resolve::{LOCKFILE, Lock, Origin, Resolution, resolve};
+use astli_resolve::{LOCKFILE, Lock, Origin, Overrides, Resolution, resolve};
 use toml_edit::DocumentMut;
 
 use crate::error::{Error, Result};
@@ -179,6 +179,20 @@ impl Here {
             in_workspace,
         })
     }
+
+    /// The workspace root's lockfile.
+    pub fn lockfile(&self) -> PathBuf {
+        self.workspace.root.package.root.join(LOCKFILE)
+    }
+
+    /// What the workspace root says of how to resolve: its pins, and the
+    /// patches beside its manifest.
+    pub fn overrides(&self) -> Overrides {
+        Overrides {
+            pinned: self.workspace.root.tables.pinned.iter().cloned().collect(),
+            patches: self.workspace.patches.clone(),
+        }
+    }
 }
 
 /// Warns of each table a member's manifest holds that only the workspace
@@ -259,25 +273,26 @@ pub enum Write {
 }
 
 /// Resolves the dependencies of `here`'s root and of each member of its
-/// workspace, preferring what `kept` holds of the lock, and writes the lock
-/// if it changed and `write` allows, telling the warnings `tell` asks for.
-/// `locked` refuses a lock that is missing or would change instead. Each
-/// change is a status line.
+/// workspace as `overrides` says, preferring what `kept` holds of the lock,
+/// and writes the lock if it changed and `write` allows, telling the
+/// warnings `tell` asks for. `locked` refuses a lock that is missing or
+/// would change instead. Each change is a status line.
 ///
-/// While the root patches a dependency, the lock is read and never written,
-/// so that it holds what the design builds on once the patch is gone; and
+/// While a dependency is patched, the lock is read and never written, so
+/// that it holds what the design builds on once the patch is gone; and
 /// `locked`, as CI asks, and [`Write::Always`] fail.
 pub fn settle(
     run: &Run,
     here: &Here,
+    overrides: &Overrides,
     kept: impl FnOnce(&Lock) -> Lock,
     write: Write,
     tell: Tell,
     locked: bool,
 ) -> Result<Resolution> {
     let root = &here.workspace.root;
-    let path = root.package.root.join(LOCKFILE);
-    let patched = here.workspace.patches.0.keys().map(mark::name);
+    let path = here.lockfile();
+    let patched = overrides.patches.0.keys().map(mark::name);
     let patched = patched.collect::<Vec<_>>().join(", ");
     if !patched.is_empty() && (locked || write == Write::Always) {
         let asked = match locked {
@@ -293,27 +308,7 @@ pub fn settle(
         ))
         .into());
     }
-    let old = Lock::read(&path)?;
-    let preferred = old.as_ref().map(kept).unwrap_or_default();
-    let resolving = |preferred| Resolving {
-        root: root.package.clone(),
-        members: (here.workspace.members.iter())
-            .map(|it| it.package.clone())
-            .collect(),
-        pinned: root.tables.pinned.iter().cloned().collect(),
-        patches: here.workspace.patches.clone(),
-        preferred,
-    };
-    let resolution = run.resolution(resolving(preferred), |it| {
-        Ok(resolve(
-            &run.store()?,
-            &it.root,
-            &it.members,
-            &it.pinned,
-            &it.patches,
-            &it.preferred,
-        )?)
-    })?;
+    let (old, resolution) = resolved(run, here, overrides, kept)?;
     let held = held(&here.package.package, &resolution);
     for warning in &resolution.warnings {
         let told = match (&warning.of, tell) {
@@ -383,8 +378,41 @@ pub fn settle(
     // Every commit locked is one the requirements admit, so a resolution
     // preferring the lock written chooses them all again: the next
     // package's run, reading it, needs no resolution of its own.
-    run.resolved(resolving(new), &resolution);
+    run.resolved(resolving(here, overrides, new), &resolution);
     Ok(resolution)
+}
+
+/// What [`settle`] resolves, and the lock as it read it, without telling
+/// a warning or writing the lock.
+pub fn resolved(
+    run: &Run,
+    here: &Here,
+    overrides: &Overrides,
+    kept: impl FnOnce(&Lock) -> Lock,
+) -> Result<(Option<Lock>, Resolution)> {
+    let old = Lock::read(&here.lockfile())?;
+    let preferred = old.as_ref().map(kept).unwrap_or_default();
+    let resolution = run.resolution(resolving(here, overrides, preferred), |it| {
+        Ok(resolve(
+            &run.store()?,
+            &it.roots,
+            &it.overrides,
+            &it.preferred,
+        )?)
+    })?;
+    Ok((old, resolution))
+}
+
+/// What resolving `here`'s workspace as `overrides` says, preferring
+/// `preferred`, reads.
+fn resolving(here: &Here, overrides: &Overrides, preferred: Lock) -> Resolving {
+    Resolving {
+        roots: (here.workspace.packages())
+            .map(|it| it.package.clone())
+            .collect(),
+        overrides: overrides.clone(),
+        preferred,
+    }
 }
 
 /// The dependencies of `here`'s package, each checked out and read as a
@@ -406,6 +434,7 @@ pub fn dependencies(
     let resolution = settle(
         run,
         here,
+        &here.overrides(),
         Lock::clone,
         Write::Manifest,
         Tell::Design,
@@ -555,6 +584,7 @@ pub fn rewrite(
         settle(
             run,
             &here,
+            &here.overrides(),
             Lock::clone,
             Write::Manifest,
             Tell::Design,

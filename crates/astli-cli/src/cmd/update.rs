@@ -29,7 +29,7 @@ impl RunWith<Ctx<'_>> for Update {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let here = lockfile::here(run)?;
-        if let Some(lock) = Lock::read(&here.workspace.root.package.root.join(LOCKFILE))?
+        if let Some(lock) = Lock::read(&here.lockfile())?
             && let Some(name) = self.names.iter().find(|it| lock.get(it).is_none())
         {
             return Err(Error::failed(format!(
@@ -48,6 +48,7 @@ impl RunWith<Ctx<'_>> for Update {
         lockfile::settle(
             run,
             &here,
+            &here.overrides(),
             kept,
             Write::Always,
             lockfile::Tell::Workspace,

@@ -5,7 +5,7 @@ use crate::common;
 use std::collections::BTreeSet;
 
 use astli_package::{Package, Patches, Root, mark};
-use astli_resolve::{Lock, Origin, Resolution, resolve};
+use astli_resolve::{Lock, Origin, Overrides, Resolution, resolve};
 use common::{Fixture, Repo};
 
 /// `cells`, released as 1.0.0, 1.1.0 and 2.0.0, and `axi` 0.2.0, which
@@ -40,15 +40,11 @@ fn locked(
     let manifest = fixture.file("root/astli.toml", &format!("[dependencies]\n{entries}"));
     let root = Package::read(&manifest).expect("a valid manifest");
     let pinned: BTreeSet<String> = pinned.iter().map(|it| it.to_string()).collect();
-    resolve(
-        &fixture.store(),
-        &root,
-        &[],
-        &pinned,
-        &Patches::default(),
-        lock,
-    )
-    .map_err(|err| err.to_string())
+    let overrides = Overrides {
+        pinned,
+        ..Overrides::default()
+    };
+    resolve(&fixture.store(), &[root], &overrides, lock).map_err(|err| err.to_string())
 }
 
 /// Each package and the version or commit chosen for it.
@@ -422,10 +418,8 @@ fn every_feature_of_the_root_is_resolved() {
 
     let resolution = resolve(
         &fixture.store(),
-        &root,
-        &[],
-        &BTreeSet::new(),
-        &Patches::default(),
+        &[root],
+        &Overrides::default(),
         &Lock::default(),
     )
     .expect("resolved");
@@ -464,10 +458,8 @@ fn a_version_without_the_feature_asked_is_passed_over() {
     let root = Package::read(&manifest).expect("a valid manifest");
     let err = resolve(
         &fixture.store(),
-        &root,
-        &[],
-        &BTreeSet::new(),
-        &Patches::default(),
+        &[root],
+        &Overrides::default(),
         &Lock::default(),
     )
     .expect_err("a feature not declared");
@@ -503,10 +495,8 @@ fn only_the_roots_dev_dependencies_are_resolved() {
 
     let resolution = resolve(
         &fixture.store(),
-        &root,
-        &[],
-        &BTreeSet::new(),
-        &Patches::default(),
+        &[root],
+        &Overrides::default(),
         &Lock::default(),
     )
     .expect("resolved");
@@ -539,15 +529,12 @@ fn a_patch_meets_every_requirement_and_brings_its_own() {
     (patches.0).insert("axi".to_string(), fixture.path().join("work/axi"));
     (patches.0).insert("dma".to_string(), fixture.path().join("work/axi"));
 
-    let resolution = resolve(
-        &fixture.store(),
-        &root,
-        &[],
-        &BTreeSet::new(),
-        &patches,
-        &Lock::default(),
-    )
-    .expect("resolved");
+    let overrides = Overrides {
+        patches,
+        ..Overrides::default()
+    };
+    let resolution =
+        resolve(&fixture.store(), &[root], &overrides, &Lock::default()).expect("resolved");
 
     assert_eq!(chosen(&resolution), ["axi on disk", "cells 2.0.0"]);
     assert_eq!(
@@ -582,19 +569,14 @@ fn workspace(
         .collect();
     let manifest = fixture.file("root/astli.toml", &format!("[workspace]\n{root}"));
     let root = Root::read(&manifest).expect("a valid manifest");
-    let members: Vec<Package> = (manifests.iter())
-        .map(|manifest| Package::read(manifest).expect("a valid manifest"))
-        .collect();
-    let pinned = root.tables.pinned.iter().cloned().collect();
-    resolve(
-        &fixture.store(),
-        &root.package,
-        &members,
-        &pinned,
-        &Patches::default(),
-        &Lock::default(),
-    )
-    .map_err(|err| err.to_string())
+    let members =
+        (manifests.iter()).map(|manifest| Package::read(manifest).expect("a valid manifest"));
+    let roots: Vec<Package> = std::iter::once(root.package).chain(members).collect();
+    let overrides = Overrides {
+        pinned: root.tables.pinned.iter().cloned().collect(),
+        ..Overrides::default()
+    };
+    resolve(&fixture.store(), &roots, &overrides, &Lock::default()).map_err(|err| err.to_string())
 }
 
 #[test]
