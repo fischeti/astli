@@ -549,9 +549,21 @@ with its build, reading the texts its origins hold, so it reads what the
 load read, and the call is the one at the same place among its calls. On
 OpenTitan's largest unit, `spi_device_reg_top.sv` at 560 kB with
 `prim_assert.sv` included, `astli preprocess` takes 11 ms, so no expansion
-is kept. The expansion is laid out by the formatter where it parses as a
-module's items, twenty lines at most, and is the text it renders to
-otherwise, cut at 400 characters.
+is kept. The expansion is laid out by the formatter, twenty lines at most,
+as the first of what a macro commonly stands for that it parses as with no
+error: a module's items, statements, an expression, a data type, ports,
+parameters. Neither the parser nor the formatter takes a fragment, so each
+is a wrapper that makes the expansion a file, starting it on a line of its
+own, the one place where both a body's indentation and an expression's
+alignment come off with the wrapper's. An expression starts a line as a
+case item, and must parse after `=` too, since a case item's `:` is
+optional to the parser. Where the formatter's text around the expansion
+is not the one the wrapper predicts, that form is passed over. Expressions
+come before types, as a select is laid out differently as either and is
+more often a signal's. What parses as none of them is the text it renders
+to, without the spaces each `\` left and the indentation its lines after
+the first share, and cut at the end of the last line within 400
+characters.
 
 Each unit that holds the file is asked, and what they say is said once,
 apart by a rule: a name `.name` connects and the port it connects to are

@@ -43,11 +43,6 @@ const LINES: usize = 8;
 /// At most this many lines of the comment above a declaration, those
 /// nearest it.
 const COMMENT: usize = 6;
-/// At most this many lines of what a macro call expands to, laid out.
-const EXPANDED: usize = 20;
-/// At most this many characters of what a macro call expands to, when it
-/// does not lay out as module items.
-const CHARACTERS: usize = 400;
 /// At most this many of the values the tops build a parameter with.
 const VALUES: usize = 4;
 
@@ -165,7 +160,7 @@ impl<'a> Hover<'a> {
             Some("") => out += "expands here to nothing\n",
             Some(wrote) => {
                 out += "expands here to\n\n";
-                fenced(&mut out, &expansion_text(wrote));
+                fenced(&mut out, &expansion::text(wrote));
             }
         }
         out
@@ -784,39 +779,6 @@ impl Reader for Held<'_> {
     }
 }
 
-/// What a macro call expands to, laid out as the formatter lays out module
-/// items where it parses as them, or else as written, cut short.
-fn expansion_text(wrote: &str) -> String {
-    match laid_out(wrote) {
-        Some(it) => cut(&it, EXPANDED),
-        None => match wrote.char_indices().nth(CHARACTERS) {
-            Some((at, _)) => format!("{}…", &wrote[..at]),
-            None => wrote.to_string(),
-        },
-    }
-}
-
-/// `text` formatted as the items of a module, where it parses whole as
-/// them.
-fn laid_out(text: &str) -> Option<String> {
-    let tree = SyntaxTree::parse("", format!("module m;\n{text}\nendmodule\n"));
-    if !tree.diagnostics().is_empty() || !tree.unparsed().is_empty() {
-        return None;
-    }
-    let formatted = astli_fmt::format(&tree, &astli_fmt::Options::default()).ok()?;
-    let lines: Vec<&str> = formatted.lines().collect();
-    let body = lines.get(1..lines.len().checked_sub(1)?)?;
-    let indent = (body.iter())
-        .filter(|it| !it.trim().is_empty())
-        .map(|it| it.len() - it.trim_start().len())
-        .min()?;
-    let body: Vec<&str> = body
-        .iter()
-        .map(|it| it.get(indent..).unwrap_or(""))
-        .collect();
-    Some(body.join("\n").trim_matches('\n').to_string())
-}
-
 /// `code` as a fenced block, with a blank line after it.
 fn fenced(out: &mut String, code: &str) {
     if code.trim().is_empty() {
@@ -831,6 +793,7 @@ fn fenced(out: &mut String, code: &str) {
     writeln!(out, "{fence}systemverilog\n{code}\n{fence}\n").unwrap();
 }
 
+mod expansion;
 mod value;
 
 #[cfg(test)]
