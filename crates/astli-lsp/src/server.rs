@@ -175,6 +175,14 @@ impl Server {
         self.slots.get(root)?.current.clone()
     }
 
+    /// The snapshot current for each design an open file is in, of those
+    /// that have loaded.
+    pub fn snapshots(&self) -> Vec<Arc<Snapshot>> {
+        (self.slots.values())
+            .filter_map(|slot| slot.current.clone())
+            .collect()
+    }
+
     /// Marks stale every design that the file at `path` is in, by `root`
     /// or by what its load read, or that a load running reads, so that a
     /// load running stops and another is made once the edits settle.
@@ -232,6 +240,7 @@ impl Server {
             }
             "textDocument/foldingRange" => self.reply(id, &method, params, Server::folding_ranges),
             "textDocument/formatting" => self.formatting(id, params),
+            "workspace/symbol" => self.workspace_symbols(id, params),
             _ => {
                 let _ = params;
                 let said = format!("`{method}` is not a request astli answers");
@@ -412,7 +421,6 @@ impl Server {
     /// Hands `work` to the pool with the request's params, answering it
     /// when it is done. `work` takes what it reads by value; whether the
     /// client has cancelled the request it asks of the [`Cancel`].
-    #[expect(dead_code, reason = "the requests over the design call it")]
     pub fn spawn<P, R>(
         &mut self,
         id: RequestId,

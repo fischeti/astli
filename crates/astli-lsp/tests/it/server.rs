@@ -44,7 +44,8 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
             "textDocumentSync": {
               "change": 2,
               "openClose": true
-            }
+            },
+            "workspaceSymbolProvider": true
           },
           "serverInfo": {
             "name": "astli",

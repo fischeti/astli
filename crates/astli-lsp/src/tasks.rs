@@ -29,10 +29,6 @@ impl Cancel {
     }
 
     /// `Err` once the request is cancelled, for work to return with `?`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the requests over the design call it")
-    )]
     pub fn check(&self) -> Result<(), ResponseError> {
         match self.cancelled() {
             true => Err(cancelled()),

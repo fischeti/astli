@@ -11,3 +11,4 @@ mod snapshots;
 mod support;
 mod symbols;
 mod watched;
+mod workspace_symbols;
