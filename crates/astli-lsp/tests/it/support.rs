@@ -1,14 +1,17 @@
 //! A client, and the host the server it starts asks: one that reads a few
 //! files of a design back through the reader it is given and tells the test
-//! what it read, and lays a file out as the test says.
+//! what it read, and lays a file out as the test says, or analyses the
+//! files it read as a design.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use astli_fmt::Options;
-use astli_lsp::{Ended, Host, Snapshot, Watched};
+use astli_lsp::{Analysed, Ended, Host, Snapshot, Unit, Watched};
+use astli_preproc::Session;
+use astli_sema::{Design, Elaboration};
 use astli_text::Reader;
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response, ResponseError};
@@ -47,8 +50,11 @@ pub type Layout = Box<dyn Fn(&Path) -> Result<Option<Options>, String> + Send + 
 /// load tells the test it has read the file and reads on once the test
 /// releases it. When one holds `scoped`, the load waits for jobs it spawns
 /// on the pool, as the driver's does.
+///
+/// With `analyse`, the snapshot holds one design, each file it read a unit.
 struct Files {
     names: Vec<String>,
+    analyse: bool,
     layout: Layout,
     loads: Sender<Load>,
     held: Sender<()>,
@@ -81,7 +87,7 @@ impl Host for Files {
     ) -> Option<Snapshot> {
         let texts: Vec<(String, String)> = (self.names.iter())
             .filter_map(|name| {
-                let path = root.join(name);
+                let path = clean(&root.join(name));
                 let text = reader.exists(&path).then(|| reader.read(&path).unwrap())?;
                 if text.contains("hold") {
                     let _ = self.held.send(());
@@ -95,6 +101,10 @@ impl Host for Files {
         if holds("scoped") {
             scoped();
         }
+        let designs = match self.analyse {
+            true => vec![analysed(root, &texts)],
+            false => Vec::new(),
+        };
         let load = Load {
             root: root.to_path_buf(),
             discover,
@@ -114,7 +124,7 @@ impl Host for Files {
         }
         Some(Snapshot {
             root: root.to_path_buf(),
-            designs: Vec::new(),
+            designs,
             problems: Vec::new(),
             lowered: 0,
         })
@@ -130,6 +140,51 @@ impl Host for Files {
             extensions: vec!["sv".to_string(), "svh".to_string()],
         }
     }
+}
+
+/// The design of the files `texts` names in `root`, each a unit of its own.
+fn analysed(root: &Path, texts: &[(String, String)]) -> Analysed {
+    let mut lowered = Vec::new();
+    let (mut summaries, mut origins) = (Vec::new(), Vec::new());
+    for (name, text) in texts {
+        let mut session = Session::new();
+        let file = session.add(clean(&root.join(name)), text.clone());
+        let expanded = session.expand(file);
+        let parsed = astli_parse::parse_expanded(&session, &expanded.tokens);
+        lowered.push(Arc::new(astli_sema::lower(&parsed)));
+        summaries.push(astli_index::Summary::new(session.origins(), file, &parsed));
+        origins.push(Arc::new(session.into_origins()));
+    }
+    let elaboration = Elaboration::new(Arc::new(Design::new(lowered)));
+    let files = elaboration.design().files().map(|(file, _)| file);
+    let units = (texts.iter().zip(files).zip(origins))
+        .map(|(((name, _), file), origins)| Unit {
+            path: clean(&root.join(name)),
+            file,
+            origins,
+            parsed: Vec::new(),
+        })
+        .collect();
+    Analysed {
+        index: astli_index::Index::new(summaries),
+        elaboration,
+        units,
+    }
+}
+
+/// `path` without its `.` and `..`, as the driver names a file.
+fn clean(path: &Path) -> PathBuf {
+    let mut cleaned = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                cleaned.pop();
+            }
+            component => cleaned.push(component),
+        }
+    }
+    cleaned
 }
 
 /// Spawns two jobs on the pool and waits on a channel for both, as the
@@ -175,17 +230,30 @@ impl Client {
     /// server answered.
     pub fn initialize(names: &[&str], capabilities: Value) -> (Client, Value) {
         let layout: Layout = Box::new(|_| Ok(Some(Options::default())));
-        Client::initialize_with(names, layout, capabilities)
+        Client::initialize_with(names, false, layout, capabilities)
+    }
+
+    /// Starts a server whose host reads `names` of a design and analyses
+    /// them, and completes the handshake in UTF-8 if `utf8`, or else in
+    /// UTF-16.
+    pub fn analysing(names: &[&str], utf8: bool) -> Client {
+        let layout: Layout = Box::new(|_| Ok(Some(Options::default())));
+        Client::initialize_with(names, true, layout, offered(utf8)).0
     }
 
     /// Starts a server whose host reads no file of a design and lays each
     /// file out as `layout` says, and completes the handshake in UTF-8 if
     /// `utf8`, or else in UTF-16.
     pub fn laid_out(layout: Layout, utf8: bool) -> Client {
-        Client::initialize_with(&[], layout, offered(utf8)).0
+        Client::initialize_with(&[], false, layout, offered(utf8)).0
     }
 
-    fn initialize_with(names: &[&str], layout: Layout, capabilities: Value) -> (Client, Value) {
+    fn initialize_with(
+        names: &[&str],
+        analyse: bool,
+        layout: Layout,
+        capabilities: Value,
+    ) -> (Client, Value) {
         let (client, server) = Connection::memory();
         let (sender, loads) = crossbeam_channel::unbounded();
         let (holding, held) = crossbeam_channel::unbounded();
@@ -193,6 +261,7 @@ impl Client {
         let (forgetting, forgot) = crossbeam_channel::unbounded();
         let host = Files {
             names: names.iter().map(|it| it.to_string()).collect(),
+            analyse,
             layout,
             loads: sender,
             held: holding,
@@ -236,9 +305,15 @@ impl Client {
     /// Sends a request and waits for its answer.
     pub fn request(&mut self, method: &str, params: Value) -> Answer {
         let id = self.send(method, params);
+        self.answer(&id)
+    }
+
+    /// Waits for the answer to request `id`, which is the next one the
+    /// server sends.
+    pub fn answer(&mut self, id: &RequestId) -> Answer {
         loop {
             if let Some(response) = self.receive() {
-                assert_eq!(response.id, id, "answers in the order asked");
+                assert_eq!(&response.id, id, "answers in the order asked");
                 return response.response_result;
             }
         }

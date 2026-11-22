@@ -219,6 +219,7 @@ dependencies = [
  "astli-fmt",
  "astli-index",
  "astli-parse",
+ "astli-preproc",
  "astli-sema",
  "astli-syntax",
  "astli-testing",

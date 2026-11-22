@@ -74,6 +74,7 @@ mod snapshot;
 mod symbols;
 mod tasks;
 mod trees;
+mod workspace_symbols;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -295,6 +296,7 @@ fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
             document_formatting_provider: Some(true.into()),
             document_symbol_provider: Some(true.into()),
             folding_range_provider: Some(FoldingRangeProvider::Bool(true)),
+            workspace_symbol_provider: Some(true.into()),
             ..ServerCapabilities::default()
         },
         server_info: Some(ServerInfo {

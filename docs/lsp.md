@@ -4,8 +4,9 @@
 > **Status:** the loop is built: the handshake, the buffers, positions,
 > cancellation and panics; and each open file's design is loaded when it is
 > opened and again after edits, reusing every unit the edit left alone.
-> Formatting is answered from the buffer, and document symbols and folding
-> from its raw tree; nothing over the design yet. Milestone M12 in
+> Formatting is answered from the buffer, document symbols and folding
+> from its raw tree, and workspace symbols from the loaded designs' indexes,
+> on the pool. Milestone M12 in
 > [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -37,7 +38,7 @@ lowered and elaborated, as `check` builds it.
 | Formatting | the buffer | `astli fmt`'s output under the package's `[fmt]`, as an edit of the lines that differ |
 | Diagnostics | both | the raw parse's and the tree lint rules' at once; the preprocessor's, `check`'s and the design lint rules' from the snapshot |
 | Code actions | a diagnostic's fix | the edits `lint --fix` would apply, one finding or the whole file |
-| Workspace symbols | the snapshot's index | every definition, package and class of the package and its dependencies |
+| Workspace symbols | each snapshot's index | every module, interface, program, checker, primitive, package and class of the packages and their dependencies |
 | Definition, references | the snapshot | where a name is declared and used, a macro's `` `define ``, an `` `include ``'s header |
 | Hover | the snapshot | a declaration's type and width, a parameter's value, a macro call's expansion |
 | Inlay hints | the snapshot | the formal a positional connection lands on, what `.*` connects, an override's value |
@@ -201,7 +202,8 @@ handing its work to the pool.
 
 `initialize` announces only what is built, each capability added by the
 change that implements it: so far the position encoding, incremental
-text document sync, document symbols, folding ranges and formatting. A
+text document sync, document symbols, folding ranges, formatting and
+workspace symbols. A
 request the server does not know is answered `MethodNotFound`, and a
 notification it does not know is dropped. After `shutdown` every request is
 refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
@@ -275,6 +277,33 @@ conditional, a `` `define `` over several lines, and a run of `//` lines or a
 start of its last line, `endmodule`, `end`, `)`, ends at that token; for a
 client that folds whole lines only, on the line before it, so the closer
 stays in view.
+
+## Workspace symbols
+
+Workspace symbols read the index of every design of every snapshot loaded
+when the request arrives, the package and its dependencies alike, and run
+on the pool, stopping between designs once the request is cancelled. Before
+any design has loaded the answer is empty. Listed are the declarations at
+the top level: modules, programs, checkers and primitives as modules, and
+interfaces, packages and classes, each kind as document symbols give it. A
+declaration several designs or roots hold, or a header several units
+include, is answered once. Not listed: an `extern` prototype, which its
+definition stands in for, and a macro, which no index holds; what a
+declaration holds inside it is the file's document symbols'.
+
+The query matches a name ignoring case when its characters are in the name
+in order, and an empty query matches every name. Matches are sorted by how
+they match: the name itself, then a name it starts, then one that holds it
+whole, then one that holds its characters apart; then shorter names first,
+then by name, file and place. An answer holds at most 128, a screen of a
+fuzzy finder, since a short query over a large design matches thousands.
+
+A symbol's range is its name. The index gives a line and a column counted in
+characters, so the column is counted out in the text the unit's origins hold
+of the file, a header's included, and the range converted to the negotiated
+encoding from there. An escaped name's range covers its backslash. A name a
+macro wrote is placed at the outermost call, where the name is not spelled,
+and is an empty range there.
 
 ## Decisions
 

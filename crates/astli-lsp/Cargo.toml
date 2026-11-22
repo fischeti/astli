@@ -30,5 +30,6 @@ serde_json.workspace = true
 similar.workspace = true
 
 [dev-dependencies]
+astli-preproc.workspace = true
 astli-testing.workspace = true
 expect-test.workspace = true
