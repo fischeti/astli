@@ -77,4 +77,10 @@ module top;
   `REGISTERS_BEGIN(regs)
 //^
   end
+  `define BYTE_RANGE Msb:Lsb
+  // A range has a `:` of its own, so it is no case item's value, and is
+  // shown as written.
+  localparam int Msb = 7, Lsb = 0;
+  logic [`BYTE_RANGE] byte_q;
+//       ^
 endmodule

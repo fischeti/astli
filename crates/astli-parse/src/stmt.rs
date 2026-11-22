@@ -342,16 +342,15 @@ fn production_case<T: Tokens>(parser: &mut Parser<T>) {
     while !parser.at_end() && !parser.at(ENDCASE_KW) {
         let item = parser.start();
         let at = parser.position();
-        if parser.at(DEFAULT_KW) {
+        let default = parser.at(DEFAULT_KW);
+        if default {
             parser.bump();
         } else {
             while expr(parser).is_some() && parser.at(COMMA) {
                 parser.bump();
             }
         }
-        if parser.at(COLON) {
-            parser.bump();
-        }
+        case_colon(parser, !default && parser.position() != at);
         production_call(parser);
         semicolon(parser);
         parser.complete(item, PRODUCTION_CASE_ITEM);
@@ -380,9 +379,11 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, generate: bool, patte
         return;
     }
     let marker = parser.start();
+    let at = parser.position();
 
     let outer = std::mem::replace(&mut parser.pattern, patterns);
-    if parser.at(DEFAULT_KW) {
+    let default = parser.at(DEFAULT_KW);
+    if default {
         parser.bump();
     } else {
         loop {
@@ -410,9 +411,7 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, generate: bool, patte
 
     parser.pattern = outer;
 
-    if parser.at(COLON) {
-        parser.bump();
-    }
+    case_colon(parser, !default && parser.position() != at);
     let arm = match generate {
         true => Scope::Item,
         false => Scope::Statement,
@@ -422,6 +421,19 @@ pub(super) fn case_item<T: Tokens>(parser: &mut Parser<T>, generate: bool, patte
     parser.set_scope(scope);
 
     parser.complete(marker, CASE_ITEM);
+}
+
+/// Takes the `:` after a case item's values, or with `required` reports
+/// its absence. What follows is parsed as the item's statement either way,
+/// so a missing `:` is the one error it causes.
+fn case_colon<T: Tokens>(parser: &mut Parser<T>, required: bool) {
+    if parser.at(COLON) {
+        parser.bump();
+    } else if required && let Some(at) = parser.span() {
+        parser
+            .events
+            .report(super::diagnostics::case_item_without_colon(at));
+    }
 }
 
 /// Parses a `for (init; cond; step)` loop statement.

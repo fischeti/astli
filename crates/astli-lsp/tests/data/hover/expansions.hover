@@ -129,3 +129,16 @@ expansions.sv:77:3 `REGISTERS_BEGIN
     …
     ```
 
+expansions.sv:84:10 `BYTE_RANGE
+    macro `BYTE_RANGE`
+
+    ```systemverilog
+    `define BYTE_RANGE Msb:Lsb
+    ```
+
+    expands here to
+
+    ```systemverilog
+    Msb:Lsb
+    ```
+

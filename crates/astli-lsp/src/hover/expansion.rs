@@ -25,8 +25,8 @@ struct Form {
     laid: (&'static str, &'static str),
     /// How far the formatter indents the expansion's lines.
     indent: usize,
-    /// Another wrapper the expansion must parse in too, where the parser
-    /// is lenient in `around`.
+    /// Another wrapper the expansion must parse in too, where `around`
+    /// takes more than what the form stands for.
     strict: Option<(&'static str, &'static str)>,
 }
 
@@ -59,8 +59,9 @@ const FORMS: &[Form] = &[
         indent: 4,
         strict: None,
     },
-    // An expression starts a line as a case item's. The parser takes a
-    // case item with no `:`, so `a b` would pass for one there.
+    // An expression starts a line as a case item's. A `:` of the
+    // expansion's own, as in `MSB:LSB`, ends the item's values there and
+    // leaves the rest a labelled statement, so it must parse after `=` too.
     Form {
         around: ("module m;\ninitial case (x)\n", ": ;\nendcase\nendmodule\n"),
         laid: (

@@ -32,6 +32,9 @@ pub const BASE_WITHOUT_DIGITS: Code = Code("base-without-digits");
 /// list.
 pub const PARAMETER_PORT_ATTRIBUTE: Code = Code("attribute-on-parameter-port");
 
+/// Diagnostic code emitted for a case item's values with no `:` after them.
+pub const CASE_ITEM_WITHOUT_COLON: Code = Code("case-item-without-colon");
+
 /// Creates a diagnostic for a run of tokens from `first` to `last` that was
 /// not parsed.
 ///
@@ -136,6 +139,18 @@ pub(crate) fn parameter_port_attribute(at: Span) -> Diagnostic {
     .help("declare the parameter in the body instead, where it may have one")
 }
 
+/// Creates a diagnostic for a case item whose values no `:` follows, at the
+/// token that stands where it belongs.
+pub(crate) fn case_item_without_colon(at: Span) -> Diagnostic {
+    Diagnostic::error(
+        CASE_ITEM_WITHOUT_COLON,
+        at,
+        "a case item takes a `:` after its values",
+    )
+    .pointing("expected `:` before this")
+    .note("only `default` may go without one")
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -147,6 +162,7 @@ mod tests {
             super::MISPLACED_RESETALL,
             super::BASE_WITHOUT_DIGITS,
             super::PARAMETER_PORT_ATTRIBUTE,
+            super::CASE_ITEM_WITHOUT_COLON,
         ] {
             let text = code.as_str();
             assert!(
