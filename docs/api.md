@@ -71,6 +71,7 @@ origins.include_trace(file);                      // the includes that reached i
 origins.trace(file);                              // &Expansion: the calls that placed it, innermost first
 origins.placed_through(file);                     // ExpansionId: the same, by id
 origins.expansion(id);                            // &Expansion: its name, call, and the `define it read
+origins.expansions();                             // (ExpansionId, &Expansion): every one, a call a body writes too
 
 Diagnostic::error(code, span, "message")          // also `warning`; a `Severity` orders by how much it matters
     .pointing("label under the caret")
@@ -170,7 +171,9 @@ expanded.skipped;                           // Vec<Span>: each branch body not t
 The listing is the expansion's rather than the origins', so a file
 expanded twice in one session finds each run's calls in its own result.
 Only a call a file writes is listed: one a body or an argument writes is
-placed by the call around it, and its tokens are among that call's. A call
+placed by the call around it, and its tokens are among that call's. The
+origins list every expansion, `Origins::expansions`, for a reader that
+asks which calls read a `` `define ``, wherever they are written. A call
 that writes nothing is still listed, which a token's trace cannot find. A
 call that builds an `` `include ``'s name is listed, and wrote nothing,
 since its tokens became the name. What
