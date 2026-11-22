@@ -1,0 +1,305 @@
+SOURCE_FILE
+  MODULE_DECL
+    LINE_COMMENT "// A case item's values take a `:` after them, and only `default` may go"
+    WHITESPACE "\n"
+    LINE_COMMENT "// without one. An item that lacks it is an error where the `:` belongs, and"
+    WHITESPACE "\n"
+    LINE_COMMENT "// what follows is still its statement, so it is the one error."
+    WHITESPACE "\n"
+    MODULE_KW "module"
+    WHITESPACE " "
+    IDENT "m"
+    SEMICOLON ";"
+    PROCEDURAL_BLOCK
+      WHITESPACE "\n  "
+      INITIAL_KW "initial"
+      BLOCK
+        WHITESPACE " "
+        BEGIN_KW "begin"
+        CASE_STMT
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "x"
+            R_PAREN ")"
+          CASE_ITEM
+            NAME_REF
+              WHITESPACE "\n      "
+              IDENT "a"
+            LABELED_STMT
+              WHITESPACE " "
+              IDENT "b"
+              COLON ":"
+              EXPR_STMT
+                WHITESPACE " "
+                SEMICOLON ";"
+          CASE_ITEM
+            NAME_REF
+              WHITESPACE "\n      "
+              IDENT "c"
+            COMMA ","
+            NAME_REF
+              WHITESPACE " "
+              IDENT "d"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "e"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              SEMICOLON ";"
+          CASE_ITEM
+            BIN_EXPR
+              NAME_REF
+                WHITESPACE "\n      "
+                IDENT "f"
+              WHITESPACE " "
+              LT_EQ "<="
+              NAME_REF
+                WHITESPACE " "
+                IDENT "g"
+            EXPR_STMT
+              SEMICOLON ";"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            DEFAULT_KW "default"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "h"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "2"
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        CASE_STMT
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "x"
+            R_PAREN ")"
+          WHITESPACE " "
+          MATCHES_KW "matches"
+          CASE_ITEM
+            TAGGED_EXPR
+              WHITESPACE "\n      "
+              TAGGED_KW "tagged"
+              WHITESPACE " "
+              IDENT "Valid"
+              BIND_PATTERN
+                WHITESPACE " "
+                DOT "."
+                IDENT "v"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "v"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              SEMICOLON ";"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            DEFAULT_KW "default"
+            COLON ":"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        CASE_STMT
+          WHITESPACE "\n    "
+          CASE_KW "case"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "x"
+            R_PAREN ")"
+          WHITESPACE " "
+          INSIDE_KW "inside"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            L_BRACK "["
+            LITERAL_EXPR
+              INT_LITERAL "0"
+            WHITESPACE " "
+            COLON ":"
+            LITERAL_EXPR
+              WHITESPACE " "
+              INT_LITERAL "3"
+            R_BRACK "]"
+            EXPR_STMT
+              ASSIGNMENT
+                NAME_REF
+                  WHITESPACE " "
+                  IDENT "y"
+                WHITESPACE " "
+                EQ "="
+                LITERAL_EXPR
+                  WHITESPACE " "
+                  INT_LITERAL "1"
+              SEMICOLON ";"
+          CASE_ITEM
+            WHITESPACE "\n      "
+            DEFAULT_KW "default"
+            EXPR_STMT
+              WHITESPACE " "
+              SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDCASE_KW "endcase"
+        RANDSEQUENCE_STMT
+          WHITESPACE "\n    "
+          RANDSEQUENCE_KW "randsequence"
+          PAREN_EXPR
+            WHITESPACE " "
+            L_PAREN "("
+            NAME_REF
+              IDENT "main"
+            R_PAREN ")"
+          PRODUCTION
+            WHITESPACE "\n      "
+            IDENT "main"
+            WHITESPACE " "
+            COLON ":"
+            PRODUCTION_RULE
+              PRODUCTION_CASE
+                WHITESPACE " "
+                CASE_KW "case"
+                PAREN_EXPR
+                  WHITESPACE " "
+                  L_PAREN "("
+                  NAME_REF
+                    IDENT "x"
+                  R_PAREN ")"
+                PRODUCTION_CASE_ITEM
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "0"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "first"
+                  SEMICOLON ";"
+                PRODUCTION_CASE_ITEM
+                  LITERAL_EXPR
+                    WHITESPACE " "
+                    INT_LITERAL "1"
+                  COLON ":"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "second"
+                  SEMICOLON ";"
+                PRODUCTION_CASE_ITEM
+                  WHITESPACE " "
+                  DEFAULT_KW "default"
+                  NAME_REF
+                    WHITESPACE " "
+                    IDENT "third"
+                  SEMICOLON ";"
+                WHITESPACE " "
+                ENDCASE_KW "endcase"
+            SEMICOLON ";"
+          PRODUCTION
+            WHITESPACE "\n      "
+            IDENT "first"
+            WHITESPACE " "
+            COLON ":"
+            PRODUCTION_RULE
+              PRODUCTION_BLOCK
+                WHITESPACE " "
+                L_BRACE "{"
+                WHITESPACE " "
+                R_BRACE "}"
+            SEMICOLON ";"
+          PRODUCTION
+            WHITESPACE "\n      "
+            IDENT "second"
+            WHITESPACE " "
+            COLON ":"
+            PRODUCTION_RULE
+              PRODUCTION_BLOCK
+                WHITESPACE " "
+                L_BRACE "{"
+                WHITESPACE " "
+                R_BRACE "}"
+            SEMICOLON ";"
+          PRODUCTION
+            WHITESPACE "\n      "
+            IDENT "third"
+            WHITESPACE " "
+            COLON ":"
+            PRODUCTION_RULE
+              PRODUCTION_BLOCK
+                WHITESPACE " "
+                L_BRACE "{"
+                WHITESPACE " "
+                R_BRACE "}"
+            SEMICOLON ";"
+          WHITESPACE "\n    "
+          ENDSEQUENCE_KW "endsequence"
+        WHITESPACE "\n  "
+        END_KW "end"
+    CASE_STMT
+      WHITESPACE "\n\n  "
+      CASE_KW "case"
+      PAREN_EXPR
+        WHITESPACE " "
+        L_PAREN "("
+        NAME_REF
+          IDENT "P"
+        R_PAREN ")"
+      CASE_ITEM
+        LITERAL_EXPR
+          WHITESPACE "\n    "
+          INT_LITERAL "0"
+        BLOCK
+          WHITESPACE " "
+          BEGIN_KW "begin"
+          WHITESPACE " "
+          COLON ":"
+          WHITESPACE " "
+          IDENT "g0"
+          WHITESPACE "\n    "
+          END_KW "end"
+      CASE_ITEM
+        WHITESPACE "\n    "
+        DEFAULT_KW "default"
+        BLOCK
+          WHITESPACE " "
+          BEGIN_KW "begin"
+          WHITESPACE " "
+          COLON ":"
+          WHITESPACE " "
+          IDENT "g1"
+          WHITESPACE "\n    "
+          END_KW "end"
+      WHITESPACE "\n  "
+      ENDCASE_KW "endcase"
+    WHITESPACE "\n"
+    ENDMODULE_KW "endmodule"
+  WHITESPACE "\n"
+---
+error[case-item-without-colon] 7:9 "b": a case item takes a `:` after its values (expected `:` before this)
+error[case-item-without-colon] 8:12 "e": a case item takes a `:` after its values (expected `:` before this)
+error[case-item-without-colon] 9:13 ";": a case item takes a `:` after its values (expected `:` before this)
+error[case-item-without-colon] 13:23 "v": a case item takes a `:` after its values (expected `:` before this)
+error[case-item-without-colon] 17:15 "y": a case item takes a `:` after its values (expected `:` before this)
+error[case-item-without-colon] 21:25 "first": a case item takes a `:` after its values (expected `:` before this)
+error[case-item-without-colon] 29:7 "begin": a case item takes a `:` after its values (expected `:` before this)

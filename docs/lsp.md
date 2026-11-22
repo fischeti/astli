@@ -556,8 +556,9 @@ parameters. Neither the parser nor the formatter takes a fragment, so each
 is a wrapper that makes the expansion a file, starting it on a line of its
 own, the one place where both a body's indentation and an expression's
 alignment come off with the wrapper's. An expression starts a line as a
-case item, and must parse after `=` too, since a case item's `:` is
-optional to the parser. Where the formatter's text around the expansion
+case item, and must parse after `=` too, since one with a `:` of its
+own, `MSB:LSB`, ends the item's values there and leaves the rest a
+labelled statement. Where the formatter's text around the expansion
 is not the one the wrapper predicts, that form is passed over. Expressions
 come before types, as a select is laid out differently as either and is
 more often a signal's. What parses as none of them is the text it renders
