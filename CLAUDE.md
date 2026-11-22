@@ -83,6 +83,9 @@ formatter.
   command's, written by the release-pr workflow, so users get a new skill
   with each release. A change to a command or flag the skill names updates
   `plugin/skills/astli/` in the same PR, as it would the site.
+- `editors/zed/` — a Zed extension that starts `astli lsp`, installed as a
+  dev extension. A crate of its own, outside the workspace, which Zed builds
+  to WebAssembly.
 
 Under `reference/`, gitignored:
 
