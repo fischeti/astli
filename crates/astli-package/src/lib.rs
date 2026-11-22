@@ -69,5 +69,5 @@ pub use requirement::{
     At, Requirement, Source, Submodules, Takes, bender_dependencies, bender_name, key,
 };
 pub use tops::Top;
-pub use walk::{Naming, Walk};
+pub use walk::{EXTENSIONS, Naming, Walk};
 pub use workspace::Workspace;

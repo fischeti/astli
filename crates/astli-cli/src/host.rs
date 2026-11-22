@@ -9,8 +9,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use astli_fmt::Options;
-use astli_lsp::{Analysed, At, Place, Problem, Snapshot, Unit};
-use astli_package::mark;
+use astli_lsp::{Analysed, At, Place, Problem, Snapshot, Unit, Watched};
+use astli_package::{BENDER_MANIFEST, EXTENSIONS, MANIFEST, mark};
+use astli_resolve::LOCKFILE;
 use astli_text::Reader;
 
 use crate::analysis::{Analysis, Designs};
@@ -109,6 +110,17 @@ impl astli_lsp::Host for Host {
         kept.floor = floor;
         drop(roots);
         rayon::spawn(move || drop(forgotten));
+    }
+
+    /// What discovery reads besides the sources: the manifests, the lock,
+    /// and a dependency's Bender manifest. A source the walk would find is
+    /// one of the extensions it takes.
+    fn watched(&self) -> Watched {
+        let names = [MANIFEST, LOCKFILE, BENDER_MANIFEST];
+        Watched {
+            names: names.map(String::from).to_vec(),
+            extensions: EXTENSIONS.map(String::from).to_vec(),
+        }
     }
 }
 

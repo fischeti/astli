@@ -106,6 +106,11 @@ impl Slot {
         self.generation.store(fresh(), Ordering::SeqCst);
     }
 
+    /// Makes the design's next load find and read the package again.
+    pub fn rediscover(&mut self) {
+        self.discover = true;
+    }
+
     /// Loads the design at `root` on a thread of its own, reading `texts`
     /// before the disk, and sends what it made on `loads`, or the panic it
     /// ended in.
