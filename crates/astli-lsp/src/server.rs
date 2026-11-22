@@ -8,7 +8,7 @@ use crossbeam_channel::Sender;
 use lsp_server::{ErrorCode, Message, Notification, Request, RequestId, Response, ResponseError};
 use lsp_types::{
     CancelParams, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, Id, LogMessageParams, MessageType,
+    DidOpenTextDocumentParams, Id, LogMessageParams, MessageType, ShowMessageParams,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -16,6 +16,7 @@ use serde_json::Value;
 
 use crate::Ended;
 use crate::buffers::{self, Buffers};
+use crate::formatting::FmtOptions;
 use crate::position::Encoding;
 use crate::tasks::{Cancel, Done, Outcome, Tasks, panic_message};
 
@@ -25,18 +26,21 @@ pub struct Server {
     pub encoding: Encoding,
     pub buffers: Buffers,
     pub tasks: Tasks,
+    /// The host's answer to what layout a file takes.
+    pub fmt_options: FmtOptions,
     /// Whether the client has sent `shutdown`, after which every request is
     /// refused and `exit` ends the server cleanly.
     shut_down: bool,
 }
 
 impl Server {
-    pub fn new(sender: Sender<Message>, encoding: Encoding) -> Server {
+    pub fn new(sender: Sender<Message>, encoding: Encoding, fmt_options: FmtOptions) -> Server {
         Server {
             sender,
             encoding,
             buffers: Buffers::default(),
             tasks: Tasks::new(),
+            fmt_options,
             shut_down: false,
         }
     }
@@ -100,6 +104,7 @@ impl Server {
                 self.shut_down = true;
                 self.answer(id, Ok(()));
             }
+            "textDocument/formatting" => self.formatting(id, params),
             #[cfg(test)]
             method if method.starts_with("test/") => self.test_request(id, method, params),
             _ => {
@@ -207,7 +212,7 @@ impl Server {
     }
 
     /// Answers request `id` with `result`.
-    fn answer<R: Serialize>(&self, id: RequestId, result: Result<R, ResponseError>) {
+    pub fn answer<R: Serialize>(&self, id: RequestId, result: Result<R, ResponseError>) {
         let response_result =
             result.map(|it| serde_json::to_value(it).expect("a result serializes"));
         let response = Response {
@@ -232,6 +237,13 @@ impl Server {
     pub fn log(&self, kind: MessageType, message: String) {
         let _ = self.sender.send(log(kind, message));
     }
+
+    /// Tells the client `message`, which it shows the user.
+    pub fn show(&self, kind: MessageType, message: String) {
+        let params = ShowMessageParams { kind, message };
+        let message = Notification::new("window/showMessage".to_string(), params);
+        let _ = self.sender.send(message.into());
+    }
 }
 
 /// A `window/logMessage` notification of `message`.
@@ -241,7 +253,7 @@ pub fn log(kind: MessageType, message: String) -> Message {
 }
 
 /// An error response's error.
-fn error(code: ErrorCode, message: impl Into<String>) -> ResponseError {
+pub fn error(code: ErrorCode, message: impl Into<String>) -> ResponseError {
     ResponseError {
         code: code as i32,
         message: message.into(),

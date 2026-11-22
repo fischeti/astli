@@ -77,10 +77,6 @@ impl Encoding {
 
     /// The position of byte `offset` in `text`: past the end, the end, and
     /// inside a character, the start of that character.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "a request that answers with a place calls it")
-    )]
     pub fn position(self, text: &str, lines: &Lines, offset: u32) -> Position {
         let offset = text.floor_char_boundary(offset as usize);
         let line = lines.line(offset as u32);

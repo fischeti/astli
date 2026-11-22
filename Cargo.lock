@@ -152,6 +152,7 @@ dependencies = [
  "roxmltree",
  "semver",
  "serde",
+ "serde_json",
  "similar",
  "toml",
  "toml_edit",
@@ -215,6 +216,8 @@ dependencies = [
 name = "astli-lsp"
 version = "0.1.0"
 dependencies = [
+ "astli-fmt",
+ "astli-parse",
  "astli-text",
  "crossbeam-channel",
  "expect-test",
@@ -223,6 +226,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "similar",
 ]
 
 [[package]]
