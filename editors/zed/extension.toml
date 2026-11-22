@@ -1,0 +1,17 @@
+id = "astli"
+name = "astli"
+version = "0.1.0"
+schema_version = 1
+authors = ["Tim Fischer"]
+description = "Starts `astli lsp` for Verilog and SystemVerilog."
+repository = "https://github.com/fischeti/astli"
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
+
+# The languages are another extension's, `verilog`: this one only names a
+# server for them, so it needs that one installed.
+[language_servers.astli]
+name = "astli"
+languages = ["SystemVerilog", "Verilog"]

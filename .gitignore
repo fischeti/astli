@@ -8,3 +8,8 @@
 /site/.cache
 /site/content/reference/cli.md
 /site/content/reference/lint-rules.md
+# Made when the Zed extension is built, by cargo or by Zed.
+/editors/zed/target
+/editors/zed/Cargo.lock
+/editors/zed/extension.wasm
+/editors/zed/grammars
