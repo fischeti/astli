@@ -2,6 +2,7 @@
 //! handler for each request and notification it knows.
 
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
@@ -11,8 +12,10 @@ use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{ErrorCode, Message, Notification, Request, RequestId, Response, ResponseError};
 use lsp_types::{
-    CancelParams, ClientCapabilities, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, Id, LogMessageParams, MessageType, ShowMessageParams,
+    CancelParams, ClientCapabilities, DidChangeTextDocumentParams, DidChangeWatchedFilesParams,
+    DidChangeWatchedFilesRegistrationOptions, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, FileChangeType, FileSystemWatcher, Id, LogMessageParams,
+    MessageType, Registration, RegistrationParams, ShowMessageParams,
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -23,7 +26,11 @@ use crate::position::Encoding;
 use crate::slots::{Loaded, Slot, drop_later};
 use crate::tasks::{Cancel, Done, Outcome, Tasks, panic_message};
 use crate::trees::Trees;
-use crate::{Ended, Host, Snapshot};
+use crate::{Ended, Host, Snapshot, Watched};
+
+/// The id of the one request the server sends, which registers the files
+/// it watches.
+const WATCHING: &str = "astli/watching";
 
 /// The server's state, owned by the main loop.
 pub struct Server {
@@ -45,14 +52,27 @@ pub struct Server {
     pub loaded: Receiver<Loaded>,
     /// What the client said it can take in `initialize`.
     pub client: ClientCapabilities,
+    /// Whether the client watches the files on disk for the server once
+    /// asked to. A client that does not tells it of no change on disk: a
+    /// design is found again only when it is made again, after its files
+    /// are closed and one is opened.
+    watches: bool,
+    /// What it watches.
+    watched: Watched,
     /// Whether the client has sent `shutdown`, after which every request is
     /// refused and `exit` ends the server cleanly.
     shut_down: bool,
 }
 
 impl Server {
-    pub fn new(sender: Sender<Message>, encoding: Encoding, host: Arc<dyn Host>) -> Server {
+    pub fn new(
+        sender: Sender<Message>,
+        encoding: Encoding,
+        host: Arc<dyn Host>,
+        watches: bool,
+    ) -> Server {
         let (loads, loaded) = crossbeam_channel::unbounded();
+        let watched = host.watched();
         Server {
             sender,
             encoding,
@@ -65,6 +85,8 @@ impl Server {
             loads,
             loaded,
             client: ClientCapabilities::default(),
+            watches,
+            watched,
             shut_down: false,
         }
     }
@@ -98,8 +120,13 @@ impl Server {
                     self.log(MessageType::Error, format!("`{method}` panicked: {said}"));
                 }
             }
-            // The server sends no request yet, so a response answers none.
-            Message::Response(_) => {}
+            // The client cannot watch for the server: it watches nothing.
+            Message::Response(response) => {
+                if let Err(error) = response.response_result {
+                    let said = format!("the client watches no file: {}", error.message);
+                    self.log(MessageType::Warning, said);
+                }
+            }
         }
         ControlFlow::Continue(())
     }
@@ -231,6 +258,8 @@ impl Server {
             "textDocument/didOpen" => self.with(&method, params, Server::open),
             "textDocument/didChange" => self.with(&method, params, Server::change),
             "textDocument/didClose" => self.with(&method, params, Server::close),
+            "initialized" => self.watch(),
+            "workspace/didChangeWatchedFiles" => self.with(&method, params, Server::on_disk),
             _ => {}
         }
     }
@@ -277,6 +306,73 @@ impl Server {
             // What the disk holds may not be what the buffer did.
             self.touch(&path, None);
             self.drop_unused();
+        }
+    }
+
+    /// Asks the client to watch the files a design is found from and read
+    /// from, if it can.
+    fn watch(&mut self) {
+        if !self.watches {
+            return;
+        }
+        let names = self.watched.names.iter().map(|name| format!("**/{name}"));
+        let sources = format!("**/*.{{{}}}", self.watched.extensions.join(","));
+        let watchers = (names.chain([sources]))
+            .map(|glob| FileSystemWatcher::new(glob.into(), None))
+            .collect();
+        let options = DidChangeWatchedFilesRegistrationOptions::new(watchers);
+        let registration = Registration::new(
+            WATCHING.to_string(),
+            "workspace/didChangeWatchedFiles".to_string(),
+            Some(serde_json::to_value(options).expect("options serialize")),
+        );
+        let params = RegistrationParams::new(vec![registration]);
+        let method = "client/registerCapability".to_string();
+        let request = Request::new(RequestId::from(WATCHING.to_string()), method, params);
+        let _ = self.sender.send(request.into());
+    }
+
+    /// Takes what changed on disk. A file that says what a package is, or a
+    /// source created or deleted, finds every design again: what a walk finds
+    /// changes, and a new manifest can move a file to another package. A
+    /// source changed loads again each design that read it, unless it is
+    /// open, when its buffer is what is read.
+    fn on_disk(&mut self, params: DidChangeWatchedFilesParams) {
+        let among = |part: Option<&OsStr>, names: &[String]| {
+            let part = part.and_then(|it| it.to_str());
+            part.is_some_and(|it| names.iter().any(|name| name == it))
+        };
+        let mut found = false;
+        for change in params.changes {
+            let Some(path) = buffers::path(&change.uri) else {
+                continue;
+            };
+            let named = among(path.file_name(), &self.watched.names);
+            let source = among(path.extension(), &self.watched.extensions);
+            if named || (source && change.kind != FileChangeType::Changed) {
+                found = true;
+            } else if source && self.buffers.get(&path).is_none() {
+                self.touch(&path, None);
+            }
+        }
+        if found {
+            self.rediscover();
+        }
+    }
+
+    /// Finds every design again: each open buffer's, which may be another
+    /// than before, and each one's package.
+    fn rediscover(&mut self) {
+        let host = self.host.clone();
+        for (path, root) in &mut self.roots {
+            *root = host.design(path);
+            self.slots.entry(root.clone()).or_insert_with(Slot::new);
+        }
+        self.drop_unused();
+        let now = Instant::now();
+        for slot in self.slots.values_mut() {
+            slot.rediscover();
+            slot.stale(now);
         }
     }
 

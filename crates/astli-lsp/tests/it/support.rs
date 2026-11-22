@@ -8,7 +8,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use astli_fmt::Options;
-use astli_lsp::{Ended, Host, Snapshot};
+use astli_lsp::{Ended, Host, Snapshot, Watched};
 use astli_text::Reader;
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response, ResponseError};
@@ -122,6 +122,13 @@ impl Host for Files {
 
     fn forget(&self, root: &Path) {
         let _ = self.forgot.send(root.to_path_buf());
+    }
+
+    fn watched(&self) -> Watched {
+        Watched {
+            names: vec!["astli.toml".to_string()],
+            extensions: vec!["sv".to_string(), "svh".to_string()],
+        }
     }
 }
 
@@ -296,6 +303,12 @@ impl Client {
         self.forgot
             .recv_timeout(PATIENCE)
             .expect("a design forgotten")
+    }
+
+    /// Whether no load starts for a while: a few times as long as the
+    /// server waits for edits to settle.
+    pub fn idle(&self) -> bool {
+        self.loads.recv_timeout(Duration::from_millis(500)).is_err()
     }
 
     /// Waits for loads until one `done` takes, and hands it back.

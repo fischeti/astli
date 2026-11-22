@@ -12,7 +12,7 @@ use crate::{BENDER_MANIFEST, Error, MANIFEST, Package, Patches, Source, mark};
 
 /// The extensions of the files a walk yields: units, and headers written to
 /// be included. A header of any other extension is found by being included.
-const EXTENSIONS: [&str; 4] = ["sv", "svh", "v", "vh"];
+pub const EXTENSIONS: [&str; 4] = ["sv", "svh", "v", "vh"];
 
 /// What a walk of a package reads besides its manifest: what the run
 /// decided of the package for the design it walks it for.

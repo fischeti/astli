@@ -10,3 +10,4 @@ mod server;
 mod snapshots;
 mod support;
 mod symbols;
+mod watched;

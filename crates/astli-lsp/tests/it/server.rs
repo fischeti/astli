@@ -78,6 +78,10 @@ fn a_request_before_initialize_is_refused() {
             None
         }
         fn forget(&self, _: &std::path::Path) {}
+        fn watched(&self) -> astli_lsp::Watched {
+            let (names, extensions) = (Vec::new(), Vec::new());
+            astli_lsp::Watched { names, extensions }
+        }
     }
 
     let (client, server) = Connection::memory();

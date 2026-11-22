@@ -51,6 +51,11 @@
 //!     }
 //!
 //!     fn forget(&self, _: &Path) {}
+//!
+//!     fn watched(&self) -> astli_lsp::Watched {
+//!         let (names, extensions) = (Vec::new(), vec!["sv".to_string()]);
+//!         astli_lsp::Watched { names, extensions }
+//!     }
 //! }
 //!
 //! let stdio = astli_lsp::Stdio::open();
@@ -126,6 +131,21 @@ pub trait Host: Send + Sync + 'static {
     /// nothing either. Asked on the main loop, so what it drops is dropped
     /// elsewhere.
     fn forget(&self, root: &Path);
+
+    /// The files on disk whose change the server asks the client to tell
+    /// it of.
+    fn watched(&self) -> Watched;
+}
+
+/// The files on disk a design is found from and read from.
+pub struct Watched {
+    /// The names of the files that say what a package is, such as its
+    /// manifest: a change to one finds every design again.
+    pub names: Vec<String>,
+    /// The extensions of the source files a package's walk finds: one
+    /// created or deleted finds every design again, and one changed loads
+    /// again each design that read it.
+    pub extensions: Vec<String>,
 }
 
 /// How the server ended.
@@ -220,10 +240,14 @@ pub fn serve(connection: &Connection, host: Arc<dyn Host>) -> Ended {
     };
     let general = params.capabilities.general.clone().unwrap_or_default();
     let encoding = Encoding::negotiate(&general.position_encodings.unwrap_or_default());
+    let watches = (params.capabilities.workspace.as_ref())
+        .and_then(|it| it.did_change_watched_files)
+        .and_then(|it| it.dynamic_registration)
+        .unwrap_or(false);
     let result = Response::new_ok(id, initialized(encoding, &*host));
     let _ = connection.sender.send(result.into());
 
-    let mut server = Server::new(connection.sender.clone(), encoding, host);
+    let mut server = Server::new(connection.sender.clone(), encoding, host, watches);
     server.client = params.capabilities;
     // Cloned, so that the loop can hand the server to a handler while it
     // waits on the pool.
