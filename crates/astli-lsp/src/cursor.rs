@@ -171,7 +171,7 @@ impl Cursor {
 
 /// Each file of `origins` at `path`: a unit's own, or each inclusion of a
 /// header.
-fn held(origins: &Origins, path: &Path) -> Vec<SourceId> {
+pub fn held(origins: &Origins, path: &Path) -> Vec<SourceId> {
     // A unit reads many files and few are asked about, so a name, which
     // compares cheaply, is asked first.
     let mut held: Vec<SourceId> = (origins.files())

@@ -15,5 +15,6 @@ mod server;
 mod snapshots;
 mod support;
 mod symbols;
+mod tokens;
 mod watched;
 mod workspace_symbols;

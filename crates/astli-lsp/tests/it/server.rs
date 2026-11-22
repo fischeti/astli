@@ -31,7 +31,7 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
     }
 
     // Everything else announced is the documents' sync, code actions,
-    // formatting, symbols, folds, definitions and hover.
+    // formatting, symbols, folds, definitions, hover and semantic tokens.
     let general = json!({ "positionEncodings": ["utf-8"] });
     let (client, result) = Client::initialize(&[], json!({ "general": general }));
     expect![[r#"
@@ -51,6 +51,36 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
             "hoverProvider": true,
             "positionEncoding": "utf-8",
             "referencesProvider": true,
+            "semanticTokensProvider": {
+              "full": true,
+              "legend": {
+                "tokenModifiers": [
+                  "declaration",
+                  "readonly",
+                  "defaultLibrary",
+                  "input",
+                  "output",
+                  "inout",
+                  "ref",
+                  "net"
+                ],
+                "tokenTypes": [
+                  "namespace",
+                  "type",
+                  "class",
+                  "enum",
+                  "interface",
+                  "struct",
+                  "typeParameter",
+                  "variable",
+                  "property",
+                  "enumMember",
+                  "function",
+                  "macro"
+                ]
+              },
+              "range": true
+            },
             "textDocumentSync": {
               "change": 2,
               "openClose": true

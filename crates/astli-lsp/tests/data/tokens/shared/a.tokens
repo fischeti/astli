@@ -1,0 +1,6 @@
+a.sv
+  3:16 `Size` variable declaration readonly
+  6:8 `shared_a` class declaration
+a.svh
+  1:7 `Size` variable readonly
+  1:17 `bits` variable declaration net

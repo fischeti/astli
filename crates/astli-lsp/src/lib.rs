@@ -85,6 +85,7 @@ mod slots;
 mod snapshot;
 mod symbols;
 mod tasks;
+mod tokens;
 mod trees;
 mod workspace_symbols;
 
@@ -320,6 +321,7 @@ fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
             folding_range_provider: Some(FoldingRangeProvider::Bool(true)),
             hover_provider: Some(true.into()),
             references_provider: Some(true.into()),
+            semantic_tokens_provider: Some(tokens::options().into()),
             workspace_symbol_provider: Some(true.into()),
             ..ServerCapabilities::default()
         },

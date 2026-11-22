@@ -951,11 +951,12 @@ A unit's expansion lists the calls its files write outside any other call,
 and the lookup finds the call under the cursor among them. A call written
 in another call's argument, as the inner one of `` `MIN(`MIN(a, b), c) ``,
 is placed by the call around it, so its name leads nowhere: definition does
-not reach its `` `define ``, nor references its calls. The names its
-arguments give are found where they are spelled, as any other, and
-references from the `` `define `` find the call, as they read every
-expansion. **Revisit when** a reader asks for one: the origins list every
-expansion (`Origins::expansions`), and the one whose call is spelled at the
+not reach its `` `define ``, nor references its calls, and it is no `macro`
+token. The names its arguments give are found where they are spelled, as
+any other, and references from the `` `define `` find the call, as they
+read every expansion. **Revisit when** a reader asks for one: the origins
+list every expansion (`Origins::expansions`), and the one whose call is
+spelled at the
 cursor could be found among them. **Where** `astli-lsp/src/cursor.rs`
 (`Cursor::here`)
 
@@ -1017,6 +1018,26 @@ say one value several times. **Revisit when** a design's unions are read
 in a hover: the member a tag beside it names, or the first, could be
 shown. **Where** `astli-lsp/src/hover/value.rs` (`Said::packed`,
 `Said::value`)
+
+### A header several units include is coloured as the first reads it
+
+Semantic tokens read a file through the first unit that holds it. A name a
+header uses means what each unit that includes it declares, and where two
+disagree, a parameter in one and a net in the other, the header is
+coloured as the first has it, with no sign that another reads it
+otherwise. Asking each unit would make each one's sites on every edit, and
+the kinds almost always agree. **Revisit when** a design's headers are
+seen coloured wrongly: the units could be asked in turn, and a name they
+disagree on left without a token. **Where** `astli-lsp/src/tokens.rs`
+(`first`)
+
+### A non-ANSI port's declaration in the body has no token
+
+In `module m (x); input x; …`, the port is declared at its name in the
+port list, and the body's `input x` declares no symbol of its own, so the
+name there is no site and gets no semantic token; every use of `x` gets
+one. **Revisit when** lowering keeps the body's declaration as a site of
+the port. **Where** `astli-sema/src/sites.rs` (`sites`)
 
 ### A code action is answered as a literal, whatever the client takes
 

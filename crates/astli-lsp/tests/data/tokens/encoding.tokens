@@ -1,0 +1,4 @@
+encoding.sv
+  2:8 `encoding` class declaration
+  3:9 `x` variable declaration
+  4:20 `x` variable
