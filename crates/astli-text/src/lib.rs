@@ -9,6 +9,8 @@
 //! - [`Diagnostic`]: an error or warning at a span, as data. Rendering it is
 //!   `astli-diag`'s job.
 //! - [`Reader`]: how a file is read, from [`Disk`] or anywhere else.
+//! - [`Lines`]: where each line of a text begins, for a column counted
+//!   some other way than [`Origins::line_col`] counts it.
 //!
 //! Most callers get an [`Origins`] from a session in `astli-preproc`, or from
 //! a tree in `astli-parse`, rather than filling one themselves.
@@ -89,11 +91,13 @@
 mod diagnostic;
 mod files;
 mod fix;
+mod lines;
 mod origins;
 mod span;
 
 pub use diagnostic::{Code, Diagnostic, Edit, Label, Severity};
 pub use files::{Disk, Reader, clean, is_lfs_pointer};
 pub use fix::apply;
+pub use lines::Lines;
 pub use origins::{Expansion, ExpansionId, Origins};
 pub use span::{LineCol, SourceId, Span};

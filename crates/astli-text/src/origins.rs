@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::lines::Lines;
 use crate::span::{LineCol, SourceId, Span};
 
 /// Unique identifier for a macro expansion instance.
@@ -49,8 +50,8 @@ enum Source {
 struct Buffer {
     source: Source,
     text: String,
-    /// Precomputed byte offsets where lines begin (always starting with 0).
-    lines: Vec<u32>,
+    /// Where each line begins.
+    lines: Lines,
     /// The view of this buffer outside any expansion.
     written: SourceId,
 }
@@ -133,13 +134,7 @@ impl Origins {
     }
 
     fn add(&mut self, source: Source, text: String) -> SourceId {
-        let mut lines = vec![0];
-        lines.extend(
-            text.bytes()
-                .enumerate()
-                .filter(|&(_, byte)| byte == b'\n')
-                .map(|(at, _)| at as u32 + 1),
-        );
+        let lines = Lines::new(&text);
         let buffer = self.buffers.len() as u32;
         let written = self.view(buffer, None);
         self.buffers.push(Buffer {
@@ -212,6 +207,11 @@ impl Origins {
         &self.buffer(file).text
     }
 
+    /// Returns where each line of the specified buffer begins.
+    pub fn lines(&self, file: SourceId) -> &Lines {
+        &self.buffer(file).lines
+    }
+
     /// Returns the source slice corresponding to `span`.
     pub fn slice(&self, span: Span) -> &str {
         &self.text(span.src_id)[span.start as usize..span.end as usize]
@@ -270,8 +270,8 @@ impl Origins {
     /// Converts a zero-based byte offset into a 1-based line and character column position.
     pub fn line_col(&self, file: SourceId, offset: u32) -> LineCol {
         let buffer = self.buffer(file);
-        let line = buffer.lines.partition_point(|&start| start <= offset) - 1;
-        let start = buffer.lines[line] as usize;
+        let line = buffer.lines.line(offset);
+        let start = buffer.lines.start(line).unwrap_or_default() as usize;
         let col = buffer.text[start..offset as usize].chars().count() + 1;
         LineCol {
             line: line as u32 + 1,
