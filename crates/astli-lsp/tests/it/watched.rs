@@ -54,28 +54,31 @@ fn the_server_asks_a_client_that_can_to_watch_files() {
 fn a_change_on_disk_loads_again_what_read_it() {
     let (mut client, _) = Client::initialize(&["a.sv", "b.sv"], watching());
     client.open(&uri("one/a.sv"), "module a;");
-    assert!(client.load().discover);
-    client.logged(loaded);
-    let changed = |name: &str, kind: u32| {
+    // Each change waits for the load before it to be swapped in: one that
+    // came while that load ran would overtake it, and the load after would
+    // then find the design again in its place.
+    let changed = |client: &mut Client, name: &str, kind: u32| {
+        client.logged(loaded);
         let changes = json!([{ "uri": uri(name), "type": kind }]);
         client.notify(
             "workspace/didChangeWatchedFiles",
             json!({ "changes": changes }),
         );
     };
+    assert!(client.load().discover);
 
     // A manifest anywhere finds the design again.
-    changed("astli.toml", 2);
+    changed(&mut client, "astli.toml", 2);
     assert!(client.load().discover);
     // So does a source created or deleted.
-    changed("one/c.sv", 1);
+    changed(&mut client, "one/c.sv", 1);
     assert!(client.load().discover);
     // A source changed that the design read, though it does not exist
     // here, loads it again as it was found.
-    changed("one/b.sv", 2);
+    changed(&mut client, "one/b.sv", 2);
     assert!(!client.load().discover);
     // One open is read from its buffer, which the disk does not change.
-    changed("one/a.sv", 2);
+    changed(&mut client, "one/a.sv", 2);
     assert!(client.idle());
     client.finish();
 }
