@@ -12,6 +12,31 @@ use astli_package::mark;
 
 use crate::error::{Error, Result};
 
+/// The variables naming a repository or what is inside it, of those `git
+/// rev-parse --local-env-vars` prints: `git` clears them itself before it
+/// works in another repository. It sets `GIT_DIR` for a hook or a `rebase
+/// --exec` it runs, and inherited, that would point the `git remote set-url`
+/// and `git checkout` `astli patch` runs in its clone at the repository astli
+/// was started in. Its other three, `GIT_CONFIG`,
+/// `GIT_CONFIG_PARAMETERS` and `GIT_CONFIG_COUNT`, stay: they carry
+/// configuration a user or a CI job sets on purpose, such as a `url.*.
+/// insteadOf` or an `http.extraHeader` that fetching a private dependency
+/// needs.
+const REPOSITORY_ENV: [&str; 12] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_GRAFT_FILE",
+    "GIT_SHALLOW_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+];
+
 /// What `git` prints for `args`, run in `dir`, trimmed.
 pub fn git<S: AsRef<OsStr>>(dir: &Path, args: impl IntoIterator<Item = S>) -> Result<String> {
     let args: Vec<S> = args.into_iter().collect();
@@ -19,16 +44,16 @@ pub fn git<S: AsRef<OsStr>>(dir: &Path, args: impl IntoIterator<Item = S>) -> Re
         .map(|it| it.as_ref().to_string_lossy())
         .collect::<Vec<_>>()
         .join(" ");
-    let output = Command::new("git")
-        .args(&args)
-        .current_dir(dir)
-        .output()
-        .map_err(|err| {
-            Error::failed(format!(
-                "cannot run {}: {err}",
-                mark::code(format!("git {shown}"))
-            ))
-        })?;
+    let mut command = Command::new("git");
+    for name in REPOSITORY_ENV {
+        command.env_remove(name);
+    }
+    let output = (command.args(&args).current_dir(dir).output()).map_err(|err| {
+        Error::failed(format!(
+            "cannot run {}: {err}",
+            mark::code(format!("git {shown}"))
+        ))
+    })?;
     if !output.status.success() {
         let said = String::from_utf8_lossy(&output.stderr);
         return Err(Error::failed(format!(

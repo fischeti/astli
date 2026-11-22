@@ -491,7 +491,7 @@ impl Mirror {
             "{} asks for the files its repository stores with Git LFS",
             mark::name(&self.name)
         );
-        let ran = std::process::Command::new(LFS)
+        let ran = lfs_command()
             .arg("version")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -678,6 +678,36 @@ impl Mirror {
 
 /// The program that writes a file stored with Git LFS.
 const LFS: &str = "git-lfs";
+
+/// The variables naming a repository or what is inside it, of those `git
+/// rev-parse --local-env-vars` prints, which `git` sets for a hook or a
+/// `rebase --exec` it runs: inherited, they would name the repository astli
+/// was started in rather than a mirror. `GIT_CONFIG`, `GIT_CONFIG_PARAMETERS`
+/// and `GIT_CONFIG_COUNT` stay, since they carry configuration set on
+/// purpose, such as the credentials a private server takes.
+const REPOSITORY_ENV: [&str; 12] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_GRAFT_FILE",
+    "GIT_SHALLOW_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+];
+
+/// `git-lfs`, seeing no repository the environment names.
+fn lfs_command() -> std::process::Command {
+    let mut command = std::process::Command::new(LFS);
+    for name in REPOSITORY_ENV {
+        command.env_remove(name);
+    }
+    command
+}
 
 /// The largest a Git LFS pointer is, as its specification bounds it.
 const POINTER_SIZE: u64 = 1024;
