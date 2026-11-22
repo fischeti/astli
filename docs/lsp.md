@@ -1,8 +1,8 @@
 # Language server
 
 > **Status:** the loop is built: the handshake, the buffers, positions,
-> cancellation and panics. It answers no language request yet. Milestone
-> M12 in [`plan.md`](plan.md#5-milestones).
+> cancellation and panics. Formatting is the one language request it
+> answers. Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
 one. More and more of a design is written by an agent and read by a person,
@@ -99,8 +99,8 @@ on a channel the loop waits on beside the client's. A handler is an arm of
 the server's dispatch, answering at once or handing its work to the pool.
 
 `initialize` announces only what is built, each capability added by the
-change that implements it: so far the position encoding and incremental
-text document sync. A request the server does not know is answered
+change that implements it: so far the position encoding, incremental
+text document sync, and formatting. A request the server does not know is answered
 `MethodNotFound`, and a notification it does not know is dropped. After
 `shutdown` every request is refused as `InvalidRequest`, and `exit` ends the
 process with 0, or with 1 if `shutdown` did not come first, as the protocol
@@ -113,6 +113,24 @@ since no design reads it. Each change of an incremental `didChange` is read
 against the text the one before it left. A position past the end of its line
 is the line's end, before its `\r\n`, and one past the last line the end of
 the text; one inside a character is that character's start.
+
+## Formatting
+
+Formatting reads the open buffer and nothing else of the design, so it is
+answered on the loop. The layout is the `[fmt]` of the file's package, which
+the driver reads for the server, since only it reads manifests: the package
+the file is in, as `astli fmt` run beside the file finds it, so a dependency's
+file takes its own package's, and a file outside any package the defaults.
+The manifest is read on each request, so an edit to it counts from the next
+format on. The client's formatting options, a tab size and the like, are
+ignored ([L2](#decisions)).
+
+The answer is an edit per run of lines that differ between the buffer and
+`astli fmt`'s output, each replacing whole lines, and no edit for a file that
+is formatted, not open, or one `[fmt] exclude` names. A refusal, and a
+manifest that does not read, give no edit and a `window/showMessage` with
+what `astli fmt` would say, since a format on save that does nothing would
+otherwise say nothing.
 
 ## Decisions
 

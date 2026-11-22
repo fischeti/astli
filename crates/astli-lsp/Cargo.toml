@@ -14,6 +14,8 @@ include = ["src/**/*"]
 workspace = true
 
 [dependencies]
+astli-fmt.workspace = true
+astli-parse.workspace = true
 astli-text.workspace = true
 crossbeam-channel.workspace = true
 lsp-server.workspace = true
@@ -21,6 +23,7 @@ lsp-types.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+similar.workspace = true
 
 [dev-dependencies]
 expect-test.workspace = true

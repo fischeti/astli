@@ -13,6 +13,7 @@ mod files;
 mod fmt;
 mod lex_parse;
 mod lint;
+mod lsp;
 mod packages;
 mod plugin;
 mod support;

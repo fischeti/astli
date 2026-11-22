@@ -19,6 +19,7 @@ use crate::{Ended, Host};
 fn host() -> Host {
     Host {
         version: "VERSION".to_string(),
+        fmt_options: std::sync::Arc::new(|_| Ok(Some(astli_fmt::Options::default()))),
     }
 }
 
@@ -164,11 +165,12 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
         client.finish();
     }
 
-    // Everything else announced is the documents' sync.
+    // Everything else announced is the documents' sync, and formatting.
     let (client, result) = Client::initialize(Some(&["utf-8"]));
     expect![[r#"
         {
           "capabilities": {
+            "documentFormattingProvider": true,
             "positionEncoding": "utf-8",
             "textDocumentSync": {
               "change": 2,

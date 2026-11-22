@@ -16,11 +16,15 @@
 //! let stdio = astli_lsp::Stdio::open();
 //! let log = stdio.log();
 //! log.send("written to the client's log");
-//! let host = astli_lsp::Host { version: "0.1.0".to_string() };
+//! let host = astli_lsp::Host {
+//!     version: "0.1.0".to_string(),
+//!     fmt_options: std::sync::Arc::new(|_| Ok(Some(astli_fmt::Options::default()))),
+//! };
 //! assert_eq!(stdio.serve(&host), astli_lsp::Ended::Exited);
 //! ```
 
 mod buffers;
+mod formatting;
 mod position;
 mod server;
 mod tasks;
@@ -36,13 +40,17 @@ use lsp_types::{
     TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
+pub use formatting::FmtOptions;
 use position::Encoding;
 use server::Server;
 
-/// What the caller hands the server: what it says of itself to the client.
+/// What the caller hands the server: what it says of itself to the
+/// client, and what only the driver can read.
 pub struct Host {
     /// The version `initialize` names: the command's, which a user knows.
     pub version: String,
+    /// The `[fmt]` of the package a file is in, which formatting reads.
+    pub fmt_options: FmtOptions,
 }
 
 /// How the server ended.
@@ -140,7 +148,11 @@ pub fn serve(connection: &Connection, host: &Host) -> Ended {
     let result = Response::new_ok(id, initialized(encoding, host));
     let _ = connection.sender.send(result.into());
 
-    let mut server = Server::new(connection.sender.clone(), encoding);
+    let mut server = Server::new(
+        connection.sender.clone(),
+        encoding,
+        host.fmt_options.clone(),
+    );
     // Cloned, so that the loop can hand the server to a handler while it
     // waits on the pool.
     let done = server.tasks.receiver.clone();
@@ -174,6 +186,7 @@ fn initialized(encoding: Encoding, host: &Host) -> InitializeResult {
         capabilities: ServerCapabilities {
             position_encoding: Some(encoding.kind()),
             text_document_sync: Some(sync.into()),
+            document_formatting_provider: Some(true.into()),
             ..ServerCapabilities::default()
         },
         server_info: Some(ServerInfo {
