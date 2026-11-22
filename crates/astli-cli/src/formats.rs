@@ -48,7 +48,7 @@ pub fn github(out: &mut dyn io::Write, resolved: &Resolved) -> io::Result<()> {
     let command = match diagnostic.severity {
         Severity::Error => "error",
         Severity::Warning => "warning",
-        Severity::Note | Severity::Help => "notice",
+        Severity::Note => "notice",
     };
     let message = format!(
         "{file}:{start}: {}[{}]: {}",
@@ -245,7 +245,7 @@ pub fn write_gitlab(to: &mut dyn io::Write) -> io::Result<()> {
         let severity = match finding.severity {
             Severity::Error => "major",
             Severity::Warning => "minor",
-            Severity::Note | Severity::Help => "info",
+            Severity::Note => "info",
         };
         let fingerprint = fingerprint(&[
             &finding.path,

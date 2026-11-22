@@ -49,7 +49,7 @@ pub fn colour(severity: Severity) -> anstyle::Color {
     match severity {
         Severity::Error => AnsiColor::Red.into(),
         Severity::Warning => AnsiColor::Yellow.into(),
-        Severity::Note | Severity::Help => Ansi256Color(147).into(),
+        Severity::Note => Ansi256Color(147).into(),
     }
 }
 
@@ -100,7 +100,7 @@ pub fn write(
     let kind = match diagnostic.severity {
         Severity::Error => ReportKind::Error,
         Severity::Warning => ReportKind::Warning,
-        Severity::Note | Severity::Help => ReportKind::Advice,
+        Severity::Note => ReportKind::Advice,
     };
     let (color, explaining) = (ariadne(colour(diagnostic.severity)), ariadne(EXPLAINING));
 
