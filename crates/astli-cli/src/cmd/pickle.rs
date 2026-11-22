@@ -154,7 +154,7 @@ fn one(
     build: &Build,
     expand: bool,
 ) -> Result<(Summary, Option<GreenNode>)> {
-    let mut opened = session::open(path, build)?;
+    let mut opened = session::open(path, build, &Disk)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
     let origins = opened.session.origins();
@@ -175,7 +175,7 @@ fn inlined(
     build: &Build,
     open: &mut Vec<PathBuf>,
 ) -> Result<String> {
-    let text = crate::session::read(path)?;
+    let text = crate::session::read(path, &Disk)?;
     let mut session = Session::new();
     let file = session.add(path, text.clone());
     let tokens = session.tokens(file);

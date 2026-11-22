@@ -36,7 +36,7 @@ fn files_of(
     walk: &Walk,
     dependencies: &[PathBuf],
 ) -> std::result::Result<(Option<usize>, Files), astli_package::Error> {
-    let files = || package.files(walk, dependencies);
+    let files = || package.files(walk, dependencies, run.reader());
     if !run.several_packages() {
         return Ok((None, files()?));
     }
@@ -184,6 +184,33 @@ impl Plan {
                 Plan::discovered(again, run)
             }
         }
+    }
+
+    /// What `check` with no argument reads for the source file at `path`:
+    /// the package it is in, found at or above its directory, with that
+    /// package's default features and no flag; or, outside any package, the
+    /// file alone, as `check` reads a file named.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "for a caller that is no command, which none is yet"
+        )
+    )]
+    pub fn load(path: &Path, run: &Run) -> Result<Plan> {
+        let dir = (path.parent())
+            .filter(|it| !it.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let target = Target::new(dir.to_path_buf());
+        let sources = match target.package()? {
+            Some(_) => Sources::default(),
+            None => Sources {
+                files: vec![path.to_path_buf()],
+                ..Sources::default()
+            },
+        };
+        let (features, build) = (FeatureArgs::default(), BuildArgs::default());
+        Plan::new(&target, &sources, &features, &build, run)
     }
 
     /// The plan of every one of the package's own features, alternatives
@@ -418,12 +445,12 @@ impl Plan {
     }
 
     fn discovered(again: Again, run: &Run) -> Result<Plan> {
-        let here = again.here.clone();
+        let (here, loaded) = settle::loaded(run, again.here.clone())?;
         let Loaded {
             mut dependencies,
             described,
             on_disk,
-        } = settle::dependencies(run, &here, run.args.locked)?;
+        } = loaded;
         let target::Here {
             package,
             workspace,
@@ -577,4 +604,145 @@ fn package(target: &Target) -> Result<Root> {
              or run inside a git repository or beside an astli.toml",
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::io;
+    use std::path::{Path, PathBuf};
+
+    use astli_package::mark;
+    use astli_resolve::Store;
+    use astli_testing::Fixture;
+    use astli_text::{Disk, Reader};
+
+    use super::Plan;
+    use crate::analysis::Designs;
+    use crate::render::Out;
+    use crate::run::Run;
+
+    /// Buffers in front of the disk, as an editor holds them.
+    struct Buffers(HashMap<PathBuf, String>);
+
+    impl Reader for Buffers {
+        fn exists(&self, path: &Path) -> bool {
+            self.0.contains_key(path) || Disk.exists(path)
+        }
+
+        fn read(&self, path: &Path) -> io::Result<String> {
+            match self.0.get(path) {
+                Some(text) => Ok(text.clone()),
+                None => Disk.read(path),
+            }
+        }
+    }
+
+    /// The units `plan` compiles, by file name, and which of `names` its
+    /// design defines.
+    fn loaded(plan: Plan, run: &Run, names: &[&str]) -> (Vec<String>, Vec<String>) {
+        let units = (plan.units.iter())
+            .map(|unit| {
+                unit.path
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        let mut out = Out::new(io::stdout());
+        let mut designs = Designs::of(&mut out, &plan, &[], false, &[], run).unwrap();
+        let defined = designs
+            .each(&mut out, plan, run, true, false, |_, _, analysis, _| {
+                let design = analysis.elaboration.design();
+                Ok((names.iter())
+                    .filter(|name| design.definition(name).is_some())
+                    .map(|name| name.to_string())
+                    .collect::<Vec<_>>())
+            })
+            .unwrap();
+        (units, defined.concat())
+    }
+
+    #[test]
+    fn a_buffer_is_read_in_place_of_its_file_and_of_a_header_it_includes() {
+        let fixture = Fixture::new("cli-load-buffers");
+        fixture.file("astli.toml", "");
+        let top = fixture.file("top.sv", "module top;\nendmodule\n");
+        let extra = fixture.file("extra.sv", "module on_disk;\nendmodule\n");
+        let names = ["top", "on_disk", "in_buffer"];
+
+        let run = Run::loading(&Disk);
+        let on_disk = loaded(Plan::load(&top, &run).unwrap(), &run, &names);
+        let buffers = Buffers(HashMap::from([
+            (
+                top.clone(),
+                "`include \"extra.sv\"\nmodule top;\nendmodule\n".into(),
+            ),
+            (extra, "module in_buffer;\nendmodule\n".into()),
+        ]));
+        let run = Run::loading(&buffers);
+        let in_buffers = loaded(Plan::load(&top, &run).unwrap(), &run, &names);
+
+        assert_eq!(
+            on_disk,
+            (
+                vec!["extra.sv".into(), "top.sv".into()],
+                vec!["top".into(), "on_disk".into()]
+            )
+        );
+        // The buffer includes `extra.sv`, which makes it a header, and the
+        // header is the buffer's too.
+        assert_eq!(
+            in_buffers,
+            (
+                vec!["top.sv".into()],
+                vec!["top".into(), "in_buffer".into()]
+            )
+        );
+        assert!(run.problems().is_empty());
+    }
+
+    #[test]
+    fn a_dependency_that_cannot_be_read_is_a_problem_and_the_package_is_read_alone() {
+        let fixture = Fixture::new("cli-load-unread");
+        fixture.file(
+            "astli.toml",
+            "[dependencies]\ncells = { git = 'https://example.invalid/cells.git', version = '1' }\n",
+        );
+        let top = fixture.file("top.sv", "module top;\n  cells u_cells ();\nendmodule\n");
+        let store = Store::at(fixture.dir("cache")).offline(true);
+
+        let run = Run::loading(&Disk).storing(store);
+        let plan = Plan::load(&top, &run).unwrap();
+        let problems = run.problems();
+        let design = loaded(plan, &run, &["top", "cells"]);
+
+        let said: Vec<String> = problems.iter().map(|it| mark::plain(&it.message)).collect();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(
+            said[0].contains("`cells`") && said[0].contains("not in the cache"),
+            "{said:?}"
+        );
+        assert_eq!(design, (vec!["top.sv".into()], vec!["top".into()]));
+        assert!(!fixture.path().join("astli.lock").exists());
+    }
+
+    #[test]
+    fn a_file_outside_any_package_is_read_alone() {
+        let fixture = Fixture::new("cli-load-alone");
+        let alone = fixture.file("alone.sv", "module on_disk;\nendmodule\n");
+        let buffers = Buffers(HashMap::from([(
+            alone.clone(),
+            "module in_buffer;\nendmodule\n".into(),
+        )]));
+
+        let run = Run::loading(&buffers);
+        let plan = Plan::load(&alone, &run).unwrap();
+
+        assert_eq!(
+            loaded(plan, &run, &["on_disk", "in_buffer"]),
+            (vec!["alone.sv".into()], vec!["in_buffer".into()])
+        );
+    }
 }

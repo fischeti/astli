@@ -44,5 +44,5 @@ pub struct Ctx<'a> {
     pub out: &'a mut Out,
     /// The run: its flags, such as verbosity and parallel jobs, and what
     /// the packages and designs it checks share.
-    pub run: &'a Run,
+    pub run: &'a Run<'a>,
 }

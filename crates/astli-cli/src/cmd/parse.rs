@@ -119,7 +119,7 @@ fn one(
 ) -> Result<Stats> {
     // Reading the file and tokenizing it are measured together as load time.
     let loaded = Instant::now();
-    let mut opened = session::open(path, build)?;
+    let mut opened = session::open(path, build, &astli_text::Disk)?;
     let load = loaded.elapsed();
 
     // Expanded mode parses the expansion. Raw mode runs one only to learn macro

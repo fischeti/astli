@@ -162,7 +162,7 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
             true => all,
             false => Vec::new(),
         };
-        let (summary, said) = listing::summarized(file, plan.build(unit), told)?;
+        let (summary, said) = listing::summarized(file, plan.build(unit), run.reader(), told)?;
         sink.report.add(said);
         Ok(summary)
     })?;

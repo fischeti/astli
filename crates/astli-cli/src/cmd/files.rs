@@ -94,7 +94,7 @@ impl RunWith<Ctx<'_>> for Files {
                 true => all,
                 false => listing::short_of_a_header(all, of),
             };
-            let (summary, said) = listing::summarized(file, plan.build(unit), told)?;
+            let (summary, said) = listing::summarized(file, plan.build(unit), run.reader(), told)?;
             if own && tops.is_empty() {
                 sink.report.add(said);
                 return Ok((summary, Report::default()));

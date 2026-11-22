@@ -9,6 +9,7 @@ use astli_package::{
     Selection, Simulator, Source, Submodules, Walk, Workspace,
 };
 use astli_testing::Fixture;
+use astli_text::Disk;
 
 fn found(dir: &Path) -> Package {
     found_root(dir).package
@@ -608,11 +609,11 @@ fn a_dependents_include_does_not_find_a_dev_file_by_suffix() {
 
     let package = found(fixture.path());
     let own = package
-        .files(&own(&package), &[])
+        .files(&own(&package), &[], &Disk)
         .expect("the package's files");
     let seen = package
         .as_dependency()
-        .files(&Walk::default(), &[])
+        .files(&Walk::default(), &[], &Disk)
         .expect("the package's files");
 
     assert_eq!(own.headers, [fixture.path().join("test/tb_macros.svh")]);
@@ -623,7 +624,7 @@ fn a_dependents_include_does_not_find_a_dev_file_by_suffix() {
 fn told_apart(root: &Path) -> (Vec<String>, Vec<String>) {
     let package = found(root);
     let files = package
-        .files(&own(&package), &[])
+        .files(&own(&package), &[], &Disk)
         .expect("the package's files");
     let relative = |paths: &[PathBuf]| -> Vec<String> {
         let relative =
@@ -722,7 +723,7 @@ fn the_build_resolves_as_the_classification_does() {
     let package = found(fixture.path());
 
     let files = package
-        .files(&own(&package), &[])
+        .files(&own(&package), &[], &Disk)
         .expect("the package's files");
     let resolved = files
         .build
@@ -761,7 +762,7 @@ fn a_dependency_header_resolves_but_is_not_the_packages() {
     let dependencies = [fixture.path().join("cells/include")];
 
     let files = package
-        .files(&own(&package), &dependencies)
+        .files(&own(&package), &dependencies, &Disk)
         .expect("the package's files");
     let resolved = files
         .build
@@ -825,7 +826,7 @@ fn an_include_found_by_suffix_gives_the_directory_a_tool_needs() {
     let package = found(fixture.path());
 
     let files = package
-        .files(&own(&package), &[])
+        .files(&own(&package), &[], &Disk)
         .expect("the package's files");
 
     // The include directory is already named.

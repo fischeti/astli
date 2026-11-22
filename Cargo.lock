@@ -140,6 +140,7 @@ dependencies = [
  "astli-resolve",
  "astli-sema",
  "astli-syntax",
+ "astli-testing",
  "astli-text",
  "expect-test",
  "globset",

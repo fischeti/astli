@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use astli_index::{Declaration, Include, Index, Summary, Uses, summarize};
 use astli_package::{Dependency, mark};
-use astli_text::{Diagnostic, clean};
+use astli_text::{Diagnostic, Reader, clean};
 use rayon::prelude::*;
 
 use crate::discovery::Plan;
@@ -121,14 +121,16 @@ impl Listing {
     }
 }
 
-/// Expands and summarizes one file, rendering what its expansion and parser
-/// reported that `told` keeps of it, and counting the errors that holds.
+/// Expands and summarizes one file, read with what it includes through
+/// `reader`, rendering what its expansion and parser reported that `told`
+/// keeps of it, and counting the errors that holds.
 pub(crate) fn summarized(
     path: &Path,
     build: &astli_preproc::Build,
+    reader: &dyn Reader,
     told: impl FnOnce(Vec<Diagnostic>) -> Vec<Diagnostic>,
 ) -> Result<(Summary, Report)> {
-    let mut opened = session::open(path, build)?;
+    let mut opened = session::open(path, build, reader)?;
     let (summary, diagnostics) = summarize(&mut opened.session, opened.file);
     let said = Report::of(opened.session.origins(), &told(diagnostics))?;
     Ok((summary, said))

@@ -1,6 +1,7 @@
 //! What one run of a command shares across the packages and the designs it
-//! reads: the flags it was given, the store, and what one package's or one
-//! design's work found that another's would only find again.
+//! reads: the flags it was given, where it reads source files from, the
+//! store, and what one package's or one design's work found that another's
+//! would only find again.
 //!
 //! Every cache is keyed on what the work it saves reads, so that a hit is
 //! what the work would have made: a wrong key would hand a design another
@@ -13,7 +14,7 @@ use std::sync::{Arc, Mutex, MutexGuard, Once, OnceLock};
 
 use astli_package::{Files, Package, Walk};
 use astli_resolve::{Lock, Overrides, Resolution, Store};
-use astli_text::Diagnostic;
+use astli_text::{Diagnostic, Disk, Reader};
 
 use crate::analysis::Lowered;
 use crate::cli::RunArgs;
@@ -22,10 +23,17 @@ use crate::error::Result;
 use crate::term::{self, Problem};
 
 /// A run of a command, made once in `main` and shared by reference with
-/// every thread of it.
-pub struct Run {
+/// every thread of it; or a load of a design for a caller that is no
+/// command, which renders what the load finds itself.
+pub struct Run<'r> {
     /// The flags every command takes.
     pub args: RunArgs,
+    /// What every source file is read through: the disk, for a command.
+    reader: &'r dyn Reader,
+    /// Each problem the run found, kept in the order found for a caller
+    /// that renders them itself; `None` for a command, which writes each
+    /// as it is found.
+    kept: Option<Mutex<Vec<Problem>>>,
     store: OnceLock<Store>,
     warned: Once,
     /// Whether the command runs once for each of several packages, as
@@ -67,10 +75,42 @@ pub struct Resolving {
 /// searched after its own.
 type Walked = (Package, Walk, Vec<PathBuf>);
 
-impl Run {
-    pub fn new(args: RunArgs) -> Run {
+impl Run<'static> {
+    /// A run of a command, reading from the disk and writing what it finds.
+    pub fn new(args: RunArgs) -> Run<'static> {
+        Run::with(args, &Disk, None)
+    }
+}
+
+impl<'r> Run<'r> {
+    /// A load of a design for a caller that stays up and renders what the
+    /// load finds itself, such as an editor's server. It reads every source
+    /// file through `reader`, reaches no network, writes no lock and draws
+    /// no progress, and keeps each problem for [`Run::problems`] rather
+    /// than writing it. Dependencies it cannot settle or read are a problem
+    /// too, and the package is read without them.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "for a caller that is no command, which none is yet"
+        )
+    )]
+    pub fn loading(reader: &'r dyn Reader) -> Run<'r> {
+        let args = RunArgs {
+            quiet: true,
+            locked: true,
+            offline: true,
+            ..RunArgs::default()
+        };
+        Run::with(args, reader, Some(Mutex::default()))
+    }
+
+    fn with(args: RunArgs, reader: &'r dyn Reader, kept: Option<Mutex<Vec<Problem>>>) -> Run<'r> {
         Run {
             args,
+            reader,
+            kept,
             store: OnceLock::new(),
             warned: Once::new(),
             packages: AtomicBool::new(false),
@@ -83,17 +123,66 @@ impl Run {
         }
     }
 
-    /// The store the environment names, showing each clone, fetch and
-    /// checkout it makes, and refusing them if the run is offline. One for
-    /// the run, so that a mirror a command fetched is not fetched again by
-    /// the resolution after it.
+    /// What every source file is read through.
+    pub fn reader(&self) -> &'r dyn Reader {
+        self.reader
+    }
+
+    /// Whether the run keeps its problems for its caller, which then wants
+    /// what it can load rather than a failure: a dependency that cannot be
+    /// settled or read is a problem, and the package is read without it.
+    pub fn loads_what_it_can(&self) -> bool {
+        self.kept.is_some()
+    }
+
+    /// Keeps `problem` for the caller, if the run keeps its problems, and
+    /// says whether it did.
+    pub fn keep(&self, problem: &Problem) -> bool {
+        let Some(kept) = &self.kept else {
+            return false;
+        };
+        // A plan made again for other features settles its dependencies
+        // again, and finds the same.
+        let mut kept = held(kept);
+        if !kept.contains(problem) {
+            kept.push(problem.clone());
+        }
+        true
+    }
+
+    /// The problems kept since the last call, in the order found; none for
+    /// a command's run, which wrote each.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "for a caller that is no command, which none is yet"
+        )
+    )]
+    pub fn problems(&self) -> Vec<Problem> {
+        (self.kept.as_ref()).map_or_else(Vec::new, |kept| std::mem::take(&mut *held(kept)))
+    }
+
+    /// The store the environment names, refusing every clone and fetch if
+    /// the run is offline. A command's shows each clone, fetch and checkout
+    /// it makes. One for the run, so that a mirror a command fetched is not
+    /// fetched again by the resolution after it.
     pub fn store(&self) -> Result<Store> {
         if let Some(store) = self.store.get() {
             return Ok(store.clone());
         }
-        let store =
-            (Store::from_env()?.reporting(Arc::new(term::Steps))).offline(self.args.offline);
+        let mut store = Store::from_env()?.offline(self.args.offline);
+        if self.kept.is_none() {
+            store = store.reporting(Arc::new(term::Steps));
+        }
         Ok(self.store.get_or_init(|| store).clone())
+    }
+
+    /// Makes the run use `store`, for a test that keeps its cache apart.
+    #[cfg(test)]
+    pub fn storing(self, store: Store) -> Run<'r> {
+        let _ = self.store.set(store);
+        self
     }
 
     /// Makes the run one of the command for each of several packages, from

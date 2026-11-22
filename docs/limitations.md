@@ -713,6 +713,18 @@ past it to new packages, waits on each. **Revisit when** such runs matter:
 fetching a package's dependencies in parallel as soon as its manifest
 names them overlaps those waits too. **Where** `astli-resolve/src/resolve.rs`
 
+### A load that cannot read one dependency reads the package without any
+
+A run that loads what it can, as a language server's does, keeps why the
+dependencies could not be settled or read as a problem, and reads the
+package as if it required nothing. A resolution either holds every
+package or fails, so one dependency the cache lacks costs the design all
+the others, `path` ones and a workspace's siblings among them. `astli
+fetch` puts back every one at once. **Revisit when** a design with one
+dependency missing is read in an editor often enough to matter: the
+resolver would have to resolve around a package it cannot read, dropping
+what requires it alone. **Where** `astli-cli/src/settle.rs` (`loaded`)
+
 ### `upstream_name` in a `Bender.yml` is ignored
 
 A bare version's URL is its remote's with the dependency's own name, even

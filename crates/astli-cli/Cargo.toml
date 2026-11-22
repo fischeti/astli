@@ -51,3 +51,4 @@ astli-text.workspace = true
 [dev-dependencies]
 expect-test.workspace = true
 roxmltree.workspace = true
+astli-testing.workspace = true
