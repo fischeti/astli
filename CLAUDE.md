@@ -43,16 +43,17 @@ formatter.
   grammar. `astli-fmt` — the formatter. `astli-index` — the top-level names
   files declare and use, and which files a design needs. `astli-sema` — the
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
-  file's tree, or a file of an elaborated design. `astli-package` — finding a package's root and reading its
-  `astli.toml`. `astli-resolve` — fetching dependencies into the shared
-  cache, and choosing their versions. `astli-lsp` — the language server's
-  loop behind `astli lsp`: the protocol, the client's buffers, positions.
-  `astli` — the umbrella, re-exporting each library crate as a module but
-  `astli-package`, `astli-resolve` and `astli-lsp`, which serve the driver
-  and promise others no API. `astli-cli` — the
-  driver, a binary named `astli`, one subcommand per stage. `astli-testing` —
-  what the tests and examples share: the corpus walker, the snapshot loop,
-  a temporary directory. A dev-dependency only, never published.
+  file's tree, or a file of an elaborated design. `astli-package` — finding
+  a package's root and reading its `astli.toml`. `astli-resolve` — fetching
+  dependencies into the shared cache, and choosing their versions.
+  `astli-lsp` — the language server's loop behind `astli lsp`: the protocol,
+  the client's buffers, positions. `astli` — the umbrella, re-exporting each
+  library crate as a module but `astli-package`, `astli-resolve` and
+  `astli-lsp`, which serve the driver and promise others no API.
+  `astli-cli` — the driver, a binary named `astli`, one subcommand per
+  stage. `astli-testing` — what the tests and examples share: the corpus
+  walker, the snapshot loop, a temporary directory. A dev-dependency only,
+  never published.
 - `scripts/fetch-corpus.sh` — populates the gitignored `corpus/` and
   `sv-tests/`, at the commits it pins, and `eda-benchmarks/`, PULP's EDA
   benchmark designs at the release it pins, and copies in the `astli.toml`
@@ -116,8 +117,9 @@ exception: prior art belongs in a design document.
   `docs/plan.md`): the libraries the umbrella re-exports share one version,
   measured by their API; `astli-cli` has its own, measured by what its users
   see; `astli-package`, `astli-resolve` and `astli-lsp` each have their own
-  and promise no API. A breaking change is fine, and goes in the next minor version. Do
-  not add deprecation shims, compatibility aliases, or migration paths.
+  and promise no API. A breaking change is fine, and goes in the next minor
+  version. Do not add deprecation shims, compatibility aliases, or migration
+  paths.
 - A `!` (`feat(fmt)!:` and so on) marks a break of the command: a flag or
   output that changes, a manifest or lock that no longer reads, a lint rule
   renamed. It bumps the command's minor version, wherever in the workspace
