@@ -116,8 +116,9 @@ version_group = "libraries"
 name = "astli"
 version_group = "libraries"
 
-# `astli-package` and `astli-resolve` serve only the driver, so each takes
-# release-plz's default: a version of its own, from its own commits.
+# `astli-package`, `astli-resolve` and `astli-lsp` serve only the driver, so
+# each takes release-plz's default: a version of its own, from its own
+# commits.
 
 # The command is versioned by what its users see: its flags and output, what
 # `fmt` writes, and the files it reads and writes. The project's changelog and
@@ -141,6 +142,7 @@ changelog_include = [
     "astli",
     "astli-package",
     "astli-resolve",
+    "astli-lsp",
 ]
 git_tag_enable = true
 git_tag_name = "v{{ version }}"

@@ -22,6 +22,8 @@ readme = "README.md"
 anstream = "1"
 anstyle = "1"
 ariadne = "0.6"
+# The language server's main loop waits on the client and on the pool at once.
+crossbeam-channel = "0.5"
 expect-test = "1"
 # Only what fetching, reading and writing out a mirror needs. HTTPS goes through
 # rustls, so that no system TLS library is linked, with `reqwest` and `rustls`
@@ -40,6 +42,10 @@ globset = "0.4"
 ignore = "0.4"
 indicatif = { version = "0.18", default-features = false, features = ["unicode-width"] }
 logos = "0.16"
+lsp-server = "0.10"
+# `Uri` as `url::Url`, which parses a `file:` URI into a path; `url` is built
+# for `reqwest` already.
+lsp-types = { package = "gen-lsp-types", version = "0.11", features = ["url"] }
 mimalloc = "0.1"
 prettyplease = "0.3"
 proc-macro2 = "1"
@@ -62,6 +68,7 @@ rustc-hash = "2"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 semver = "1"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 similar = "3"
 syn = { version = "3", features = ["full"] }
@@ -75,6 +82,7 @@ astli-diag = { path = "crates/astli-diag", version = "0.8.0" }
 astli-fmt = { path = "crates/astli-fmt", version = "0.8.0" }
 astli-index = { path = "crates/astli-index", version = "0.8.0" }
 astli-lint = { path = "crates/astli-lint", version = "0.8.0" }
+astli-lsp = { path = "crates/astli-lsp", version = "0.1.0" }
 astli-package = { path = "crates/astli-package", version = "0.7.0" }
 astli-parse = { path = "crates/astli-parse", version = "0.8.0" }
 astli-preproc = { path = "crates/astli-preproc", version = "0.8.0" }

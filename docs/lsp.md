@@ -1,7 +1,8 @@
 # Language server
 
-> **Status:** designed; nothing is built. Milestone M12 in
-> [`plan.md`](plan.md#5-milestones).
+> **Status:** the loop is built: the handshake, the buffers, positions,
+> cancellation and panics. It answers no language request yet. Milestone
+> M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
 one. More and more of a design is written by an agent and read by a person,
@@ -86,6 +87,33 @@ A value depends on the instance. A definition's body at its defaults always
 exists; where the manifest names tops ([P32](packages.md#decisions)), the
 bodies the definition has under them are found by walking down from each.
 
+## The loop
+
+One thread runs the server (`astli-lsp`), started by `astli lsp`, which
+hands it what the server says of itself and points `term` at the client's
+log. It takes each message
+from the client in turn, owns the buffers, and sends every response. A
+request that reads only the buffers is answered there; one over the design
+is handed to the pool with the snapshot it reads, and its answer comes back
+on a channel the loop waits on beside the client's. A handler is an arm of
+the server's dispatch, answering at once or handing its work to the pool.
+
+`initialize` announces only what is built, each capability added by the
+change that implements it: so far the position encoding and incremental
+text document sync. A request the server does not know is answered
+`MethodNotFound`, and a notification it does not know is dropped. After
+`shutdown` every request is refused as `InvalidRequest`, and `exit` ends the
+process with 0, or with 1 if `shutdown` did not come first, as the protocol
+has it.
+
+A buffer is held under the path its `file:` URI names, made absolute and
+cleaned, and the store is the `Reader` every read of a source file goes
+through. A URI of another scheme, a client's `untitled:` buffer, is not held,
+since no design reads it. Each change of an incremental `didChange` is read
+against the text the one before it left. A position past the end of its line
+is the line's end, before its `\r\n`, and one past the last line the end of
+the text; one inside a character is that character's start.
+
 ## Decisions
 
 | # | Decision | Why |
@@ -93,7 +121,7 @@ bodies the definition has under them are found by walking down from each.
 | L1 | The server is for reading: diagnostics, navigation, hover, inlay hints. Rename, completion, and structure kept from a half-typed buffer are not part of this design | They are what a reader and an agent use. Completion needs a tree from a buffer missing its closers, which the parser gives up whole ([limitations](limitations.md#a-construct-missing-its-closer-falls-back-whole)), and rename needs every reference to be certain. Both build on what is here, so they can follow it. |
 | L2 | No setup: the package the open file is in, found and read as `check` with no arguments does ([P1](packages.md#decisions), [P17](packages.md#decisions)), with its `[fmt]`, `[lint]` and `[top.*]`. A file outside any package is read alone. The server has no configuration file and no settings of its own | Include directories and defines are what a server cannot guess and a user will not keep current by hand. Discovery has them. A second place to configure them would disagree with the first. |
 | L3 | Standard protocol only: no request, view or command a client must be written for | Every editor and every agent's client then has all of it. A hierarchy view or an instance picker is a client per editor, and the first is `astli elab`'s job. |
-| L4 | A module in `astli-cli` behind `astli lsp`, over stdio | What it needs, choosing the package, settling dependencies, the analysis, is the driver's ([D18](plan.md#4-decisions)). A crate of its own would have no second reader, and would need those lifted into a library first. |
+| L4 | A crate of its own, `astli-lsp`, which the driver starts behind `astli lsp`, over stdio. It depends on library crates alone: what it needs of a loaded design, choosing the package, settling dependencies, the analysis, it defines as a trait, which `astli-cli` implements and hands in. It writes nothing to the terminal; the driver sends what `term` writes to the client's log through a handle the crate gives it, and maps how the server ended to an exit code | The driver is large, and the server will grow to thousands of lines. Loading a design is the driver's ([D18](plan.md#4-decisions)), and turning the dependency around keeps it there without lifting it into a library first. Like `astli-package` and `astli-resolve`, the crate serves the driver alone and promises no API. |
 | L5 | `lsp-server` with `gen-lsp-types`. The main loop is synchronous, and owns the buffers and their raw trees; work over the design runs on the pool, against a snapshot | The pipeline is synchronous and its parallelism is rayon's; a tree is not `Send` ([D13](plan.md#4-decisions)), so it stays on the thread that parsed it. An async framework brings a runtime for nothing that waits. |
 | L6 | A cache of lowered units under a whole rebuild: an edit lowers again the units that read the changed file, and the design, index and elaboration are built anew. No `salsa` | Expanding, parsing and lowering is what the cache keeps, and its key is exact. Cold, `check` takes 30 ms on ibex, 0.2 s on ara and 1.1 s on OpenTitan on ten cores, so the rest is measured before anything finer is built. [S4](sema.md#decisions)'s queries stay functions of ids, which is what a finer scheme would need. |
 | L7 | A snapshot is immutable and swapped whole. A request reads the one it started on, a rebuild checks between units whether an edit has overtaken it, and the snapshot it replaces is dropped off the request's path | No request sees half of an edit, and none takes a lock to read. Dropping a design takes tens of milliseconds, which is why a command leaks it. |
@@ -105,6 +133,8 @@ bodies the definition has under them are found by walking down from each.
 | L13 | A panic in a request is caught and answered as an error. The formatter's stack overflow on a chain a thousand links long stays ([limitations](limitations.md#a-chain-of-postfixes-or-mixed-operators-2048-deep-overflows-the-formatter)) | A command that panics ends; a server that does takes every open file's state with it. An overflow is not caught, but only a fuzzer writes such a chain, and a client starts a server that died again. |
 | L14 | Formatting is the whole file, returned as an edit of the lines that differ. No range formatting | The formatter lays out a file, not a part of one. A whole-document edit moves the cursor and reopens folds in most editors. |
 | L15 | Every editor but VS Code starts `astli lsp` from its own configuration, upstreamed where the editor keeps a list of servers. The Claude Code plugin names it in a `.lsp.json`. VS Code gets a thin extension that ships the binary and has no view, command or setting beyond the binary's path | The binary is the product, and is already built for each platform. VS Code starts no server without an extension, and one that downloads nothing and configures nothing is one a user never has to think about. |
+| L16 | Only work on the pool is cancelled: `$/cancelRequest` sets the request's flag, which its work reads between steps, and a request cancelled before its answer is sent is answered `RequestCancelled`, whatever its work made. A request answered on the main loop has been answered before the cancellation is read | Requests over the design are the ones that take long. One answered on the loop has already been answered by the time the loop reads the next message. A flag the work reads costs nothing until it is set, and the work decides where it can stop. |
+| L17 | A panic is caught around each message on the main loop, and around each piece of work on the pool, and told to the client's log; a request's answer is `InternalError`. What `term` writes, which a command writes to stderr, goes to the client's log as `window/logMessage`, without colour. The standard panic hook still writes to stderr | A panic on a rayon thread that reached rayon would abort the process. Stdout is the protocol's, and nothing in astli writes there but a command's result; stderr a client may not show. The hook's line names where the panic was, which a bug report wants. |
 
 ## Prior art
 

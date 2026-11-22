@@ -22,6 +22,10 @@ kinds:
 | Progress | something the run is doing, redrawn in place | `  ⠙ Fetching axi (github.com/pulp-platform/axi) 1,204 objects, 2.1 MiB` |
 | Summary | a tally, once at the end | `3 errors, 1 warning` |
 
+`astli lsp` is the exception: its stdout is the protocol, and what any
+other command would write to stderr goes to the client's log
+([L17](lsp.md#decisions)).
+
 A run that fetches and then fails reads as below. At a terminal the
 backticks give way to a style for each kind of span (C10).
 

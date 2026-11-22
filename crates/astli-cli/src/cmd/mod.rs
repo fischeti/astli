@@ -17,6 +17,7 @@ pub mod fmt;
 pub mod init;
 pub mod lex;
 pub mod lint;
+pub mod lsp;
 pub mod parse;
 pub mod patch;
 pub mod path;

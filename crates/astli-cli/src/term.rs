@@ -91,7 +91,25 @@ pub fn style() -> Style {
 /// A status or a problem that cannot be written is dropped rather than
 /// reported: with stderr gone there is nowhere left to say so.
 pub fn write(text: &[u8]) -> io::Result<()> {
+    if let Some(to) = lock(&REDIRECT).as_ref() {
+        let text = String::from_utf8_lossy(text);
+        to(&anstream::adapter::strip_str(&text).to_string());
+        return Ok(());
+    }
     suspend(|| AutoStream::new(io::stderr().lock(), *STDERR).write_all(text))
+}
+
+/// Where what [`write`] is given goes in place of stderr, as plain text,
+/// while one is set: the language server's client, whose stdout is the
+/// protocol and whose stderr no one may read.
+type Redirect = Box<dyn Fn(&str) + Send>;
+
+static REDIRECT: Mutex<Option<Redirect>> = Mutex::new(None);
+
+/// Sends what [`write`] is given to `to` rather than stderr, or to stderr
+/// again with `None`.
+pub fn redirect(to: Option<Redirect>) {
+    *lock(&REDIRECT) = to;
 }
 
 /// `write` run with every step in progress hidden, and drawn again below
