@@ -255,25 +255,17 @@ impl Mirror {
     /// is kept beside it, for a walk to refuse a file put there by hand. The
     /// list is written last, so that a checkout without one, cut short or
     /// older than lists, is sealed again.
-    pub fn checkout(&self, commit: ObjectId) -> Result<Checkout, Error> {
-        self.checkout_as(commit, &Takes::default(), None)
-    }
-
-    /// [`checkout`](Mirror::checkout), with what `taken` asks for besides.
-    /// The files of each submodule it takes are written where the commit
-    /// records it. Each comes from a mirror of its own repository in the
-    /// store, at the commit the gitlink names, from the URL `.gitmodules`
-    /// gives at `commit`. With `lfs`, `git-lfs` writes each file stored
-    /// with Git LFS, fetching what its mirror's `lfs/` lacks. A checkout
-    /// taking either is kept apart from the plain one, so that a design
-    /// that takes neither reads the commit's own files.
-    pub fn checkout_with(&self, commit: ObjectId, taken: &Takes) -> Result<Checkout, Error> {
-        self.checkout_as(commit, taken, None)
-    }
-
-    /// [`checkout_with`](Mirror::checkout_with), reported as the commit of
-    /// the package `named` at `version`, if it has to be written.
-    pub(crate) fn checkout_as(
+    ///
+    /// `taken` asks for more: the files of each submodule it takes are
+    /// written where the commit records it, each from a mirror of its own
+    /// repository in the store, at the commit the gitlink names, from the
+    /// URL `.gitmodules` gives at `commit`; with `lfs`, `git-lfs` writes
+    /// each file stored with Git LFS, fetching what its mirror's `lfs/`
+    /// lacks. A checkout taking either is kept apart from the plain one, so
+    /// that a design that takes neither reads the commit's own files. It is
+    /// reported as the commit of the package `named` at its version, if it
+    /// has to be written.
+    pub(crate) fn checkout(
         &self,
         commit: ObjectId,
         taken: &Takes,

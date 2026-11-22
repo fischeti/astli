@@ -5,8 +5,8 @@
 //! keyed by its URL, so that a fork and the repository it forks are two
 //! mirrors. A mirror answers what resolution asks of a package without a
 //! checkout: its versions, the commit a `rev` names, and its manifest at a
-//! commit. [`Mirror::checkout`] then writes one commit out as plain files,
-//! once, read by every design that needs it. [`resolve`] chooses one
+//! commit. [`Resolved::checkout`] then writes the commit chosen out as
+//! plain files, once, read by every design that needs it. [`resolve`] chooses one
 //! version of each package a design needs, over its mirrors, preferring
 //! what the [`Lock`] holds, and [`Resolution::load`] reads the part of it a
 //! design reaches.
@@ -26,7 +26,7 @@ mod version;
 pub use error::Error;
 pub use load::{Loaded, Note};
 pub use lock::{LOCKFILE, Lock, Locked};
-pub use mirror::{Checkout, Mirror};
+pub use mirror::Mirror;
 pub use report::{Report, Silent, Step};
 pub use resolve::{Located, Origin, Overrides, Resolution, Resolved, Warning, resolve};
 pub use store::{Store, canonical};
