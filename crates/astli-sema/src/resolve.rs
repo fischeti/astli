@@ -1059,8 +1059,9 @@ impl<'d> Resolver<'d> {
             // A port, net or variable whose type names an interface, or a
             // modport of one, as an interface port or a virtual interface
             // does; or a covergroup, whose cover points are its members. A
-            // struct's member is no name; one of a type sema cannot see may
-            // be anything.
+            // struct's member is no name, through a typedef or a type
+            // parameter, whose value only a body gives; one of a type sema
+            // cannot see may be anything.
             SymbolKind::Port(Port { ty, .. })
             | SymbolKind::Variable(Data { ty, .. })
             | SymbolKind::Net(Data { ty, .. }) => {
@@ -1091,7 +1092,8 @@ impl<'d> Resolver<'d> {
                         ..
                     } => scope(at),
                     SymbolKind::Covergroup(covergroup) => Some((file, covergroup.points)),
-                    SymbolKind::Typedef(_) => return None,
+                    SymbolKind::Typedef(_)
+                    | SymbolKind::Parameter(Parameter { is_type: true, .. }) => return None,
                     _ => None,
                 }
             }

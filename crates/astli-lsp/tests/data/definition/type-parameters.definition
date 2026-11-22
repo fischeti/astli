@@ -1,0 +1,16 @@
+type-parameters.sv 4:38
+  4:38-4:39 -> type-parameters.sv 4:38-4:39 `x`
+type-parameters.sv 8:49
+  8:49-8:50 -> type-parameters.sv 8:49-8:50 `x`
+type-parameters.sv 11:48
+  11:48-11:49 -> type-parameters.sv 11:48-11:49 `a`
+type-parameters.sv 19:17
+  19:17-19:18 -> type-parameters.sv 8:49-8:50 `x`
+type-parameters.sv 21:17
+  21:17-21:18 -> type-parameters.sv 4:38-4:39 `x`
+type-parameters.sv 23:20
+  23:20-23:21 -> type-parameters.sv 8:49-8:50 `x`
+type-parameters.sv 25:23
+  25:23-25:24 -> type-parameters.sv 11:48-11:49 `a`
+type-parameters.sv 25:25
+  25:25-25:26 -> type-parameters.sv 8:58-8:59 `y`

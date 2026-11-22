@@ -1,0 +1,28 @@
+type-parameters.sv:12:17 x
+    member `x`: `logic [3:0]`
+
+    ```systemverilog
+    logic [3:0] x
+    ```
+
+type-parameters.sv:14:20 x
+    member `x`: `logic [3:0]`
+
+    ```systemverilog
+    logic [3:0] x
+    ```
+
+type-parameters.sv:16:23 a
+    member `a`: `struct {x: logic [3:0]; y: logic}`, 5 bits
+
+    ```systemverilog
+    par_t a
+    ```
+
+type-parameters.sv:16:25 y
+    member `y`: `logic`
+
+    ```systemverilog
+    logic y
+    ```
+
