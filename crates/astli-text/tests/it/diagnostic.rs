@@ -21,7 +21,6 @@ fn find(origins: &Origins, file: astli_text::SourceId, needle: &str) -> Span {
 fn severity_orders_by_how_much_it_matters() {
     assert!(Severity::Error > Severity::Warning);
     assert!(Severity::Warning > Severity::Note);
-    assert!(Severity::Note > Severity::Help);
 
     // Which is the point: the worst of a run is a `max`.
     let run = [Severity::Note, Severity::Error, Severity::Warning];

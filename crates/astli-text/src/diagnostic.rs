@@ -12,8 +12,6 @@ use crate::span::Span;
 /// Severity level of a compiler diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Severity {
-    /// Suggested fix or remedial guidance.
-    Help,
     /// Informational note providing additional context.
     Note,
     /// Warning indicating potentially unintended or deprecated syntax.
@@ -32,7 +30,6 @@ impl Severity {
 impl fmt::Display for Severity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Severity::Help => "help",
             Severity::Note => "note",
             Severity::Warning => "warning",
             Severity::Error => "error",
