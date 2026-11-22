@@ -5,6 +5,7 @@
 //! with a host of its own in place of the driver's.
 
 mod buffers;
+mod diagnostics;
 mod formatting;
 mod server;
 mod snapshots;

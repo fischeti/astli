@@ -216,6 +216,7 @@ dependencies = [
 name = "astli-lsp"
 version = "0.1.0"
 dependencies = [
+ "astli-diag",
  "astli-fmt",
  "astli-index",
  "astli-lint",

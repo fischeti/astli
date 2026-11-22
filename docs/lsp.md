@@ -1,13 +1,12 @@
 # Language server
 
 > **Status:** the loop is built: the handshake, the buffers, positions,
-> **Status:** the loop is built: the handshake, the buffers, positions,
 > cancellation and panics; and each open file's design is loaded when it is
 > opened and again after edits, reusing every unit the edit left alone.
 > Formatting is answered from the buffer, document symbols and folding
 > from its raw tree, and workspace symbols from the loaded designs' indexes,
-> on the pool. Milestone M12 in
-> [`plan.md`](plan.md#5-milestones).
+> on the pool; diagnostics are published from the buffer and the snapshot.
+> Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
 one. More and more of a design is written by an agent and read by a person,
@@ -36,7 +35,7 @@ lowered and elaborated, as `check` builds it.
 | --- | --- | --- |
 | Document symbols, folding | the raw tree | definitions, classes, subroutines, declarations, instances, blocks, each with its range; every branch of a conditional |
 | Formatting | the buffer | `astli fmt`'s output under the package's `[fmt]`, as an edit of the lines that differ |
-| Diagnostics | both | the raw parse's and the tree lint rules' at once; the preprocessor's, `check`'s and the design lint rules' from the snapshot |
+| Diagnostics | both | the raw parse's and the tree lint rules' at once; the preprocessor's, the expanded parse's, `check`'s and the design lint rules' from the snapshot |
 | Code actions | a diagnostic's fix | the edits `lint --fix` would apply, one finding or the whole file |
 | Workspace symbols | each snapshot's index | every module, interface, program, checker, primitive, package and class of the packages and their dependencies |
 | Definition, references | the snapshot | where a name is declared and used, a macro's `` `define ``, an `` `include ``'s header |
@@ -86,8 +85,9 @@ set of defines the package's tops give, which is one for most packages. Each
 has its elaboration, its index, and each unit's path, origins and parse
 diagnostics, and beside them is what the loader found wrong, as data: a
 manifest that does not read, a dependency the store lacks, a file that cannot
-be read. It is made of library types alone, so a handler in `astli-lsp`
-reads it without the driver.
+be read. It also carries, as data, what only the manifest says of what is
+reported ([Diagnostics](#diagnostics)). It is made of library types alone,
+so a handler in `astli-lsp` reads it without the driver.
 
 ## Staying current
 
@@ -161,6 +161,13 @@ that the kept units still hold, and lowering the one that does not; 13 to
 enough that nothing finer is built ([L6](#decisions)). Comparing each file's
 modification time rather than its text would save most of the 40, but
 would no longer be exact.
+
+Finding the open files' diagnostics follows each load
+([Diagnostics](#diagnostics)), and the script logs it apart: about 60 ms
+with `uart_core.sv` open, most of it the linter's view of the whole design,
+and about 330 ms once `prim_assert.sv` is open too, since each of the 595
+units that include it is checked and linted
+([limitations](limitations.md#each-load-makes-its-designs-linter-and-what-its-tops-build-again)).
 
 ## From a cursor to a meaning
 
@@ -305,6 +312,99 @@ encoding from there. An escaped name's range covers its backslash. A name a
 macro wrote is placed at the outermost call, where the name is not spelled,
 and is an empty range there.
 
+## Diagnostics
+
+Each open file's findings are published as `textDocument/publishDiagnostics`
+under the buffer's version, in two steps that read different things and
+find different things, so that what the buffer alone can say is shown at
+once and what needs the design follows it.
+
+**From the buffer**, on the loop, when the file is opened, on each change,
+and whenever a snapshot of its design is swapped in: what the raw parse
+found malformed, the waivers that do not read, and the tree lint rules, at
+the levels of the file and under its waivers, as `astli lint` in the file's
+directory reads it. The raw parse keeps a region its grammar does not cover
+as written; that is not published, since a macro standing for syntax is one,
+and the expanded parse says what a compiler would not read. The levels are
+the snapshot's, so until the design is first loaded a buffer publishes what
+its raw parse found and nothing else.
+
+**From the snapshot**, on the load's thread once the driver hands the
+snapshot back, before it is swapped in: what each unit's expansion and
+expanded parse reported, `check` of the unit, and the design lint rules; where
+the manifest names tops, also what only what the tops build gets wrong and
+the built rules, and among the load's problems, a name declared more than
+once. Only the units that hold an open file are checked, the file itself or
+a header it includes, and of each only what lies in an open file of the
+same design root is kept ([L21](#decisions)). A header's findings are those of every unit that
+includes it and is reported, each published once
+([L22](#decisions)). What is built from the tops and the linter's view of
+the design are made once a load, for the whole design, and only if a unit
+needs them. An edit that overtakes the load stops this step too, between
+units and before each of those is made. How long this step took is logged
+on a line of its own, after the load's, and not counted in it. A panic in
+this step is caught apart from the load and logged: the snapshot is swapped
+in all the same, with nothing from its design, and its problems placed
+unless placing them is what panicked, since a snapshot lost would be lost
+again on every load while the file that makes it panic is open.
+
+Which units are reported, at which levels, and from which tops is the
+driver's, read from `astli.toml` ([P8](packages.md#decisions)): it hands the
+server, in the snapshot, whether `check` and whether `lint`'s design rules
+report each unit, the levels `lint` reads each file of the root package at,
+and each top's body. The server runs the checks the commands run over them
+([L23](#decisions)).
+
+The two steps overlap in nothing but a parse error both parses find, and in
+what they read: the buffer step reads the text as it is now, the snapshot's
+the text its load read. So what is published for a file is both sets, a
+finding with the same range, code and message once, and
+
+- a snapshot's findings, and the load's problems placed in an open file,
+  are taken for the file only if its load read the buffer's text as it is
+  now; otherwise the design is due again already, and the file keeps what
+  it had;
+- a change drops those of the changed file that do not end before the
+  first character it changed, since their places may no longer be theirs,
+  and keeps the rest until the next snapshot, so that typing at the end of
+  a file does not blank everything above it. A finding with a related
+  place in the same file that does not end before it is dropped too, since
+  for a client that takes no related information the place is a line of
+  the message ([L22](#decisions));
+- a file that closes, or whose findings are gone, is published an empty
+  list.
+
+The load's problems that have a place are published at their file, open or
+not, usually `astli.toml`: they cost nothing more than the load, and the
+manifest's is often what explains the rest. One without a place is shown
+the user with `window/showMessage` when a load first finds it, and only
+then, since a design is loaded on every edit; a note is only logged. Where
+the dependencies could not be read, the package is read without any of them
+([limitations](limitations.md#a-load-that-cannot-read-one-dependency-reads-the-package-without-any)),
+and every name they declare would be unknown. Why is placed in the
+manifest, at the line its dependencies start on, since a resolution that
+fails says what it lacks but not where it is required. The snapshot says
+so, and then only its problems and each buffer's own findings are
+published, and the design's held back ([L24](#decisions)).
+
+A finding is placed as the CLI places it ([C1](cli.md#decisions)): at the
+outermost macro call when a macro wrote what it is about, through the
+unit's origins and in the negotiated encoding. Its labels, the text a macro
+call stands for, each call of the macro chain and each `` `include `` that
+reached the file are related information, each at its place; for a client
+that takes none, a line of the message each. Notes and help join the
+message, a line each. An error is an error, a warning a warning, a note
+information. The `source` is `astli` and the `code` the finding's, and a lint
+rule's code links to its group on the rules page of the site, which lists
+it.
+
+An open file's diagnostics are published under the URI the client opened it
+with, and a related place in an open file names that URI too: a client
+matches a URI to its documents as written, and may escape a character, or
+write a drive letter, otherwise than the path's own URI does. A file not
+open is published under the URI its path makes, and cleared under the one
+it was last published under.
+
 ## Decisions
 
 | # | Decision | Why |
@@ -329,6 +429,10 @@ and is an empty range there.
 | L18 | A snapshot is one design root's: the package an open file is in, as `check` with no arguments finds it, or the file alone outside any. Files of one root share it; a workspace member is a root of its own | It is what `check` would say in the file's directory, which is what a user compares the editor with. A root is cheap to find from a path and never depends on what else is open, so opening a file never changes another's design. A member's file read inside a sibling's design would be read with the sibling's build, and which sibling would depend on the order files were opened. |
 | L19 | A unit is cached under its path and build, valid while every file it read reads the same and every file it asked after exists as it did. No hash, and no knowledge of the preprocessor | What a unit read is all it depends on, and recording it at the `Reader` catches what a list of included files would miss: a header created earlier on the include path. Comparing with the text its origins already hold is exact and costs no memory. |
 | L20 | A root's plan is kept until a manifest, the lock or the set of source files changes, as `workspace/didChangeWatchedFiles` says; edits debounce for 100 ms | Discovery walks the package and settles its dependencies, which an edit to a source file does not change. 100 ms is longer than the pause between keys and short enough that the design is current by the time the reader looks. |
+| L21 | Diagnostics are published for open files only, and the load's problems at their file. Of a design, only the units that hold an open file are checked and linted | `check` over a whole package is what a cold run costs, 1.1 s on OpenTitan, and a design is loaded again on every edit. The files open are the ones being read; CI's `check` covers the rest. A problem is the load's, found whatever is open, and the manifest's is the one that explains why the rest is missing. |
+| L22 | What is published for a file is the buffer's findings and the snapshot's together, one with the same range, code and message once. A snapshot's, and the load's problems placed in an open file, are taken for the file only if its load read the buffer's text as it is now; a change keeps those of the changed file that end before the first character it changed, related places in the file and all, until the next snapshot. A header's are those of every reported unit that includes it | Neither step shows a finding at a place its text no longer has, and neither waits for the other. The text before an edit is unchanged, so what is found there is placed exactly, and the design's findings above the cursor do not blink out at each key. A header means something in each unit that includes it, as `check` reports it through each. |
+| L23 | What the driver's policy decides comes as data: the snapshot says whether `check` and whether `lint`'s design rules report each unit, the levels `lint` reads each root file at, and each top's body; the server runs the checks the commands run over them. The tree rules' levels are the snapshot's too | Which files are reported ([P8](packages.md#decisions)), the levels, the waivers and the tops are the manifest's, which only the driver reads, and levels can extend a style that is a dev dependency, which only discovery finds. As data, a finding is the same whether `check` or the server runs it, and no second copy of the policy can disagree with the first. |
+| L24 | A snapshot whose dependencies could not be read says so, and then only its problems and the buffers' own findings are published; why is a diagnostic in the manifest | The package is then read without any dependency, so every name one declares would be reported unknown, a wall of findings that says nothing. A fresh clone opened before `astli fetch` is that case, and the manifest's diagnostic says which dependency the store lacks, beside the requirements, and names the command. |
 
 ## Prior art
 

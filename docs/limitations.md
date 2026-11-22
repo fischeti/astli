@@ -895,6 +895,56 @@ under a running server: the server could register a watcher for each file
 its loads read outside the globs. **Where** `astli-lsp/src/server.rs`
 (`watch`)
 
+### A file only a feature compiles is not linted in an editor
+
+The server loads a package with its default features, as `check` with no
+arguments does, and hands each file of that design the levels `lint` reads
+it at. `lint` reads every feature's files as written, so a file only
+another feature compiles has no levels in the server: neither the tree
+rules nor the design's run over it, though `astli lint` lints it.
+**Revisit when** such a file is edited often enough to matter: the levels
+could be read over every feature's files, as `lint` reads them, while the
+design stays the default one. **Where** `astli-cli/src/host.rs` (`leveled`)
+
+### Each load makes its design's linter, and what its tops build, again
+
+Only the units that hold an open file are checked and linted, but the
+linter resolves every file of the design to know what each reads and
+writes, and where the manifest names tops, what they build and what only
+it gets wrong are found over the whole design. Each is made again on every
+load, which comes after every edit. On OpenTitan, release, ten cores
+(`scripts/lsp-rebuild.py`), this step takes about 60 ms after a load with
+one unit open, as long as the load itself after an edit to that unit; with
+`prim_assert.sv` open, which 595 units include, every one of them is
+checked and linted, and it takes about 330 ms. **Revisit when** an editor
+feels it: what the linter gathers of a unit could be kept with the unit,
+what is built kept while no unit changes, and a header read through a few
+of the units that include it rather than all. **Where**
+`astli-lsp/src/diagnostics.rs` (`of_design`)
+
+### A dependency the store lacks is told at the manifest's dependencies
+
+A resolution that fails says what it lacks in its message, not where the
+manifest requires it, so the server places why the package is read
+without its dependencies at the line their table starts on, or the first
+line of the manifest. **Revisit when** a resolution's errors name the
+requirement they are about. **Where** `astli-cli/src/settle.rs`
+(`dependencies_line`)
+
+### What `check` says of the list it would write is not published
+
+Besides its findings, `check` tells two things of the filelist `files`
+would write for the design: a file of a dependency with no manifest of its
+own that binds into what the tops build, a note, and a header a tool given
+the list would find in another include directory than astli did, or in
+none, a warning. The server publishes neither. Each is about the list, not
+the file being edited, and has no place in it: the first names a
+dependency, the second a header's path. **Revisit when** an editor user
+asks why `check` warns of what the editor does not show: each could be a
+problem at the file it names, as a name declared twice is. **Where**
+`astli-cli/src/host.rs` (`analysed`), beside `listing::foreign_binds` and
+`Listing::misfound`
+
 ### A lone `\r` does not end a line
 
 The protocol ends a line at `\n`, `\r\n` or `\r`; astli's line table, and so

@@ -23,20 +23,25 @@ impl Server {
     /// The buffer `uri` names and its raw tree, or `None` if it is not
     /// open.
     pub fn raw(&mut self, uri: &Uri) -> Option<(&Buffer, &SyntaxTree)> {
-        let path = buffers::path(uri)?;
-        let buffer = self.buffers.get(&path)?;
+        self.tree(&buffers::path(uri)?)
+    }
+
+    /// The buffer at `path`, as [`buffers::key`] makes it, and its raw
+    /// tree, or `None` if it is not open.
+    pub fn tree(&mut self, path: &Path) -> Option<(&Buffer, &SyntaxTree)> {
+        let buffer = self.buffers.get(path)?;
         let trees = &mut self.trees.0;
         // A tree is checked against its buffer's text rather than told of
         // each edit, so that it cannot outlive a change it missed; one whose
         // buffer has closed goes the next time any tree is asked for.
         trees.retain(|path, _| self.buffers.get(path).is_some());
         let stale = trees
-            .get(&path)
+            .get(path)
             .is_none_or(|tree| tree.source() != &*buffer.text);
         if stale {
-            let tree = SyntaxTree::parse(Path::new(&path), buffer.text.to_string());
-            trees.insert(path.clone(), tree);
+            let tree = SyntaxTree::parse(path, buffer.text.to_string());
+            trees.insert(path.to_path_buf(), tree);
         }
-        Some((buffer, &trees[&path]))
+        Some((buffer, &trees[path]))
     }
 }

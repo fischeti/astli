@@ -22,6 +22,7 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::buffers::{self, Buffers};
+use crate::diagnostics::{ByPath, Published, Told};
 use crate::position::Encoding;
 use crate::slots::{Loaded, Slot, drop_later};
 use crate::tasks::{Cancel, Done, Outcome, Tasks, panic_message};
@@ -34,7 +35,7 @@ const WATCHING: &str = "astli/watching";
 
 /// The server's state, owned by the main loop.
 pub struct Server {
-    sender: Sender<Message>,
+    pub sender: Sender<Message>,
     pub encoding: Encoding,
     pub buffers: Buffers,
     pub trees: Trees,
@@ -43,9 +44,17 @@ pub struct Server {
     /// The design root of each open buffer, asked of the host when it was
     /// opened: a file moves to another design only when discovery runs
     /// again.
-    roots: HashMap<PathBuf, PathBuf>,
+    pub roots: HashMap<PathBuf, PathBuf>,
     /// Each design an open buffer is in, by its root.
-    slots: HashMap<PathBuf, Slot>,
+    pub slots: HashMap<PathBuf, Slot>,
+    /// What each open buffer's text says on its own, found again as it
+    /// changes.
+    pub own: ByPath,
+    /// What its design says of each open file, as the last snapshot that
+    /// read the buffer's text found it.
+    pub design: ByPath,
+    /// What was last published for each file, unless that was nothing.
+    pub published: Published,
     /// What the loads send back.
     loads: Sender<Loaded>,
     /// What the main loop waits on beside the client and the requests.
@@ -82,6 +91,9 @@ impl Server {
             host,
             roots: HashMap::new(),
             slots: HashMap::new(),
+            own: ByPath::new(),
+            design: ByPath::new(),
+            published: Published::new(),
             loads,
             loaded,
             client: ClientCapabilities::default(),
@@ -134,30 +146,44 @@ impl Server {
     /// Starts a load of each design whose edits have settled, and says when
     /// the next one is due.
     pub fn load_due(&mut self, now: Instant) -> Option<Instant> {
+        let shape = self.shape();
         for (root, slot) in &mut self.slots {
             if slot.due.is_some_and(|due| due <= now) {
                 let texts = self.buffers.texts();
-                slot.load(root, texts, &self.host, &self.loads);
+                let open = (self.roots.iter())
+                    .filter(|(_, it)| *it == root)
+                    .map(|(path, _)| path.clone())
+                    .collect();
+                slot.load(root, texts, open, shape, &self.host, &self.loads);
             }
         }
         self.slots.values().filter_map(|slot| slot.due).min()
     }
 
-    /// Swaps in the snapshot a load made, if no edit has overtaken it, and
-    /// tells the client's log; a load that panicked is told too. What is
-    /// dropped of a design is dropped off the loop.
+    /// Swaps in the snapshot a load made, if no edit has overtaken it, with
+    /// what it found, and tells the client's log; a load that panicked is
+    /// told too. What is dropped of a design is dropped off the loop.
     pub fn swap(&mut self, loaded: Loaded) {
         let root = loaded.root.clone();
         let Some(slot) = self.slots.get_mut(&root) else {
             return drop_later(loaded);
         };
         match slot.swap(loaded, &self.buffers) {
-            Ok(Some(snapshot)) => {
+            Ok(Some((snapshot, found))) => {
                 let (units, lowered) = (snapshot.units(), snapshot.lowered);
                 let took = slot.took.as_millis();
-                let root = root.display();
-                let said = format!("loaded {root}: {units} units, {lowered} lowered, in {took} ms");
+                let at = root.display();
+                let said = format!("loaded {at}: {units} units, {lowered} lowered, in {took} ms");
                 self.log(MessageType::Log, said);
+                if found.units > 0 {
+                    let (units, took) = (found.units, found.took.as_millis());
+                    let said = format!("checked {at}: {units} units, in {took} ms");
+                    self.log(MessageType::Log, said);
+                }
+                for panicked in &found.panicked {
+                    self.log(MessageType::Error, panicked.clone());
+                }
+                self.found(&root, found);
             }
             Ok(None) => {}
             Err(panicked) => {
@@ -169,7 +195,6 @@ impl Server {
 
     /// The snapshot current for the file at `path`, if it is open and its
     /// design has loaded.
-    #[expect(dead_code, reason = "the requests over the design call it")]
     pub fn snapshot(&self, path: &Path) -> Option<Arc<Snapshot>> {
         let root = self.roots.get(&buffers::key(path))?;
         self.slots.get(root)?.current.clone()
@@ -196,18 +221,24 @@ impl Server {
     }
 
     /// Drops each design no open buffer is in, off the loop: overtakes its
-    /// load running, and tells the host to forget what it kept of it.
+    /// load running, tells the host to forget what it kept of it, and
+    /// takes its problems back from the files they were published at.
     fn drop_unused(&mut self) {
         let unused: Vec<PathBuf> = (self.slots.keys())
             .filter(|root| !self.roots.values().any(|it| it == *root))
             .cloned()
             .collect();
+        let mut placed = Vec::new();
         for root in unused {
             if let Some(slot) = self.slots.remove(&root) {
                 slot.overtake();
                 self.host.forget(&root);
+                placed.extend(slot.problems.keys().cloned());
                 drop_later(slot);
             }
+        }
+        for path in placed {
+            self.publish(&path);
         }
     }
 
@@ -281,12 +312,21 @@ impl Server {
         // Asked first, so that a host that panics leaves no buffer without
         // a design.
         let root = self.host.design(&path);
-        self.buffers.open(&path, document.text);
+        let (uri, text, version) = (document.uri, document.text, document.version);
+        self.buffers.open(&path, uri, text, version);
         self.slots.entry(root.clone()).or_insert_with(Slot::new);
         self.roots.insert(path.clone(), root.clone());
         self.touch(&path, Some(&root));
         // Opened again, a file may be in another design than before.
         self.drop_unused();
+        // Opened, it may hold another text than its design read, or the
+        // disk its problems were placed in.
+        self.design.remove(&path);
+        for slot in self.slots.values_mut() {
+            slot.problems.remove(&path);
+        }
+        self.find_own(&path);
+        self.publish(&path);
     }
 
     fn change(&mut self, params: DidChangeTextDocumentParams) {
@@ -296,14 +336,29 @@ impl Server {
             return;
         };
         let changes = params.content_changes;
-        if !(self.buffers).change(&path, changes, self.encoding) {
+        let version = document.version;
+        let Some(earliest) = (self.buffers).change(&path, changes, version, self.encoding) else {
             return self.log(
                 MessageType::Warning,
                 format!("{uri} changed, and is not open"),
             );
-        }
+        };
         let root = self.roots.get(&path).cloned();
         self.touch(&path, root.as_deref());
+        // What the design found before the change is still where it was,
+        // until the design is loaded again; what it found after may not be.
+        // A load's problems placed in the file are its findings too.
+        let before = |it: &Told| it.reach < earliest;
+        if let Some(design) = self.design.get_mut(&path) {
+            design.retain(before);
+        }
+        for slot in self.slots.values_mut() {
+            if let Some(problems) = slot.problems.get_mut(&path) {
+                problems.retain(before);
+            }
+        }
+        self.find_own(&path);
+        self.publish(&path);
     }
 
     fn close(&mut self, params: DidCloseTextDocumentParams) {
@@ -312,9 +367,12 @@ impl Server {
         };
         if self.buffers.close(&path) {
             self.roots.remove(&path);
+            self.own.remove(&path);
+            self.design.remove(&path);
             // What the disk holds may not be what the buffer did.
             self.touch(&path, None);
             self.drop_unused();
+            self.publish(&path);
         }
     }
 
