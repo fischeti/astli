@@ -509,9 +509,9 @@ Manifest::parse(astli, bender)?;         // Result<Manifest, Malformed>: the sam
 let deps = Dependencies::ordered(&package, found, requires)?;  // what resolution found, in bender's order
 let enabled = deps.select(&package, &selection)?;   // the features each enables, settled once for the design
 deps.replaced(&package, &declared)?;    // Vec<bool>: which units an override replaces
-let files = package.files(&walk, &deps.include_dirs())?;  // Files: walked, units, headers, and the build
+let files = package.files(&walk, &deps.include_dirs(), &Disk)?;  // Files: walked, units, headers, and the build
 let dep = &deps.packages[0];             // Dependency: a name, a Package as a dependent sees it, what it needs, its Walk
-dep.package.files(&dep.walk, &deps.include_dirs_of(dep))?;
+dep.package.files(&dep.walk, &deps.include_dirs_of(dep), &Disk)?;
 ```
 
 A `Package` holds its `Manifest`, what `[package]` and the tables of a
@@ -534,11 +534,14 @@ it was located, so its files are walked and told apart by the same code
 include directories, then its dependencies', and after them its walked
 files by path suffix (`Build::include_files`). `Build::resolve` is the
 one search for an `` `include ``, asking a `Reader` which candidate it
-holds: the expander asks its session's, and discovery, telling headers
-from units, and `pickle`, inlining them, ask `Disk`, each taking the
-directives from `Scan::includes`. Given the same reader they find the same
-header. A file that is found and cannot be read is the expander's
-`include-not-found`, saying why, rather than a reason to search on.
+holds: the expander asks its session's, discovery, telling headers from
+units, the one `Package::files` is given, and `pickle`, inlining them,
+asks `Disk`, each taking the directives from `Scan::includes`. Given the
+same reader they find the same header. `Package::files` reads what each
+file holds through its reader, so an editor's unsaved buffer counts as
+it would saved, but which files there are is the walk's, on disk. A file
+that is found and cannot be read is the expander's `include-not-found`,
+saying why, rather than a reason to search on.
 
 `astli-resolve` fetches what a dependency names by `git` and chooses its
 versions. It and `astli-package` serve the driver, and their API follows

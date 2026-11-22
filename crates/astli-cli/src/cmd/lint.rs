@@ -35,7 +35,7 @@ use std::sync::Arc;
 use astli_lint::{Config, Layer, Level, Linter, RULES, RuleOption, Waivers, lint};
 use astli_parse::{NOT_PARSED, SyntaxTree};
 use astli_sema::Built;
-use astli_text::{Diagnostic, Edit, Origins, apply};
+use astli_text::{Diagnostic, Edit, Origins, Reader, apply};
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
@@ -131,7 +131,7 @@ impl Lint {
         // told as soon as the file is read; with one, it waits for the
         // design's findings.
         let trees = cmd::each(out, &plan.own, run, None, |sink, path| {
-            let mut read = Read::of(path, &levels[at[path]], !self.fix, design)?;
+            let mut read = Read::of(path, &levels[at[path]], !self.fix, design, run.reader())?;
             if !design {
                 for (origins, found) in std::mem::take(&mut read.found) {
                     sink.report.render(&origins, &found)?;
@@ -251,7 +251,7 @@ const PASSES: usize = 8;
 fn fix(files: &[PathBuf], levels: &[Config]) -> Result {
     let fixed: Vec<usize> = (files.par_iter().zip(levels))
         .map(|(path, config)| {
-            let original = crate::session::tree(path)?;
+            let original = crate::session::tree(path, &astli_text::Disk)?;
             if !original.diagnostics().is_empty() {
                 return Ok(0);
             }
@@ -312,9 +312,16 @@ impl<'a> Read<'a> {
     /// findings still holding a fix are those it could not apply.
     ///
     /// What the parser kept as written, which the rules did not read, is a
-    /// warning, but with a `design`, whose expansion says it instead.
-    fn of(path: &Path, levels: &'a Config, offer: bool, design: bool) -> Result<Read<'a>> {
-        let tree = crate::session::tree(path)?;
+    /// warning, but with a `design`, whose expansion says it instead. The
+    /// file is read through `reader`.
+    fn of(
+        path: &Path,
+        levels: &'a Config,
+        offer: bool,
+        design: bool,
+        reader: &dyn Reader,
+    ) -> Result<Read<'a>> {
+        let tree = crate::session::tree(path, reader)?;
         let offer = offer && tree.diagnostics().is_empty();
         let mut found = tree.diagnostics().to_vec();
         if !design {

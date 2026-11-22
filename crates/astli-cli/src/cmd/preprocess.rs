@@ -127,7 +127,7 @@ fn one(
     build: &Build,
     quiet: bool,
 ) -> Result<Counts> {
-    let mut opened = session::open(path, build)?;
+    let mut opened = session::open(path, build, &astli_text::Disk)?;
     let out = &mut *sink.out;
 
     let counts = match emit {

@@ -14,7 +14,7 @@ use astli_index::Declares;
 use astli_package::mark;
 use astli_preproc::MacroTable;
 use astli_sema::{Elaboration, TopError, TopValue};
-use astli_text::is_lfs_pointer;
+use astli_text::{Disk, is_lfs_pointer};
 
 use crate::analysis::Elaborated;
 use crate::cmd;
@@ -76,9 +76,9 @@ pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &Run) -> Result<Vec<Marked
         // read again, to be refused as any read of a source refuses them.
         let text = match String::from_utf8(bytes) {
             Ok(text) if !is_lfs_pointer(&text) => text,
-            _ => session::read(file)?,
+            _ => session::read(file, &Disk)?,
         };
-        let opened = session::opened(file, text, &astli_preproc::Build::new());
+        let opened = session::opened(file, text, &astli_preproc::Build::new(), &Disk);
         let parsed = astli_parse::parse(&opened.session, opened.file, MacroTable::new());
         Ok(marks(opened.session.origins(), &parsed))
     })?;
@@ -244,7 +244,7 @@ pub(crate) struct Test<'a> {
     /// The marks on its declaration, which hold its sweeps.
     pub marks: Option<&'a Marks>,
     /// The run, which tells what is wrong with a sweep.
-    pub run: &'a Run,
+    pub run: &'a Run<'a>,
 }
 
 impl Test<'_> {

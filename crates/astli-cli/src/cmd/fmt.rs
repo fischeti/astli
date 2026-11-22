@@ -101,7 +101,7 @@ impl Fmt {
         files.retain(|file| !config.excludes(file));
         // No file is printed: a diff names its own.
         let outcome = cmd::each(out, &files, run, None, |sink, path| {
-            let tree = crate::session::tree(path)?;
+            let tree = crate::session::tree(path, run.reader())?;
             report(
                 sink.out,
                 &mut sink.report,

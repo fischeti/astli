@@ -67,7 +67,7 @@ impl RunWith<Ctx<'_>> for Lex {
 }
 
 fn one(out: &mut dyn Write, path: &Path, no_trivia: bool, quiet: bool) -> Result<Stats> {
-    let text = crate::session::read(path)?;
+    let text = crate::session::read(path, &astli_text::Disk)?;
 
     // Direct lexing of a single file does not require preprocessor session state;
     // an Origins map suffices for line and column mapping.

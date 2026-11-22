@@ -1,9 +1,12 @@
 //! When a run resolves the dependencies of the package it acts on over
 //! `astli.lock`, and when it writes the lock: in a workspace the lock is its
 //! root's, and resolves every member. And the dependencies a design reads,
-//! loaded from what was resolved, with what loading found told.
+//! loaded from what was resolved, with what loading found told; or, for a
+//! run that loads what it can, the package without them.
 
-use astli_package::{MANIFEST, mark};
+use std::collections::BTreeSet;
+
+use astli_package::{Dependencies, MANIFEST, mark};
 use astli_resolve::{Loaded, Lock, Note, Overrides, Resolution, resolve};
 
 use crate::error::{Error, Result};
@@ -194,6 +197,39 @@ pub fn dependencies(run: &Run, here: &Here, locked: bool) -> Result<Loaded> {
     let package = &here.package.package;
     let told = |note| warning(note).report(run);
     Ok(resolution.load(&store, &here.workspace.root, package, told)?)
+}
+
+/// The dependencies of `here`'s package, as [`dependencies`] loads them,
+/// with the package they are loaded for: `here`'s own.
+///
+/// A run that [loads what it can](Run::loads_what_it_can) is not failed by
+/// a dependency it cannot settle or read: why is a problem it keeps, and
+/// the package is read without any dependency, as if it required none. An
+/// error that names one dependency still loses the rest, since a
+/// resolution that fails holds none of them.
+pub fn loaded(run: &Run, here: Here) -> Result<(Here, Loaded)> {
+    let err = match dependencies(run, &here, run.args.locked) {
+        Ok(loaded) => return Ok((here, loaded)),
+        Err(err) if run.loads_what_it_can() => err,
+        Err(err) => return Err(err),
+    };
+    (err.problem())
+        .note("the package is read without its dependencies")
+        .report(run);
+    let mut here = here;
+    let manifest = &mut here.package.package.manifest;
+    manifest.dependencies.clear();
+    manifest.dev_dependencies.clear();
+    manifest.dev_features.clear();
+    for feature in manifest.features.values_mut() {
+        feature.dependencies.clear();
+    }
+    let loaded = Loaded {
+        dependencies: Dependencies::default(),
+        described: Vec::new(),
+        on_disk: BTreeSet::new(),
+    };
+    Ok((here, loaded))
 }
 
 /// What a run says of `note`.

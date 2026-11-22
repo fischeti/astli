@@ -13,7 +13,7 @@ use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
 use astli_sema::{BodyId, Design, Elaboration, FileId, Hir, TopValue, lower};
-use astli_text::{Diagnostic, Origins};
+use astli_text::{Diagnostic, Origins, Reader};
 
 use crate::cmd::{self, Outcome};
 use crate::discovery::{Plan, kept_only};
@@ -69,9 +69,9 @@ impl Analysis {
                 // built alike, so each is lowered once for all of them that
                 // build it with what `made` says.
                 Some(made) => run.lowered(path.to_path_buf(), made, || {
-                    lowered(path, plan.build(unit), true)
+                    lowered(path, plan.build(unit), true, run.reader())
                 }),
-                None => lowered(path, plan.build(unit), summarize),
+                None => lowered(path, plan.build(unit), summarize, run.reader()),
             }
         })?;
         plan.unread(&outcome.failed_of(&plan.units));
@@ -288,10 +288,10 @@ pub(crate) type Lowered = (
     Vec<Diagnostic>,
 );
 
-/// Expands, parses and lowers one file, keeping its summary and its marks
-/// if `summarize`.
-fn lowered(path: &Path, build: &Build, summarize: bool) -> Result<Lowered> {
-    let mut opened = session::open(path, build)?;
+/// Expands, parses and lowers one file, read with what it includes through
+/// `reader`, keeping its summary and its marks if `summarize`.
+fn lowered(path: &Path, build: &Build, summarize: bool, reader: &dyn Reader) -> Result<Lowered> {
+    let mut opened = session::open(path, build, reader)?;
     let expanded = opened.expand();
     let parsed = parse_expanded(&opened.session, &expanded.tokens);
     let mut found = opened.diagnostics().to_vec();

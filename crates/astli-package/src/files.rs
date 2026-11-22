@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use astli_preproc::{Build, Resolved, Session};
-use astli_text::{Disk, Reader};
+use astli_text::Reader;
 use rayon::prelude::*;
 
 use crate::{Error, Package, Walk};
@@ -34,8 +34,11 @@ pub struct Files {
 
 impl Package {
     /// Walks the package as `walk` says and tells its headers from its
-    /// units. `dependencies` are the include directories its dependencies
-    /// export, searched after its own.
+    /// units, reading each file through `reader`. `dependencies` are the
+    /// include directories its dependencies export, searched after its own.
+    /// Which files there are is the disk's to say; what each holds, and
+    /// whether a header is there, the reader's, so that an unsaved buffer
+    /// counts as it would saved.
     ///
     /// A header is any file another includes, whatever its extension, since
     /// designs include `.sv` files too. Every branch counts, as one a build
@@ -43,7 +46,12 @@ impl Package {
     /// that resolves to nothing, or to more than one file, is left to the
     /// expansion to report where it matters; each file it could be is a
     /// header.
-    pub fn files(&self, walk: &Walk, dependencies: &[PathBuf]) -> Result<Files, Error> {
+    pub fn files(
+        &self,
+        walk: &Walk,
+        dependencies: &[PathBuf],
+        reader: &dyn Reader,
+    ) -> Result<Files, Error> {
         let walked = self.walk(walk)?;
         let searched: Vec<PathBuf> = (self.search_dirs(&walk.enabled).into_iter())
             .chain(dependencies.iter().cloned())
@@ -51,7 +59,7 @@ impl Package {
         let build = (searched.iter().cloned())
             .fold(Build::new(), Build::include_dir)
             .include_files(walked.iter().cloned());
-        let included = |path: &PathBuf| included(path, &build, &searched);
+        let included = |path: &PathBuf| included(path, &build, &searched, reader);
 
         // Every walked file, in parallel: nearly all the work.
         let scanned: Vec<Vec<Include>> = walked.par_iter().map(included).collect();
@@ -99,12 +107,13 @@ struct Include {
 }
 
 /// Every file an `` `include `` in `path` could name, in any branch, given
-/// the directories `searched` before the suffix search.
+/// the directories `searched` before the suffix search, read through
+/// `reader`.
 ///
 /// A file that cannot be read includes nothing here: what reads it to
 /// compile it says why, and goes on with the rest.
-fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Vec<Include> {
-    let Ok(text) = Disk.read(path) else {
+fn included(path: &Path, build: &Build, searched: &[PathBuf], reader: &dyn Reader) -> Vec<Include> {
+    let Ok(text) = reader.read(path) else {
         return Vec::new();
     };
     // Most files include nothing, and one whose text does not hold the
@@ -121,7 +130,7 @@ fn included(path: &Path, build: &Build, searched: &[PathBuf]) -> Vec<Include> {
         let Some((name, angle)) = written else {
             continue;
         };
-        let headers = match build.resolve(name, angle, &Disk) {
+        let headers = match build.resolve(name, angle, reader) {
             Resolved::Found(header) => vec![header],
             Resolved::Ambiguous(headers) => headers,
             Resolved::NotFound => Vec::new(),

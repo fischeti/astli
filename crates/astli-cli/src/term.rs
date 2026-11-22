@@ -451,14 +451,20 @@ impl Problem {
     /// in `run`: a resolution's warning, or a name declared twice in a
     /// member, would otherwise be told again by each package's run that
     /// meets it.
+    ///
+    /// A run that [keeps](Run::keep) its problems writes nothing: the
+    /// problem is its caller's to render.
     pub fn report(&self, run: &Run) {
+        if run.tells_once() && !run.first_told(self) {
+            return;
+        }
+        if run.keep(self) {
+            return;
+        }
         if self.severity == Severity::Note && QUIET.load(Ordering::Relaxed) {
             return;
         }
         if self.tally && render::FORMAT.get().is_some_and(|it| it.owns_stderr()) {
-            return;
-        }
-        if run.tells_once() && !run.first_told(self) {
             return;
         }
         if let Some(report) = self.at.as_ref().and_then(|at| self.located(at)) {
