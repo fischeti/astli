@@ -10,6 +10,7 @@ mod definition;
 mod diagnostics;
 mod formatting;
 mod hover;
+mod references;
 mod server;
 mod snapshots;
 mod support;

@@ -1,0 +1,6 @@
+b.sv 5:3
+  shared/a.sv 6:3-6:16 `shared_byte_t`
+  shared/a.svh 2:21-2:34 `shared_byte_t` (declaration)
+  shared/a.svh 4:20-4:33 `shared_byte_t`
+  shared/a.svh 4:45-4:58 `shared_byte_t`
+  shared/b.sv 5:3-5:16 `shared_byte_t`

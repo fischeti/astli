@@ -7,7 +7,8 @@
 > from its raw tree, and workspace symbols from the loaded designs' indexes,
 > on the pool; diagnostics are published from the buffer and the snapshot,
 > and their fixes offered as code actions. A position is looked up in the
-> snapshot, and go to definition and hover answer from it.
+> snapshot, and go to definition, references, document highlights and
+> hover answer from it.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -40,7 +41,7 @@ lowered and elaborated, as `check` builds it.
 | Diagnostics | both | the raw parse's and the tree lint rules' at once; the preprocessor's, the expanded parse's, `check`'s and the design lint rules' from the snapshot |
 | Code actions | what was published | the edits `lint --fix` would apply, one finding or the whole file |
 | Workspace symbols | each snapshot's index | every module, interface, program, checker, primitive, package and class of the packages and their dependencies |
-| Definition, references | the snapshot | where a name is declared and used, a macro's `` `define ``, an `` `include ``'s header |
+| Definition, references, highlights | the snapshot | where a name is declared and used, a macro's `` `define `` and calls, an `` `include ``'s header |
 | Hover | the snapshot | a declaration's type and width, a parameter's value, a macro call's expansion |
 | Inlay hints | the snapshot | the formal a positional connection lands on, what `.*` connects, an override's value |
 | Semantic tokens | the snapshot | what a name is, and the branches the build did not take |
@@ -204,8 +205,10 @@ loop it takes the snapshot current for the file's design and the buffer's
 text; on the pool it finds each unit, of each design of the snapshot, whose
 origins hold the file, its own text or each inclusion of a header, and in
 each the byte the position names and what stands there: each name the
-unit's sites give, the macro call whose `` `NAME `` the cursor is on, and
-the `` `include `` it is on. Each place is answered per unit, since a
+unit's sites give, the macro call whose `` `NAME `` the cursor is on, the
+`` `include `` it is on, and the name of a `` `define `` it is on, read off
+the text since no site holds it, outside a branch the build skipped. Each
+place is answered per unit, since a
 header's name may mean something else in each unit that includes it, and a
 request says what several agree on once.
 
@@ -252,8 +255,8 @@ handing its work to the pool.
 `initialize` announces only what is built, each capability added by the
 change that implements it: so far the position encoding, incremental
 text document sync, document symbols, folding ranges, formatting,
-workspace symbols, definition, hover, and code actions of the kinds
-`quickfix` and `source.fixAll.astli`. A
+workspace symbols, definition, references, document highlights, hover,
+and code actions of the kinds `quickfix` and `source.fixAll.astli`. A
 request the server does not know is answered `MethodNotFound`, and a
 notification it does not know is dropped. After `shutdown` every request is
 refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
@@ -506,6 +509,7 @@ lowering does not keep ([S74](sema.md#decisions)).
 | an import's package and item, a `bind`'s target | theirs |
 | a struct's member used | its declaration in the struct, in the body of the definition around it at its defaults |
 | `` `NAME `` of a macro call | the name its `` `define `` defines; nothing for a built-in, a `+define+`, or a macro no `` `define `` defines |
+| the name a `` `define `` defines | itself |
 | an `` `include `` | the start of the header it read |
 
 A definition or a package that several files declare goes to each
@@ -519,6 +523,63 @@ like any other.
 Each place is answered once, in the order found, as a `LocationLink` where
 the client takes links, whose origin is what the cursor was on, and as a
 `Location` otherwise ([L27](#decisions)).
+
+## References
+
+`textDocument/references` is answered on the pool from the lookup, and
+stops between units once the request is cancelled.
+`textDocument/documentHighlight` is the same answer kept to the cursor's
+file, and reads only the units that hold it. A file whose buffer differs
+from the text its snapshot read answers `ContentModified`, as the lookup
+does ([L26](#decisions)). A reference is a place that means what a name at
+the cursor means, so the cursor on a use and on the declaration find the
+same places.
+
+| At the cursor | Finds |
+| --- | --- |
+| a name used, or declared | each use that resolves to it, a scoped or a hierarchical name's too |
+| a definition or a package | each instance, import, scoped name, type, `bind` and hierarchical name that names it, and each file's declaration of it |
+| a port or a parameter | its uses, and each connection or override that names it, `.name` among them, or lands on it by position, the whole expression given |
+| a package's member | its uses, scoped or not, and each import that names it |
+| an implicit net | its uses, the first its declaration |
+| a struct's member, used or declared | each `a.b` that names it, as definition finds a member, at the defaults of the definition around it |
+| `` `NAME `` of a macro call, or the name a `` `define `` defines | each call that read that `` `define ``, one another macro's body or argument writes too, and the name in the `` `define `` |
+
+Sema goes from a use to its declaration and not back, so the way back is a
+scan: each unit's sites, made once a snapshot and kept with the unit as
+the lookup keeps them ([L25](#decisions)), each compared with what the
+cursor's mean. A unit is scanned only where a text its origins hold, a
+header's or a pasted name's too, spells the name, or for a formal the name
+of its definition, since a positional connection spells no formal; a
+macro's calls are read off the expansions of each unit whose origins hold
+its `` `define ``'s file ([L30](#decisions)).
+
+A name declared in a header is a symbol in each unit that includes it, and
+a name a macro's body writes is one in each expansion, so two places mean
+the same when what they name is spelled at the same byte of the same file;
+a definition or a package means the same by its name, as several files may
+declare one and each use names the one sema chose. Each place is answered
+once, sorted by file and place. Without `context.includeDeclaration` the
+declarations are left out; a highlight keeps them, and marks no place a
+read or a write, which the sites do not say. Not found: a name in what the
+parser kept as written, which may stand for several things
+([limitations](limitations.md#a-name-in-an-opaque-region-is-no-reference)),
+and what `.*` connects or a pattern's key names
+([limitations](limitations.md#what--connects-and-a-patterns-key-are-no-references)).
+
+A reference in another open file edited since the load is placed as
+definition places it
+([limitations](limitations.md#a-place-in-another-file-edited-since-the-load-is-placed-in-the-text-the-load-read)).
+
+On OpenTitan, release, on ten cores, as a client times the request over
+five servers with four files open (`uart_core.sv`, `prim_flop.sv`,
+`tlul_pkg.sv` and the header defining `` `ASSERT ``): a signal of
+`uart_core.sv`, which 27 units spell, takes 6 to 17 ms the first time
+after a load and 6 ms after it; `prim_flop`, 490 places in the 659 units
+that spell it, 14 to 21 ms and then 7 to 9; `tl_h2d_t`, 1168 places in 251
+units, 10 to 17 ms; `` `ASSERT ``, 1603 calls, 10 to 13 ms. Making the
+sites of all 1953 units at once takes 16 ms, and the scan of what is kept
+2 to 5 ms. The four requests keep about 10 MB of sites.
 
 ## Hover
 
@@ -647,6 +708,7 @@ or a macro no `` `define `` defines.
 | L27 | Definition answers every place what stands at the cursor leads to, each once: a name's declaration, each declaration of a definition several files declare, what a macro-written name is in each expansion. A declaration answers itself, as links where the client takes them | A name in a header or a macro's body means one thing per inclusion or expansion, and a reader asking where it is declared wants all of them, not the first unit's. An answer of itself lets a client say "this is the definition" rather than nothing. A link's origin tells the client what the answer was for, which a macro call or a positional connection spans more widely than the word under the cursor. |
 | L28 | Hover shows a declaration as written, read from the raw tree of its file, with the comment above it in the same code block. A value is said at the defaults and for each distinct value under the tops, an integer atom type's as a plain number | Lowering keeps a declaration's name and not its range ([S74](sema.md#decisions)), and the raw tree has every declaration as written, the ones a branch hides too, so a hover reads the one file it shows. A comment in SystemVerilog is plain text, which markdown would mangle, and in the block it is shown as written. A sized literal says a value exactly, and `32'sd8` for an `int` is noise where `8` says the same. |
 | L29 | A code action is made from what was last published for the file, while that was published for the buffer's version; a quick fix for each diagnostic the request names that was published with a fix, and fix all as `lint --fix` fixes the buffer, at the levels it was published with | A fix is bytes of the text its finding was found in, and the buffer's findings are found again on every change, so what was published for the version is what the fix is right for. Matching the client's diagnostics against what was published, rather than finding again what lies in the range, offers nothing for a diagnostic the client holds from an older text. Fix all lints the fixed text again, as `lint --fix` does, since a fix that overlaps another is right only for the text the other leaves; its first pass is what was published, the same text at the same levels. |
+| L30 | References scan each unit's kept sites for those that mean what the cursor's mean, a symbol or a member by where its name is spelled and a definition by its name, in the units whose text spells the name. No table from a declaration to its uses is kept. A name in an opaque region is not listed | The sites are what costs, and the lookup keeps them already; a table built from them would be built again on every edit, for a request a reader makes now and then, where the scan takes milliseconds. A header's symbol is one per unit that includes it, and a reader means one. Whether a text spells a name is a superset of where a use may be, where the index's references are not: a name sema finds among the definitions, as the head of `top.sig`, is no reference in a summary. The protocol's answer is a flat list with no place to say one is uncertain, and an opaque region's name may mean any declaration of it. |
 
 ## Prior art
 

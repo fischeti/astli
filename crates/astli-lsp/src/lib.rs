@@ -79,6 +79,7 @@ mod folding;
 mod formatting;
 mod hover;
 mod position;
+mod references;
 mod server;
 mod slots;
 mod snapshot;
@@ -313,10 +314,12 @@ fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
             text_document_sync: Some(sync.into()),
             code_action_provider: Some(actions.into()),
             definition_provider: Some(true.into()),
+            document_highlight_provider: Some(true.into()),
             document_formatting_provider: Some(true.into()),
             document_symbol_provider: Some(true.into()),
             folding_range_provider: Some(FoldingRangeProvider::Bool(true)),
             hover_provider: Some(true.into()),
+            references_provider: Some(true.into()),
             workspace_symbol_provider: Some(true.into()),
             ..ServerCapabilities::default()
         },
