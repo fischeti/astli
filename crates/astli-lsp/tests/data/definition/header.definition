@@ -1,0 +1,16 @@
+header.sv 3:3
+  3:1-3:22 -> header.svh 1:1-1:1 ``
+header.sv 3:12
+  3:1-3:22 -> header.svh 1:1-1:1 ``
+header.sv 7:3
+  7:3-7:10 -> header.svh 2:35-2:42 `state_t`
+header.sv 9:23
+  9:23-9:27 -> header.svh 4:28-4:32 `next`
+header.svh 4:20
+  4:20-4:27 -> header.svh 2:35-2:42 `state_t`
+header.svh 4:35
+  4:33-4:40 -> header.svh 2:35-2:42 `state_t`
+header.svh 6:10
+  6:10-6:13 -> header.svh 4:41-4:44 `now`
+header.svh 6:17
+  6:17-6:21 -> header.svh 2:22-2:26 `Idle`

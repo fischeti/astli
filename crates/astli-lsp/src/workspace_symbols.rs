@@ -172,7 +172,7 @@ fn symbol(
 /// name a macro wrote is not spelled where its outermost call is, so it is
 /// the empty range there. A file the origins do not hold, which a summary
 /// never names, is taken to count as the location does.
-fn range(declaration: &Declaration, origins: &Origins, encoding: Encoding) -> Range {
+pub fn range(declaration: &Declaration, origins: &Origins, encoding: Encoding) -> Range {
     let at = &declaration.location;
     let (line, col) = (at.at.line.saturating_sub(1), at.at.col.saturating_sub(1));
     let file = (origins.files()).find(|&it| origins.path(it) == Some(Path::new(&at.path)));

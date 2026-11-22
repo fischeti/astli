@@ -6,6 +6,8 @@
 > Formatting is answered from the buffer, document symbols and folding
 > from its raw tree, and workspace symbols from the loaded designs' indexes,
 > on the pool; diagnostics are published from the buffer and the snapshot.
+> A position is looked up in the snapshot, and go to definition answers
+> from it.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -195,6 +197,45 @@ A value depends on the instance. A definition's body at its defaults always
 exists; where the manifest names tops ([P32](packages.md#decisions)), the
 bodies the definition has under them are found by walking down from each.
 
+### The lookup
+
+Every request that starts at a position goes through one lookup. On the
+loop it takes the snapshot current for the file's design and the buffer's
+text; on the pool it finds each unit, of each design of the snapshot, whose
+origins hold the file, its own text or each inclusion of a header, and in
+each the byte the position names and what stands there: each name the
+unit's sites give, the macro call whose `` `NAME `` the cursor is on, and
+the `` `include `` it is on. Each place is answered per unit, since a
+header's name may mean something else in each unit that includes it, and a
+request says what several agree on once.
+
+A unit's sites are made the first time a request asks for them, and kept
+with the unit for as long as its snapshot lives. Its macro calls, and the
+branch bodies its expansion skipped, the driver keeps in the snapshot as it
+lowers the unit: they are a few ids and spans a unit, where its expanded
+tokens are the size of the text it read ([L25](#decisions)). A call is
+found among the calls a file writes outside any other, so one written in
+another's argument is not found
+([limitations](limitations.md#a-macro-call-in-another-calls-argument-is-not-found-from-a-cursor)).
+
+A position is in the buffer's text, and the snapshot may have read older
+text. Where a unit read the file otherwise than the buffer holds it now,
+the edit has made the design due already, and the lookup answers
+`ContentModified`, which tells the client to ask again, rather than answer
+from places the text no longer has ([L26](#decisions)). A file not open,
+one whose design has not loaded, and one no unit of its design holds,
+answer nothing.
+
+A place the snapshot holds leaves the server as a `file:` URI and a range in
+the negotiated encoding, counted in the text the unit's origins hold of the
+file, as diagnostics are placed; an open file is named by the URI the client
+opened it with.
+
+On OpenTitan, release, a lookup in `uart_core.sv` takes 3 ms, most of it
+finding the unit among the 1953. The first in `prim_assert.sv` after a load
+takes 45 ms, making the sites of the 595 units that include it, and each
+after it 4 ms.
+
 ## The loop
 
 One thread runs the server (`astli-lsp`), started by `astli lsp`, which
@@ -209,8 +250,8 @@ handing its work to the pool.
 
 `initialize` announces only what is built, each capability added by the
 change that implements it: so far the position encoding, incremental
-text document sync, document symbols, folding ranges, formatting and
-workspace symbols. A
+text document sync, document symbols, folding ranges, formatting,
+workspace symbols and definition. A
 request the server does not know is answered `MethodNotFound`, and a
 notification it does not know is dropped. After `shutdown` every request is
 refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
@@ -405,6 +446,37 @@ write a drive letter, otherwise than the path's own URI does. A file not
 open is published under the URI its path makes, and cleared under the one
 it was last published under.
 
+## Definition
+
+`textDocument/definition` is answered on the pool from the lookup, and
+stops between units once the request is cancelled. What it goes to is the
+place a name is declared, its name and not the whole declaration, which
+lowering does not keep ([S74](sema.md#decisions)).
+
+| At the cursor | Goes to |
+| --- | --- |
+| a name used that sema resolves | its declaration; an implicit net, its first use |
+| a declaration, a struct's member declared | itself, so that a client can tell it is there |
+| an instance's definition | the definition |
+| `.name(…)` or `.name` of a connection or an override | the port or the parameter; `.name` also the name it connects |
+| a positional connection or override | the formal it lands on, only where no name inside it is under the cursor |
+| an import's package and item, a `bind`'s target | theirs |
+| a struct's member used | its declaration in the struct, in the body of the definition around it at its defaults |
+| `` `NAME `` of a macro call | the name its `` `define `` defines; nothing for a built-in, a `+define+`, or a macro no `` `define `` defines |
+| an `` `include `` | the start of the header it read |
+
+A definition or a package that several files declare goes to each
+declaration, as the index groups them. A name a macro wrote goes,
+from the `` `define ``'s body, to what it is in each expansion, and from a
+call's argument, to what it is at that call. A name nothing declares goes
+nowhere, and so does a name in what the parser kept as written, which may
+stand for several things. A target in a dependency's checkout is a file
+like any other.
+
+Each place is answered once, in the order found, as a `LocationLink` where
+the client takes links, whose origin is what the cursor was on, and as a
+`Location` otherwise ([L27](#decisions)).
+
 ## Decisions
 
 | # | Decision | Why |
@@ -433,6 +505,9 @@ it was last published under.
 | L22 | What is published for a file is the buffer's findings and the snapshot's together, one with the same range, code and message once. A snapshot's, and the load's problems placed in an open file, are taken for the file only if its load read the buffer's text as it is now; a change keeps those of the changed file that end before the first character it changed, related places in the file and all, until the next snapshot. A header's are those of every reported unit that includes it | Neither step shows a finding at a place its text no longer has, and neither waits for the other. The text before an edit is unchanged, so what is found there is placed exactly, and the design's findings above the cursor do not blink out at each key. A header means something in each unit that includes it, as `check` reports it through each. |
 | L23 | What the driver's policy decides comes as data: the snapshot says whether `check` and whether `lint`'s design rules report each unit, the levels `lint` reads each root file at, and each top's body; the server runs the checks the commands run over them. The tree rules' levels are the snapshot's too | Which files are reported ([P8](packages.md#decisions)), the levels, the waivers and the tops are the manifest's, which only the driver reads, and levels can extend a style that is a dev dependency, which only discovery finds. As data, a finding is the same whether `check` or the server runs it, and no second copy of the policy can disagree with the first. |
 | L24 | A snapshot whose dependencies could not be read says so, and then only its problems and the buffers' own findings are published; why is a diagnostic in the manifest | The package is then read without any dependency, so every name one declares would be reported unknown, a wall of findings that says nothing. A fresh clone opened before `astli fetch` is that case, and the manifest's diagnostic says which dependency the store lacks, beside the requirements, and names the command. |
+| L25 | A request at a position goes through one lookup, which gives each unit that holds the file, the byte, the sites there, the macro call and the `` `include ``. A unit's sites are made on the first ask and kept with it; its macro calls and skipped branches the driver keeps in the snapshot, and not its expanded tokens | Definition, references, hover and inlay hints all start from what stands at a place, and finding it is the same for each. Sites take a walk of the unit's HIR, which a header's 595 units make 45 ms of, so they are made once a snapshot rather than once a request, and only for the units asked about. A unit's calls are ids into the origins the snapshot keeps already. Its tokens would cost as much as its text again, for every unit, to show the expansion of a call a reader hovers, which expanding that one unit again from its build, kept in the snapshot, gives when asked. |
+| L26 | A lookup in a file whose buffer differs from the text its snapshot read answers `ContentModified` | The position is in the buffer's text, and the snapshot's places are in the text it read, so any answer would be placed where the text no longer is. The edit has made the design due already, and the client asks again. Mapping the position back through the edit would need the edits kept since the load. |
+| L27 | Definition answers every place what stands at the cursor leads to, each once: a name's declaration, each declaration of a definition several files declare, what a macro-written name is in each expansion. A declaration answers itself, as links where the client takes them | A name in a header or a macro's body means one thing per inclusion or expansion, and a reader asking where it is declared wants all of them, not the first unit's. An answer of itself lets a client say "this is the definition" rather than nothing. A link's origin tells the client what the answer was for, which a macro call or a positional connection spans more widely than the word under the cursor. |
 
 ## Prior art
 

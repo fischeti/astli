@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use astli_fmt::Options;
 use astli_lint::Config;
-use astli_lsp::{Analysed, At, Place, Problem, Snapshot, Unit, Watched};
+use astli_lsp::{Analysed, At, Memo, Place, Problem, Snapshot, Unit, Watched};
 use astli_package::{BENDER_MANIFEST, EXTENSIONS, MANIFEST, mark};
 use astli_resolve::LOCKFILE;
 use astli_text::Reader;
@@ -340,6 +340,7 @@ fn analysed(run: &Run, plan: &Plan, analysis: Analysis, levels: &Leveled) -> Res
         linted: linted[at] && levels.contains_key(&unit.path),
         calls: recorded.calls,
         skipped: recorded.skipped,
+        memo: Memo::default(),
     })
     .collect();
     Ok(Analysed {

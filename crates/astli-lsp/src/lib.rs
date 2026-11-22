@@ -71,6 +71,8 @@
 //! ```
 
 mod buffers;
+mod cursor;
+mod definition;
 mod diagnostics;
 mod folding;
 mod formatting;
@@ -99,7 +101,7 @@ use lsp_types::{
 use position::Encoding;
 use server::Server;
 
-pub use snapshot::{Analysed, At, Place, Problem, Snapshot, Unit};
+pub use snapshot::{Analysed, At, Memo, Place, Problem, Snapshot, Unit};
 
 /// What the server needs of the driver: what it says of itself, what only
 /// the driver can read, and what a design is and how one is loaded. Shared
@@ -300,6 +302,7 @@ fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
         capabilities: ServerCapabilities {
             position_encoding: Some(encoding.kind()),
             text_document_sync: Some(sync.into()),
+            definition_provider: Some(true.into()),
             document_formatting_provider: Some(true.into()),
             document_symbol_provider: Some(true.into()),
             folding_range_provider: Some(FoldingRangeProvider::Bool(true)),

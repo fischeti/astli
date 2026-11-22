@@ -1,0 +1,15 @@
+macros.sv 5:29
+  nothing
+macros.sv 5:38
+  5:38-5:44 -> macros.sv 9:9-9:15 `source`
+  5:38-5:44 -> macros.sv 15:9-15:15 `source`
+macros.sv 10:3
+  10:3-10:8 -> macros.sv 5:9-5:13 `READ`
+macros.sv 10:5
+  10:3-10:8 -> macros.sv 5:9-5:13 `READ`
+macros.sv 10:9
+  10:9-10:10 -> macros.sv 9:17-9:18 `x`
+macros.sv 17:25
+  nothing
+macros.sv 19:26
+  nothing

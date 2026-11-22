@@ -5,11 +5,11 @@
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use astli_index::Index;
 use astli_lint::Config;
-use astli_sema::{BodyId, Elaboration, FileId};
+use astli_sema::{BodyId, Design, Elaboration, FileId, Sites};
 use astli_text::{Diagnostic, ExpansionId, LineCol, Origins, Severity, Span};
 
 /// A design root's design as one load found it, never changed once built.
@@ -88,6 +88,25 @@ pub struct Unit {
     pub calls: Arc<[ExpansionId]>,
     /// The body of each branch its expansion did not take, as written.
     pub skipped: Arc<[Span]>,
+    /// What requests find of it and keep for the next; a load makes it
+    /// empty, with `Memo::default()`.
+    pub memo: Memo,
+}
+
+impl Unit {
+    /// Each name the unit's HIR holds, by where it is spelled, made on the
+    /// first ask from `design`, the one its [`Analysed`] holds.
+    pub fn sites(&self, design: &Design) -> &Sites {
+        (self.memo.sites).get_or_init(|| Sites::new(design, self.file, &self.origins))
+    }
+}
+
+/// What requests have found of a unit, kept with it: a snapshot outlives a
+/// request, and finding it again would cost each request a walk of the
+/// unit's HIR.
+#[derive(Default)]
+pub struct Memo {
+    sites: OnceLock<Sites>,
 }
 
 /// Something wrong with a load that is no finding of a unit, as plain text.

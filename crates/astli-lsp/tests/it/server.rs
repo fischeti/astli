@@ -30,13 +30,14 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
         client.finish();
     }
 
-    // Everything else announced is the documents' sync, formatting, symbols
-    // and folds.
+    // Everything else announced is the documents' sync, formatting, symbols,
+    // folds and definitions.
     let general = json!({ "positionEncodings": ["utf-8"] });
     let (client, result) = Client::initialize(&[], json!({ "general": general }));
     expect![[r#"
         {
           "capabilities": {
+            "definitionProvider": true,
             "documentFormattingProvider": true,
             "documentSymbolProvider": true,
             "foldingRangeProvider": true,
