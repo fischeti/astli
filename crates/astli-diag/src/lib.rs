@@ -5,9 +5,9 @@
 //! *placed*, which inside a macro is text the user never wrote. Showing it
 //! takes two steps:
 //!
-//! 1. [`resolve`] (or [`resolve_all`] for many) maps each span to where it is
-//!    written, against the [`Origins`](astli_text::Origins) the diagnostic
-//!    came with. The result, a [`Resolved`], points at the outermost macro
+//! 1. [`resolve_all`] maps each diagnostic's span to where it is written,
+//!    against the [`Origins`](astli_text::Origins) the diagnostics came
+//!    with. Each result, a [`Resolved`], points at the outermost macro
 //!    call and names it as a [`Place`], a path and the lines and columns it
 //!    covers; holds the text the call stands for as
 //!    [`spelled`](Resolved::spelled); and lists the calls it went
@@ -77,6 +77,6 @@ mod resolve;
 mod sources;
 mod terminal;
 
-pub use resolve::{Place, Resolved, Through, resolve, resolve_all};
+pub use resolve::{Place, Resolved, Through, resolve_all};
 pub use sources::Sources;
 pub use terminal::{EXPLAINING, Style, colour, write};
