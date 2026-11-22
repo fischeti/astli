@@ -64,9 +64,14 @@ pub struct Manifest {
     pub dev: Vec<String>,
     /// What `[features]` declares, by name.
     pub features: BTreeMap<String, Feature>,
-    /// The features a dependent gets without asking, `[features] default`.
-    /// The package's own runs enable every feature instead.
+    /// The features a dependent gets without asking, `[features] default`,
+    /// which the package's own runs enable too unless a top's table names
+    /// its own.
     pub default_features: Vec<String>,
+    /// What only the package's own runs enable, `[package] dev-features`:
+    /// each of its own features by name alone, or a dependency's as the
+    /// dependency's name and the feature. A dependent never enables them.
+    pub dev_features: Vec<(String, Option<String>)>,
     /// What it requires of each package it depends on, by name: its
     /// `[dependencies]`, or without that table, what its `Bender.yml` lists.
     pub dependencies: BTreeMap<String, Requirement>,
@@ -109,6 +114,7 @@ impl Default for Manifest {
             dev: Vec::new(),
             features: BTreeMap::new(),
             default_features: Vec::new(),
+            dev_features: Vec::new(),
             dependencies: BTreeMap::new(),
             dev_dependencies: BTreeMap::new(),
             overrides: BTreeMap::new(),
@@ -185,6 +191,13 @@ impl Manifest {
         }
         brought_checked(&features, &dependencies).map_err(Malformed::Astli)?;
         let section = design.section;
+        let dev_features = dev_features_read(
+            &section.dev_features,
+            &features,
+            &dependencies,
+            &dev_dependencies,
+        )
+        .map_err(Malformed::Astli)?;
         Ok(Manifest {
             name: section.name,
             sources: section.sources,
@@ -193,6 +206,7 @@ impl Manifest {
             dev: section.dev,
             features,
             default_features,
+            dev_features,
             dependencies,
             dev_dependencies,
             overrides: design.overrides,
@@ -667,6 +681,49 @@ fn brought_checked(
     Ok(())
 }
 
+/// `[package] dev-features` as `written`, each one of the package's own
+/// `features`, or `dependency/feature` of a dependency either table lists.
+fn dev_features_read(
+    written: &[String],
+    features: &BTreeMap<String, Feature>,
+    dependencies: &BTreeMap<String, Requirement>,
+    dev_dependencies: &BTreeMap<String, Requirement>,
+) -> Result<Vec<(String, Option<String>)>, String> {
+    let wrong = |asked: &str, why: String| {
+        format!(
+            "{}: {} {why}",
+            mark::code("package.dev-features"),
+            mark::name(asked)
+        )
+    };
+    (written.iter())
+        .map(|asked| match asked.split_once('/') {
+            None if features.contains_key(asked) => Ok((asked.clone(), None)),
+            None => Err(wrong(asked, "is not a feature of the package".to_string())),
+            Some((dependency, feature)) if !dependency.is_empty() && !feature.is_empty() => {
+                match dependencies.contains_key(dependency)
+                    || dev_dependencies.contains_key(dependency)
+                {
+                    true => Ok((dependency.to_string(), Some(feature.to_string()))),
+                    false => Err(wrong(
+                        asked,
+                        format!(
+                            "names {}, which neither {} nor {} lists",
+                            mark::name(dependency),
+                            mark::code("dependencies"),
+                            mark::code("dev-dependencies")
+                        ),
+                    )),
+                }
+            }
+            Some(_) => Err(wrong(
+                asked,
+                "is neither a feature nor a dependency's".to_string(),
+            )),
+        })
+        .collect()
+}
+
 /// `include` under `root` if it is a directory, which is where most IP keeps
 /// the headers it exports.
 fn default_include_dirs(root: &Path) -> Vec<PathBuf> {
@@ -806,6 +863,7 @@ struct Section {
     include_dirs: Option<Vec<PathBuf>>,
     exclude: Vec<String>,
     dev: Vec<String>,
+    dev_features: Vec<String>,
     default_top: Option<String>,
 }
 
@@ -817,6 +875,7 @@ impl Default for Section {
             include_dirs: None,
             exclude: Vec::new(),
             dev: Vec::new(),
+            dev_features: Vec::new(),
             default_top: None,
         }
     }

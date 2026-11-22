@@ -1,6 +1,8 @@
 [package]
 name = "snitch_ssr"
 dev = ["test/**"]
+# Its testbenches drive the TCDM with `tcdm_test`, which no dependent gets.
+dev-features = ["tcdm_interface/test"]
 
 [dependencies]
 common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }
@@ -8,8 +10,3 @@ tcdm_interface = { path = "../tcdm_interface" }
 
 [dev-dependencies]
 register_interface = { git = "https://github.com/pulp-platform/register_interface.git", rev = "common-cells-v2" }
-
-# Its testbenches drive the TCDM with `tcdm_test`. A feature of its own, so
-# that its runs have it and no dependent gets it.
-[features]
-test = { dependencies = ["tcdm_interface/test"] }

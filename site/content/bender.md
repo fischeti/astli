@@ -79,6 +79,7 @@ The export maps `astli`'s package model onto Bender's:
 | Feature-gated dependency | Dependency with `target: <features>` |
 | `[dev-dependencies]` | Dependency with `target: <package>_dev` |
 | Feature dependencies | `pass_targets` |
+| `dev-features` | Its own feature's target as `any(<feature>, <package>_dev)`, a dependency's in `pass_targets` under `<package>_dev` |
 | `include-dirs` (and feature-specific ones) | `export_include_dirs` (under corresponding target) |
 | Package sources | `sources`, in topological compilation order |
 | Feature sources | Source group with `target: <feature>` |

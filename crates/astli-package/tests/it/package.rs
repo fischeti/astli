@@ -885,6 +885,8 @@ fn a_malformed_feature_is_refused() {
     let key = refusal(&fixture, "[features]\nvip = { source = [\"vip\"] }\n");
     let outside = refusal(&fixture, "[features]\nvip = { include-dirs = [\"..\"] }\n");
     let pattern = refusal(&fixture, "[features]\nvip = { sources = [\"vip/[a\"] }\n");
+    let dev = refusal(&fixture, "[package]\ndev-features = [\"vip\"]\n");
+    let unlisted = refusal(&fixture, "[package]\ndev-features = [\"cells/vip\"]\n");
     let top = refusal(
         &fixture,
         "[features]\nvip = {}\n[top.tb]\nfeatures = [\"asic\"]\n",
@@ -893,6 +895,14 @@ fn a_malformed_feature_is_refused() {
     assert!(
         default.contains("`features.default`: `vip` is not a feature"),
         "{default}"
+    );
+    assert!(
+        dev.contains("`package.dev-features`: `vip` is not a feature"),
+        "{dev}"
+    );
+    assert!(
+        unlisted.contains("names `cells`, which neither `dependencies` nor"),
+        "{unlisted}"
     );
     assert!(
         top.contains("`top.tb.features`: `asic` is not a feature"),
@@ -1083,6 +1093,32 @@ fn the_command_line_selects_only_the_roots_own() {
             .contains("`cells/fpga` is a dependency's"),
         "{refused}"
     );
+}
+
+#[test]
+fn dev_features_are_the_roots_own_runs_alone() {
+    let fixture = Fixture::new("select-dev");
+    let root = "[package]\ndev-features = [\"own\", \"cells/fpga\"]\n\
+                [features]\nown = {}\nmore = {}\n\
+                [dependencies]\ncells = { path = '../cells' }\n";
+    let none = Selection {
+        base: Base::None,
+        features: Vec::new(),
+    };
+
+    let (root, mut dependencies) = design(&fixture, root, CELLS);
+    let enabled_own = dependencies.select(&root, &none).expect("a selection");
+    let with_root = enabled(&dependencies.packages[0].walk).join(" ");
+    // A dependency's own are its runs', never a dependent's.
+    let cells = CELLS.replace("[features]", "dev-features = [\"fpga\"]\n[features]");
+    let (root, mut dependencies) = design(&fixture, "", &cells);
+    dependencies.select(&root, &none).expect("a selection");
+    let as_dependency = enabled(&dependencies.packages[0].walk).join(" ");
+
+    // On whatever the base, which `--no-features` leaves them in.
+    assert!(enabled_own.iter().eq(["own"]));
+    assert_eq!(with_root, "asic fpga sim");
+    assert_eq!(as_dependency, "asic sim");
 }
 
 #[test]

@@ -134,6 +134,38 @@ fn bender_export_writes_the_bender_yml_astli_toml_says() {
 }
 
 #[test]
+fn bender_export_builds_dev_features_under_the_dev_target() {
+    let fixture = exported("bender-export-dev-features");
+    let soc = fixture.path().join("soc");
+    let manifest = std::fs::read_to_string(soc.join("astli.toml")).expect("a manifest");
+    fixture.file(
+        "soc/astli.toml",
+        &manifest.replace(
+            "dev = [\"tb\"]\n",
+            "dev = [\"tb\"]\ndev-features = [\"vip\", \"cells/x\", \"model/fast\"]\n",
+        ),
+    );
+    fixture.file(
+        "model/astli.toml",
+        "[package]\nname = \"model\"\n\n[features]\nfast = {}\n",
+    );
+
+    let output = driver(&fixture).dir(&soc).args(["bender", "export"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let written = std::fs::read_to_string(soc.join("Bender.yml")).expect("a Bender.yml");
+    // An own feature builds in the package's own builds too, and a
+    // dependency's is passed in them alone.
+    for line in [
+        "  cells: { path: \"../cells\", pass_targets: [\"x\", { target: \"any(vip, soc_dev)\", pass: \"sim\" }] }\n",
+        "  model: { path: \"../model\", target: \"any(vip, soc_dev)\", pass_targets: [{ target: \"soc_dev\", pass: \"fast\" }] }\n",
+        "  - target: \"any(vip, soc_dev)\"\n    files:\n      - vip/drv.sv\n",
+    ] {
+        assert!(written.contains(line), "{line}\nin\n{written}");
+    }
+}
+
+#[test]
 fn bender_export_lists_a_replacement_before_what_uses_it() {
     let fixture = exported("bender-export-override");
     let soc = fixture.path().join("soc");

@@ -1,6 +1,8 @@
 [package]
 name = "mem_interface"
 dev = ["test/**"]
+# Its own testbenches use its test drivers.
+dev-features = ["test"]
 
 [dependencies]
 common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "2.0.0-beta.3" }

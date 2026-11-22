@@ -54,14 +54,22 @@ pub enum Base {
 impl Selection {
     /// The features of `root`'s own it enables, which [`Dependencies::select`]
     /// enables of it: the same for any two selections that enable the same.
+    /// Its `dev-features` of its own are among them, whatever the base.
     pub fn own(&self, root: &Package) -> BTreeSet<String> {
-        let features = &root.manifest.features;
+        let manifest = &root.manifest;
         let base: Vec<&String> = match &self.base {
-            Base::Default => root.manifest.default_features.iter().collect(),
+            Base::Default => manifest.default_features.iter().collect(),
             Base::None => Vec::new(),
-            Base::All => features.keys().collect(),
+            Base::All => manifest.features.keys().collect(),
         };
-        base.into_iter().chain(&self.features).cloned().collect()
+        let dev = (manifest.dev_features.iter())
+            .filter(|(_, feature)| feature.is_none())
+            .map(|(name, _)| name);
+        base.into_iter()
+            .chain(dev)
+            .chain(&self.features)
+            .cloned()
+            .collect()
     }
 }
 
@@ -110,8 +118,9 @@ impl Dependencies {
     ///
     /// A dependency is in the design when one in it requires it, an
     /// optional one only while a feature bringing it in is enabled. The root
-    /// enables what `selection` says of its own features; a dependency, its
-    /// defaults, unless every requirement of it turns them off. Each then gets every feature anything asks of it: a requirement
+    /// enables what `selection` says of its own features, and its
+    /// `dev-features`; a dependency, its defaults, unless every requirement
+    /// of it turns them off. Each then gets every feature anything asks of it: a requirement
     /// or an enabled feature. Two packages asking for different features of
     /// one get both, since features only add. A feature nobody declares, or
     /// a package not in the design, is an error naming who asked. Returns
@@ -185,6 +194,12 @@ impl Dependencies {
                 }
                 for name in &selection.features {
                     open.push((0, name.clone(), mark::code("--features")));
+                }
+                for (dependency, name) in &root.manifest.dev_features {
+                    if let Some(name) = name {
+                        let to = find(dependency, &names[0])?;
+                        open.push((to, name.clone(), names[0].clone()));
+                    }
                 }
                 let required = (direct.iter().enumerate())
                     .filter(|(asker, _)| reached[*asker])
