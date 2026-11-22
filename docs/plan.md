@@ -57,7 +57,7 @@ flowchart LR
     sema --> lint["astli-lint"]
     preproc --> package["astli-package<br>astli.toml"]
     package --> resolve["astli-resolve<br>fetch, versions"]
-    text -.-> lsp["astli-lsp<br>the server's loop"]
+    index & sema --> lsp["astli-lsp<br>the server's loop"]
     text["astli-text<br>spans, Origins, Diagnostic"] -.-> preproc & parse & diag["astli-diag"]
     fmt & index & lint & diag --> umbrella["astli<br>re-exports"]
     fmt & index & lint & diag & resolve & lsp --> cli["astli-cli<br>the driver"]
@@ -76,7 +76,7 @@ flowchart LR
 | `astli-lint` | Lint rules over one file's raw tree, over a file of an elaborated design, and over what its tops build; their groups and levels ([`sema.md`](sema.md)). |
 | `astli-package` | A package's root and its `astli.toml`, read whole: `[package]` interpreted, `[fmt]` and `[lint]` handed to the driver ([`packages.md`](packages.md)). |
 | `astli-resolve` | Dependencies fetched with `gix` into a cache every design shares, a mirror per repository and a checkout per commit, and their versions chosen with PubGrub ([`packages.md`](packages.md)). |
-| `astli-lsp` | The language server's loop: the protocol, the client's buffers, positions in the negotiated encoding, work handed to the pool ([`lsp.md`](lsp.md)). What it reads of a design the driver hands it. |
+| `astli-lsp` | The language server's loop: the protocol, the client's buffers, positions in the negotiated encoding, work handed to the pool, and the snapshot of each open file's design, kept current as buffers change ([`lsp.md`](lsp.md)). Loading a design it asks of the driver, through a trait. |
 | `astli` | The umbrella: each library crate re-exported whole as a module, but `astli-package`, `astli-resolve` and `astli-lsp` ([`api.md`](api.md)). |
 | `astli-cli` | The driver: one subcommand per stage (`lex`, `preprocess`, `parse`, `fmt`, `lint`, `check`, `elab`), `files` and `pickle`, `build` and `run`, the dependency commands, filelists, parallelism, rendering. |
 

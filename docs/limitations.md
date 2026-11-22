@@ -841,6 +841,42 @@ ignores case, reads from the disk while the client edits it. **Revisit when**
 a design reads one file through two such paths. **Where**
 `astli-lsp/src/buffers.rs` (`key`)
 
+### A file a buffer starts to include stays a unit until discovery runs again
+
+Which files are units and which are headers is decided by discovery, and a
+root's plan is kept across edits ([L20](lsp.md#decisions)). A buffer that
+adds an `` `include `` of a file the plan compiles on its own leaves it a
+unit, so its declarations are in the design twice, until a watched file
+changes or the design is made again. A buffer that drops the last include of
+a header does not make it a unit either. **Revisit when** a design is edited
+that way often enough to matter: discovering again when an edit adds or
+drops an `` `include `` would cost a walk of the package for that edit
+alone. **Where** `astli-cli/src/host.rs` (`plan`)
+
+### A client that cannot register watched files tells the server nothing of the disk
+
+The server learns that a manifest, the lock or a source file on disk changed
+only from `workspace/didChangeWatchedFiles`, which it registers for where
+the client allows dynamic registration. Elsewhere a design is discovered
+again only once all its files are closed and one is reopened, and a source
+changed on disk and not open is read again only when an edit to another file
+makes its design due. **Revisit when** a client in use cannot register: the
+server could watch the files itself, at the cost of a watcher per platform.
+**Where** `astli-lsp/src/server.rs` (`watches`)
+
+### A header the watch does not name changes on disk unseen
+
+The server registers watchers for the manifests, the lock and the source
+extensions the package walk takes, under the client's workspace folders. A
+header with another extension, such as `.inc`, or one outside every
+workspace folder, a dependency's in the store among them, can change on
+disk while no buffer holds it, and the designs that read it keep the old
+text until an edit to another file makes them due. A buffer of it is seen
+at once. **Revisit when** a design includes such a header and it changes
+under a running server: the server could register a watcher for each file
+its loads read outside the globs. **Where** `astli-lsp/src/server.rs`
+(`watch`)
+
 ### A lone `\r` does not end a line
 
 The protocol ends a line at `\n`, `\r\n` or `\r`; astli's line table, and so
