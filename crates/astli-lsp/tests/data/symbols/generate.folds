@@ -1,0 +1,17 @@
+1-2 comment: // Generate blocks nest as written; one without a label is not a symbol,
+3-49: module gen #(parameter int N = 4) ();
+5-14: for (i = 0; i < N; i++) begin : g_outer
+7-13: for (genvar j = 0; j < 2; j++) begin : g_inner
+9-10: if (j == 0) begin : g_first
+11-12: end else begin
+17-21: case (N)
+18-19: 1: begin : g_one
+24-27: generate
+25-26: if (N > 2) begin : g_big
+30-31 comment: // Processes are named by the label of the block they run, or by their
+32-38: always_ff @(posedge clk or negedge rst_n) begin : p_count
+34-35: if (!rst_n) begin
+36-37: end else begin
+40-41: always_comb begin
+43-47: initial begin
+44-46: fork : f_wait

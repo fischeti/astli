@@ -89,10 +89,6 @@ impl Encoding {
     }
 
     /// The range of `bytes` in `text`.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "a request that answers with a place calls it")
-    )]
     pub fn range(self, text: &str, lines: &Lines, bytes: Bytes<u32>) -> Range {
         Range {
             start: self.position(text, lines, bytes.start),

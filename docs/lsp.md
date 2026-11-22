@@ -1,8 +1,9 @@
 # Language server
 
 > **Status:** the loop is built: the handshake, the buffers, positions,
-> cancellation and panics. Formatting is the one language request it
-> answers. Milestone M12 in [`plan.md`](plan.md#5-milestones).
+> cancellation and panics. Formatting is answered from the buffer, and
+> document symbols and folding from its raw tree; nothing over the design
+> yet. Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
 one. More and more of a design is written by an agent and read by a person,
@@ -45,7 +46,10 @@ The server holds three things.
 
 **Buffers.** The text of each open file, as the editor last sent it, and its
 raw tree. They are a `Reader` that prefers a buffer to the disk, which every
-read of a source file goes through.
+read of a source file goes through. A tree is not `Send`, so the trees are
+held on the main loop beside the buffers rather than in them, each parsed
+when a request first asks for it and parsed again once its buffer's text
+differs.
 
 **Units.** A compilation unit, lowered: its HIR, its origins, its summary and
 its parse diagnostics. A unit is a function of its own text, its build, and
@@ -100,11 +104,11 @@ the server's dispatch, answering at once or handing its work to the pool.
 
 `initialize` announces only what is built, each capability added by the
 change that implements it: so far the position encoding, incremental
-text document sync, and formatting. A request the server does not know is answered
-`MethodNotFound`, and a notification it does not know is dropped. After
-`shutdown` every request is refused as `InvalidRequest`, and `exit` ends the
-process with 0, or with 1 if `shutdown` did not come first, as the protocol
-has it.
+text document sync, document symbols, folding ranges and formatting. A
+request the server does not know is answered `MethodNotFound`, and a
+notification it does not know is dropped. After `shutdown` every request is
+refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
+if `shutdown` did not come first, as the protocol has it.
 
 A buffer is held under the path its `file:` URI names, made absolute and
 cleaned, and the store is the `Reader` every read of a source file goes
@@ -131,6 +135,49 @@ is formatted, not open, or one `[fmt] exclude` names. A refusal, and a
 manifest that does not read, give no edit and a `window/showMessage` with
 what `astli fmt` would say, since a format on save that does nothing would
 otherwise say nothing.
+
+## Symbols and folds
+
+Both read the buffer's raw tree alone, so they answer before any design is
+loaded, and a declaration in a branch no build takes is listed like any
+other. A symbol's range is its construct, without the comments ahead of it,
+and its selection range its name.
+
+| Listed | Kind | Detail |
+| --- | --- | --- |
+| module, program, checker, primitive | module | the keyword, but for `module` |
+| interface, package, class, covergroup | interface, package, class, class | `covergroup` |
+| function, task; a method, a constructor in a class | function, method, constructor | a function's return type, or `task` |
+| property, sequence, `let` | function | the keyword |
+| modport | interface | `modport` |
+| typedef: enum, struct or union, other; nettype | enum, struct, type parameter | `nettype` |
+| enum variant, struct member | enum member, field | a member's type |
+| parameter, localparam; type parameter | constant; type parameter | what is written before the name |
+| port, in a header or the body | property | its direction and type, a header's taken from the port before it; one a header only names and the body declares is the body's alone |
+| net, variable, genvar | variable | what is written before the name |
+| instance, named gate | object | the definition's name, or the gate |
+| labelled block, labelled statement | namespace | |
+| `always`, `initial`, `final` | event, named by its block's label or its keyword | the keyword, when labelled |
+
+Each name of a declaration of several is a symbol whose range is the whole
+declaration, so the cursor anywhere in it finds one. A block without a label
+is not a symbol, and what it declares is listed in the symbol around it, as
+is a generate `if`, `for` and `case`. Not listed: what a macro call stands
+for and what it is given, a `VERBATIM` region, a macro's `` `define ``, an
+`extern` prototype of a module, an import, a constraint, a clocking block,
+and the variables a `for` header declares. A client without
+`hierarchicalDocumentSymbolSupport` is given the same symbols flat, as
+`SymbolInformation`, each naming the one around it, since such a client may
+not read a nested answer at all.
+
+A fold covers a definition's or a subroutine's body from the line its header
+ends on, a parameter or port list, an instance's connections, a block, a
+`case`, a `generate` region, an enum's or a struct's body, each branch of a
+conditional, a `` `define `` over several lines, and a run of `//` lines or a
+`/* */` over several, as a comment. One closed by a token of its own at the
+start of its last line, `endmodule`, `end`, `)`, ends at that token; for a
+client that folds whole lines only, on the line before it, so the closer
+stays in view.
 
 ## Decisions
 

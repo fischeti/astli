@@ -1,0 +1,10 @@
+1-3 comment: // Every branch of a conditional is listed, and folds on its own. A macro
+4-6: `define REG(name, width) \
+10-11 comment: // A run of comment lines folds,
+12-17: module cond (
+14-15: `ifdef WITH_DEBUG
+18-36: );
+19-21: `ifdef FPGA
+22-24: `elsif ASIC
+25-26: `else
+35-36 comment: /* A block comment

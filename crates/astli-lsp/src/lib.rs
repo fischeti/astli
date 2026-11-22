@@ -24,20 +24,23 @@
 //! ```
 
 mod buffers;
+mod folding;
 mod formatting;
 mod position;
 mod server;
+mod symbols;
 mod tasks;
 #[cfg(test)]
 mod tests;
+mod trees;
 
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Sender, select};
 use lsp_server::{Connection, ErrorCode, IoThreads, Message, Response};
 use lsp_types::{
-    InitializeParams, InitializeResult, MessageType, ServerCapabilities, ServerInfo,
-    TextDocumentSyncKind, TextDocumentSyncOptions,
+    FoldingRangeProvider, InitializeParams, InitializeResult, MessageType, ServerCapabilities,
+    ServerInfo, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 pub use formatting::FmtOptions;
@@ -143,7 +146,7 @@ pub fn serve(connection: &Connection, host: &Host) -> Ended {
             return Ended::Failed(said);
         }
     };
-    let general = params.capabilities.general.unwrap_or_default();
+    let general = params.capabilities.general.clone().unwrap_or_default();
     let encoding = Encoding::negotiate(&general.position_encodings.unwrap_or_default());
     let result = Response::new_ok(id, initialized(encoding, host));
     let _ = connection.sender.send(result.into());
@@ -153,6 +156,7 @@ pub fn serve(connection: &Connection, host: &Host) -> Ended {
         encoding,
         host.fmt_options.clone(),
     );
+    server.client = params.capabilities;
     // Cloned, so that the loop can hand the server to a handler while it
     // waits on the pool.
     let done = server.tasks.receiver.clone();
@@ -187,6 +191,8 @@ fn initialized(encoding: Encoding, host: &Host) -> InitializeResult {
             position_encoding: Some(encoding.kind()),
             text_document_sync: Some(sync.into()),
             document_formatting_provider: Some(true.into()),
+            document_symbol_provider: Some(true.into()),
+            folding_range_provider: Some(FoldingRangeProvider::Bool(true)),
             ..ServerCapabilities::default()
         },
         server_info: Some(ServerInfo {

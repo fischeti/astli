@@ -7,7 +7,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use crossbeam_channel::Sender;
 use lsp_server::{ErrorCode, Message, Notification, Request, RequestId, Response, ResponseError};
 use lsp_types::{
-    CancelParams, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    CancelParams, ClientCapabilities, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
     DidOpenTextDocumentParams, Id, LogMessageParams, MessageType, ShowMessageParams,
 };
 use serde::Serialize;
@@ -19,15 +19,19 @@ use crate::buffers::{self, Buffers};
 use crate::formatting::FmtOptions;
 use crate::position::Encoding;
 use crate::tasks::{Cancel, Done, Outcome, Tasks, panic_message};
+use crate::trees::Trees;
 
 /// The server's state, owned by the main loop.
 pub struct Server {
     sender: Sender<Message>,
     pub encoding: Encoding,
     pub buffers: Buffers,
+    pub trees: Trees,
     pub tasks: Tasks,
     /// The host's answer to what layout a file takes.
     pub fmt_options: FmtOptions,
+    /// What the client said it can take in `initialize`.
+    pub client: ClientCapabilities,
     /// Whether the client has sent `shutdown`, after which every request is
     /// refused and `exit` ends the server cleanly.
     shut_down: bool,
@@ -39,8 +43,10 @@ impl Server {
             sender,
             encoding,
             buffers: Buffers::default(),
+            trees: Trees::default(),
             tasks: Tasks::new(),
             fmt_options,
+            client: ClientCapabilities::default(),
             shut_down: false,
         }
     }
@@ -104,6 +110,10 @@ impl Server {
                 self.shut_down = true;
                 self.answer(id, Ok(()));
             }
+            "textDocument/documentSymbol" => {
+                self.reply(id, &method, params, Server::document_symbols);
+            }
+            "textDocument/foldingRange" => self.reply(id, &method, params, Server::folding_ranges),
             "textDocument/formatting" => self.formatting(id, params),
             #[cfg(test)]
             method if method.starts_with("test/") => self.test_request(id, method, params),
@@ -179,6 +189,25 @@ impl Server {
             Ok(params) => handle(self, params),
             Err(err) => self.log(MessageType::Error, format!("`{method}`: {err}")),
         }
+    }
+
+    /// Answers a request on the spot with what `handle` makes of its
+    /// params, or tells the client they do not read as `method`'s.
+    fn reply<P: DeserializeOwned, R: Serialize>(
+        &mut self,
+        id: RequestId,
+        method: &str,
+        params: Value,
+        handle: impl FnOnce(&mut Server, P) -> Result<R, ResponseError>,
+    ) {
+        let result = match serde_json::from_value(params) {
+            Ok(params) => handle(self, params),
+            Err(err) => Err(error(
+                ErrorCode::InvalidParams,
+                format!("`{method}`: {err}"),
+            )),
+        };
+        self.answer(id, result);
     }
 
     /// Hands `work` to the pool with the request's params, answering it

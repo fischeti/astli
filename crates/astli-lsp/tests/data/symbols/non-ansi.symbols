@@ -1,0 +1,6 @@
+module old 3:1-7:10 name 3:8-3:11
+  property renamed 3:19-3:30 name 3:20-3:27
+  property d 3:32-3:33 name 3:32-3:33
+  property a (input) 4:3-4:11 name 4:9-4:10
+  property b (output reg [3:0]) 5:3-5:22 name 5:20-5:21
+  property c (inout) 6:3-6:11 name 6:9-6:10

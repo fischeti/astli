@@ -16,14 +16,17 @@ workspace = true
 [dependencies]
 astli-fmt.workspace = true
 astli-parse.workspace = true
+astli-syntax.workspace = true
 astli-text.workspace = true
 crossbeam-channel.workspace = true
 lsp-server.workspace = true
 lsp-types.workspace = true
 rayon.workspace = true
+rowan.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 similar.workspace = true
 
 [dev-dependencies]
+astli-testing.workspace = true
 expect-test.workspace = true
