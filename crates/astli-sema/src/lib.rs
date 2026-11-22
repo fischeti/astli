@@ -70,7 +70,14 @@ pub use design::{Design, FileId, SymbolRef};
 pub use elab::{
     Blocks, BodyId, Child, ChildKind, Elaboration, Operator, TopError, TopSetting, TopValue, Walked,
 };
-pub use hir::*;
+pub use hir::{
+    Arg, Bind, BindId, Bins, Bounds, CaseItem, Class, Clocking, ClockingSignal, CoverOption,
+    Covergroup, Coverpoint, Data, Dim, Enum, EnumId, Event, Expr, ExprId, ExprKind, Field, For,
+    GenerateArm, Hir, Import, Instance, Member, ModportItem, Name, Node, Opaque, Parameter,
+    ParameterKind, PatternItem, PatternStep, Port, Process, Property, PropertyArm, PropertySpec,
+    Scope, ScopeId, ScopeKind, Stmt, StmtId, StmtKind, Symbol, SymbolId, SymbolKind, Timing, Type,
+    TypeKind, With,
+};
 pub use lower::lower;
 pub use resolve::{Names, Resolution, Searched};
 pub use types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};

@@ -75,15 +75,6 @@ pub struct TopValue {
 }
 
 impl TopValue {
-    pub fn bits(&self) -> &Bits {
-        &self.bits
-    }
-
-    /// The name of the enum member it is.
-    pub fn member(&self) -> Option<&str> {
-        self.member.as_deref()
-    }
-
     /// The integer a simulator's `-G` takes: in decimal, after a `-` when
     /// it is negative.
     pub fn integer(&self) -> String {

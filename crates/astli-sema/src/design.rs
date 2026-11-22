@@ -250,7 +250,7 @@ impl Design {
     /// there, else the one a file declares at its top level. A `bind`'s
     /// instance is looked for where it is bound: in the definition it names,
     /// or where no definition is so named, around the `bind`.
-    pub fn instantiated(&self, at: SymbolRef) -> Option<SymbolRef> {
+    pub(crate) fn instantiated(&self, at: SymbolRef) -> Option<SymbolRef> {
         let SymbolKind::Instance(instance) = &self.symbol(at).kind else {
             return None;
         };
@@ -469,7 +469,7 @@ impl Design {
 
     /// Whether more than one file declares the module, interface or program
     /// `name`, which one a compiler keeps being a guess.
-    pub fn is_declared_twice(&self, name: &str) -> bool {
+    pub(crate) fn is_declared_twice(&self, name: &str) -> bool {
         self.twice.contains(name)
     }
 

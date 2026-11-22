@@ -184,7 +184,7 @@ impl Built {
     }
 
     /// Whether the tops build a body of `definition`.
-    pub fn reaches(&self, definition: SymbolRef) -> bool {
+    pub(crate) fn reaches(&self, definition: SymbolRef) -> bool {
         self.definitions.contains(&definition)
     }
 
