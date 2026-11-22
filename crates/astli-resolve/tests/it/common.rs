@@ -1,7 +1,6 @@
 //! Repositories the tests make with `git`, and a store to mirror them into.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use astli_package::Package;
 use astli_resolve::{Located, Lock, Overrides, Store, resolve};
@@ -75,15 +74,7 @@ impl Repo {
     /// What `git` prints for `args` in the repository, the user's and the
     /// system's configuration left out.
     pub fn git(&self, args: &[&str]) -> String {
-        let output = Command::new("git")
-            .args(args)
-            .current_dir(&self.dir)
-            .env("GIT_CONFIG_GLOBAL", &self.config)
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_AUTHOR_NAME", "astli")
-            .env("GIT_AUTHOR_EMAIL", "astli@example.com")
-            .env("GIT_COMMITTER_NAME", "astli")
-            .env("GIT_COMMITTER_EMAIL", "astli@example.com")
+        let output = (astli_testing::git(&self.dir, &self.config).args(args))
             .output()
             .expect("git runs");
         assert!(
