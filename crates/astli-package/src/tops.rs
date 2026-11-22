@@ -1,6 +1,6 @@
-//! What the root says of a top it is built from: the module, and what that
-//! module needs defined and its parameters set to, so that no run has to
-//! repeat it.
+//! What the root says of a top it is built from: the module, what that
+//! module needs defined and its parameters set to, and the features it is
+//! built with, so that no run has to repeat it.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -24,6 +24,9 @@ pub struct Top {
     /// quotes.
     #[serde(deserialize_with = "params")]
     pub params: BTreeMap<String, String>,
+    /// The package's own features it is built with, in place of `default`;
+    /// `None` when not written, which builds it with `default`.
+    pub features: Option<Vec<String>>,
 }
 
 impl Top {

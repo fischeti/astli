@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use astli_package::{
-    At, Declared, Dependencies, Dependency, Error, ListedBy, Package, Patches, Profile, Root,
+    At, Base, Declared, Dependencies, Dependency, Error, ListedBy, Package, Patches, Profile, Root,
     Selection, Simulator, Source, Submodules, Walk, Workspace,
 };
 use astli_testing::Fixture;
@@ -885,10 +885,18 @@ fn a_malformed_feature_is_refused() {
     let key = refusal(&fixture, "[features]\nvip = { source = [\"vip\"] }\n");
     let outside = refusal(&fixture, "[features]\nvip = { include-dirs = [\"..\"] }\n");
     let pattern = refusal(&fixture, "[features]\nvip = { sources = [\"vip/[a\"] }\n");
+    let top = refusal(
+        &fixture,
+        "[features]\nvip = {}\n[top.tb]\nfeatures = [\"asic\"]\n",
+    );
 
     assert!(
         default.contains("`features.default`: `vip` is not a feature"),
         "{default}"
+    );
+    assert!(
+        top.contains("`top.tb.features`: `asic` is not a feature"),
+        "{top}"
     );
     assert!(
         bare.contains("`cells` is not one of `dependencies`"),
@@ -1029,9 +1037,10 @@ fn enabled(walk: &Walk) -> Vec<&str> {
 }
 
 #[test]
-fn a_dependency_gets_its_defaults_and_what_anything_asks() {
+fn each_package_gets_its_defaults_and_a_dependency_what_anything_asks() {
     let fixture = Fixture::new("select");
-    let (root, mut dependencies) = design(&fixture, "[features]\nown = {}\n", CELLS);
+    let root = "[features]\ndefault = [\"own\"]\nown = {}\nmore = {}\n";
+    let (root, mut dependencies) = design(&fixture, root, CELLS);
 
     let enabled_own = (dependencies.select(&root, &Selection::default())).expect("a selection");
 
@@ -1051,7 +1060,7 @@ fn the_command_line_selects_only_the_roots_own() {
     let root = "[features]\nown = {}\nmore = {}\nfpga = { dependencies = [\"cells/fpga\"] }\n\
                 [dependencies]\ncells = { path = '../cells' }\n";
     let selection = |features: &[&str]| Selection {
-        no_features: true,
+        base: Base::None,
         features: features.iter().map(|it| it.to_string()).collect(),
     };
 
@@ -1082,7 +1091,7 @@ fn a_feature_nobody_declares_or_a_package_not_in_the_design_is_refused() {
     let refused = |root: &str, cells: &str, features: &[&str]| {
         let (root, mut dependencies) = design(&fixture, root, cells);
         let selection = Selection {
-            no_features: false,
+            base: Base::Default,
             features: features.iter().map(|it| it.to_string()).collect(),
         };
         let err = dependencies.select(&root, &selection).expect_err("refused");
@@ -1435,13 +1444,17 @@ fn a_dependency_a_feature_names_alone_is_in_the_design_only_with_it() {
     for name in ["models", "cells", "verif"] {
         fixture.file(&format!("{name}/astli.toml"), "");
     }
+    let every = Selection {
+        base: Base::All,
+        features: Vec::new(),
+    };
     let without = Selection {
-        no_features: true,
+        base: Base::None,
         features: Vec::new(),
     };
     let found = ["models", "cells", "verif"];
 
-    let (_, all) = selected(&fixture, "root", &found, &Selection::default());
+    let (_, all) = selected(&fixture, "root", &found, &every);
     let (_, none) = selected(&fixture, "root", &found, &without);
 
     assert_eq!(names(&all), ["cells", "models", "verif"]);

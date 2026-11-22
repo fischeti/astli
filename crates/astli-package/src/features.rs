@@ -8,8 +8,9 @@ use serde::Deserialize;
 
 use crate::{Dependencies, Error, Manifest, Package, Requirement, mark};
 
-/// What a feature adds to a package when enabled. Features only add, so any
-/// combination is a design, and all of them together is too.
+/// What a feature adds to a package when enabled. Features only add, never
+/// remove, so two features are alternatives only by declaring the same
+/// name, which a design enabling both refuses.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Feature {
     /// Patterns, relative to the root and matched as `exclude`'s are, for
@@ -26,15 +27,42 @@ pub struct Feature {
     pub dependencies: Vec<(String, Option<String>)>,
 }
 
-/// Which features a run enables: the root's own, and its dependencies'.
-#[derive(Debug, Clone, Default)]
+/// Which of the root's own features a run enables, and through them its
+/// dependencies'.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Selection {
-    /// None of the root's own features but those named, rather than all.
-    pub no_features: bool,
+    /// What is enabled before `features`.
+    pub base: Base,
     /// More of the root's own to enable, by name. A dependency's are the
     /// root's to enable through a feature of its own, which resolution then
     /// covers.
     pub features: Vec<String>,
+}
+
+/// Which of the root's own features a [`Selection`] starts from.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Base {
+    /// Its `default`, as a dependent gets them.
+    #[default]
+    Default,
+    /// None.
+    None,
+    /// Every one.
+    All,
+}
+
+impl Selection {
+    /// The features of `root`'s own it enables, which [`Dependencies::select`]
+    /// enables of it: the same for any two selections that enable the same.
+    pub fn own(&self, root: &Package) -> BTreeSet<String> {
+        let features = &root.manifest.features;
+        let base: Vec<&String> = match &self.base {
+            Base::Default => root.manifest.default_features.iter().collect(),
+            Base::None => Vec::new(),
+            Base::All => features.keys().collect(),
+        };
+        base.into_iter().chain(&self.features).cloned().collect()
+    }
 }
 
 impl Package {
@@ -82,9 +110,8 @@ impl Dependencies {
     ///
     /// A dependency is in the design when one in it requires it, an
     /// optional one only while a feature bringing it in is enabled. The root
-    /// enables all its own features unless `selection` says otherwise; a
-    /// dependency, its defaults, unless every requirement of it turns them
-    /// off. Each then gets every feature anything asks of it: a requirement
+    /// enables what `selection` says of its own features; a dependency, its
+    /// defaults, unless every requirement of it turns them off. Each then gets every feature anything asks of it: a requirement
     /// or an enabled feature. Two packages asking for different features of
     /// one get both, since features only add. A feature nobody declares, or
     /// a package not in the design, is an error naming who asked. Returns
@@ -149,10 +176,12 @@ impl Dependencies {
 
                 // What is asked, of which package, and by whom.
                 let mut open: Vec<(usize, String, String)> = Vec::new();
-                if !selection.no_features {
-                    for name in root.manifest.features.keys() {
-                        open.push((0, name.clone(), names[0].clone()));
-                    }
+                let base = Selection {
+                    features: Vec::new(),
+                    ..selection.clone()
+                };
+                for name in base.own(root) {
+                    open.push((0, name, names[0].clone()));
                 }
                 for name in &selection.features {
                     open.push((0, name.clone(), mark::code("--features")));

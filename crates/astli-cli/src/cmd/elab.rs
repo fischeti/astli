@@ -74,6 +74,7 @@ impl RunWith<Ctx<'_>> for Elab {
             return Err(Error::failed("name a top to elaborate from with --top"));
         }
         let mut flags = Flags::new(&self.param, std::slice::from_ref(&tops), true)?;
+        plan = plan.for_tops(&tops, run)?;
         plan.define(&tops);
         term::note(PREVIEW).report(run);
         let mut analysis = Analysis::new(out, &mut plan, &tops, &flags, run, false)?;

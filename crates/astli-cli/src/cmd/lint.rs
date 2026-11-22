@@ -107,7 +107,10 @@ impl RunWith<Ctx<'_>> for Lint {
 impl Lint {
     /// Lints the files named, or those of the package `target` chose.
     fn once(&self, out: &mut render::Out, target: &Target, run: &Run) -> Result {
-        let mut plan = Plan::new(target, &self.sources, &self.features, &self.build, run)?;
+        // Every feature's files, which the tree rules read as written, each
+        // design then enabling those its tops do.
+        let mut plan = Plan::new(target, &self.sources, &self.features, &self.build, run)?
+            .every_feature(run)?;
         let config = LintConfig::load(run, target, self.config.as_deref(), &self.levels, &plan)?;
         // Each file's levels, which its patterns make.
         let levels: Vec<Config> = (plan.own.iter())
@@ -144,13 +147,14 @@ impl Lint {
         plan.unread(&trees.failed_of(&plan.own));
         let unread = trees.failed;
         let mut trees = trees.values;
+        let own = plan.own.clone();
         // The design is every unit, a dependency's too, each expanded with
         // its own package's build. Each file's findings are reported once,
         // what every design found in it together.
         let mut unread_units = 0;
         designs.each(out, plan, run, false, true, |_, plan, analysis, flags| {
             flags.check(analysis)?;
-            self.design(&plan, run, analysis, &mut trees)?;
+            self.design(&plan, &own, run, analysis, &mut trees)?;
             unread_units = analysis.unread;
             Ok(())
         })?;
@@ -161,8 +165,15 @@ impl Lint {
 
     /// Lints `analysis`, the design `plan` holds, adding what its rules
     /// find in each file read on its own to what `trees` already found in
-    /// it.
-    fn design(&self, plan: &Plan, run: &Run, analysis: &Analysis, trees: &mut [Read]) -> Result {
+    /// it, each the tree of the file at its place in `own`.
+    fn design(
+        &self,
+        plan: &Plan,
+        own: &[PathBuf],
+        run: &Run,
+        analysis: &Analysis,
+        trees: &mut [Read],
+    ) -> Result {
         let tops = analysis.top_names();
         // What a compiler would not read is an error once expanded, where
         // the file as written only warns of it. The rest the expansion and
@@ -188,7 +199,7 @@ impl Lint {
         let (files, origins) = (&analysis.files, &analysis.origins);
         // Each reported unit, and where it is among the files read on their
         // own.
-        let at: HashMap<&Path, usize> = (plan.own.iter().enumerate())
+        let at: HashMap<&Path, usize> = (own.iter().enumerate())
             .map(|(at, path)| (path.as_path(), at))
             .collect();
         let reported: Vec<(usize, usize)> = (plan.shown(reached.as_deref(), Whose::Own))

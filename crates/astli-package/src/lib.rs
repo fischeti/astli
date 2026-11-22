@@ -56,7 +56,7 @@ pub use build::{Profile, Profiles, Simulator, Tests};
 pub use dependencies::{Dependencies, Dependency};
 pub use described::Description;
 pub use error::Error;
-pub use features::{Feature, Selection};
+pub use features::{Base, Feature, Selection};
 pub use files::Files;
 pub use lfs::lfs_object;
 pub use overrides::Declared;

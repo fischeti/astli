@@ -245,7 +245,8 @@ impl Designs {
                 true => whole.take(),
                 false => whole.clone(),
             }
-            .expect("the plan is kept for the last design");
+            .expect("the plan is kept for the last design")
+            .for_tops(tops, run)?;
             plan.define(tops);
             let mut analysis = Analysis::new(out, &mut plan, tops, &self.flags, run, summarize)?;
             made.push(each(out, plan, &mut analysis, &mut self.flags)?);
