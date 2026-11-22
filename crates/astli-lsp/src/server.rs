@@ -133,12 +133,15 @@ impl Server {
                 }
             }
             // The client cannot watch for the server: it watches nothing.
-            Message::Response(response) => {
+            Message::Response(response) if response.id == RequestId::from(WATCHING.to_string()) => {
                 if let Err(error) = response.response_result {
                     let said = format!("the client watches no file: {}", error.message);
                     self.log(MessageType::Warning, said);
                 }
             }
+            // A refresh the client refused leaves its tokens until the next
+            // edit asks for them.
+            Message::Response(_) => {}
         }
         ControlFlow::Continue(())
     }
@@ -184,6 +187,7 @@ impl Server {
                     self.log(MessageType::Error, panicked.clone());
                 }
                 self.found(&root, found);
+                self.refresh_tokens();
             }
             Ok(None) => {}
             Err(panicked) => {
@@ -271,6 +275,8 @@ impl Server {
             "textDocument/hover" => self.hover(id, params),
             "textDocument/references" => self.references(id, params),
             "textDocument/documentHighlight" => self.highlights(id, params),
+            "textDocument/semanticTokens/full" => self.semantic_tokens(id, params),
+            "textDocument/semanticTokens/range" => self.semantic_tokens_range(id, params),
             "textDocument/documentSymbol" => {
                 self.reply(id, &method, params, Server::document_symbols);
             }

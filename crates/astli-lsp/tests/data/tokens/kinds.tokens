@@ -1,0 +1,59 @@
+kinds.sv
+  2:9 `pkg` namespace declaration
+  3:18 `Depth` variable declaration readonly
+  4:30 `Idle` enumMember declaration readonly
+  4:36 `Busy` enumMember declaration readonly
+  4:43 `state_t` enum declaration
+  5:33 `valid` property declaration
+  5:52 `data` property declaration
+  5:60 `beat_t` struct declaration
+  6:26 `twice` function declaration
+  6:36 `value` variable declaration input
+  7:12 `value` variable input
+  11:11 `bus_if` interface declaration
+  12:9 `req` variable declaration
+  13:11 `host` interface declaration
+  13:24 `req` variable
+  16:8 `leaf` class declaration
+  16:29 `Width` variable declaration readonly
+  16:55 `T` typeParameter declaration
+  17:15 `clk` variable declaration input
+  21:8 `kinds` class declaration
+  22:10 `pkg` namespace
+  24:15 `clk` variable declaration input
+  25:3 `bus_if` interface
+  25:15 `bus` variable declaration
+  27:8 `ready` variable declaration net
+  28:3 `state_t` enum
+  28:11 `state` variable declaration
+  29:3 `pkg` namespace
+  29:8 `beat_t` struct
+  29:15 `beat` variable declaration
+  30:10 `pkg` namespace
+  30:15 `Depth` variable readonly
+  30:26 `count` variable declaration
+  31:10 `i` variable declaration
+  33:3 `leaf` class
+  33:11 `Width` variable readonly
+  33:17 `pkg` namespace
+  33:22 `Depth` variable readonly
+  33:30 `u_leaf` namespace declaration
+  33:39 `clk` variable input
+  35:18 `tick` function declaration
+  36:5 `count` variable
+  36:13 `twice` function
+  36:19 `count` variable
+  39:23 `clk` variable input
+  39:36 `seq` namespace declaration
+  40:5 `state` variable
+  40:14 `Busy` enumMember readonly
+  41:9 `beat` variable
+  41:14 `valid` property
+  41:21 `count` variable
+  41:30 `beat` variable
+  41:35 `data` property
+  44:10 `bus` variable
+  44:14 `req` variable
+  44:20 `ready` variable net
+  45:10 `floating` variable net
+  45:21 `ready` variable net

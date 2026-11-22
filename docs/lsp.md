@@ -8,7 +8,7 @@
 > on the pool; diagnostics are published from the buffer and the snapshot,
 > and their fixes offered as code actions. A position is looked up in the
 > snapshot, and go to definition, references, document highlights and
-> hover answer from it.
+> hover answer from it; semantic tokens say what each name of a file is.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -256,7 +256,8 @@ handing its work to the pool.
 change that implements it: so far the position encoding, incremental
 text document sync, document symbols, folding ranges, formatting,
 workspace symbols, definition, references, document highlights, hover,
-and code actions of the kinds `quickfix` and `source.fixAll.astli`. A
+semantic tokens of the whole file and of a range, and code actions of
+the kinds `quickfix` and `source.fixAll.astli`. A
 request the server does not know is answered `MethodNotFound`, and a
 notification it does not know is dropped. After `shutdown` every request is
 refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
@@ -675,6 +676,81 @@ both said, and a name a macro wrote that means one thing in every expansion
 is said once. Nothing is said of a name sema does not resolve, a keyword,
 or a macro no `` `define `` defines.
 
+## Semantic tokens
+
+An editor colours SystemVerilog by its own grammar, so the server adds
+only what resolution knows: what each name is. A keyword, a literal, a
+comment, an operator, a system task and a compiler directive get no token,
+which keeps the answer small and leaves the theme's colours for them as
+they are. `textDocument/semanticTokens/full` and `/range` are answered on
+the pool, from the sites of the first unit, of the first design, whose
+origins hold the file, and the macro calls it lists there
+([L31](#decisions)).
+
+| A name that is | Type | Modifiers |
+| --- | --- | --- |
+| a module, program, checker, primitive; a class, a covergroup | `class` | |
+| an interface; a modport | `interface` | |
+| a package; an instance, a named block or statement, a clocking block | `namespace` | |
+| a parameter, a localparam | `variable` | `readonly` |
+| a type parameter | `typeParameter` | |
+| a port, of a definition or a subroutine | `variable` | its direction: `input`, `output`, `inout` or `ref` |
+| a net; an implicit net | `variable` | `net` |
+| a variable, a genvar, a `with`'s iterator | `variable` | |
+| a typedef: of an enum, of a struct or union, of anything else; a forward typedef | `enum`, `struct`, `type`; `type` | |
+| an enum member | `enumMember` | `readonly` |
+| a struct's or a union's member | `property` | |
+| a cover point | `property` | |
+| a function, a task, a property, a sequence, a `let` | `function` | |
+| `` `NAME `` of a macro call; of a built-in | `macro` | `defaultLibrary` for a built-in |
+
+Every name a declaration declares has `declaration` too. A name used is
+what it refers to; `.name` of a connection or an override, the port or the
+parameter; an instance's definition, an import's package and item, and a
+`bind`'s target, what they name. A member after a dot is a struct's only
+where the type before it, in the body of the definition around it at its
+defaults, is a struct or a union; otherwise it may be a method, and has no
+token. No standard type is an instance, and `namespace` is what a
+hierarchical name reaches into, as a package is what `::` reaches into; a
+custom type would be coloured by no theme. `parameter` is an argument in
+the protocol, and a parameter here is a constant, which themes colour as
+`variable.readonly`. A port's direction and a net have no standard
+modifier, so theirs are the legend's own, and a client that does not know
+them colours the name as the variable it is.
+
+No token is given to a name sema leaves unresolved, to one in a region the
+parser kept as written, to a constraint or a nettype, or to a positional
+connection, whose names are tokens of their own. A token is a name written
+in the file where it is: a name a `` `define ``'s body spells is a token
+there only where it means one thing in every expansion, and a name pasted
+together by a macro is in no file. A macro call written in another call's
+argument is not listed among the unit's calls, so it gets no token
+([limitations](limitations.md#a-macro-call-in-another-calls-argument-is-not-found-from-a-cursor)).
+Two sites at one span agree, or the span gets the formal's where one is
+`.name` connecting a name to a port of that name, or gets nothing. Every
+token is one name, so none spans lines, which a client need not accept.
+
+Positions are counted in the negotiated encoding in the text the unit read,
+each relative to the one before as the protocol has it. A buffer that
+differs from that text answers `ContentModified`, as a lookup does
+([L26](#decisions)), and a file whose design has not loaded, or which no
+unit holds, answers nothing. Since an editor asks for tokens on each edit,
+before the design is loaded again, each snapshot swapped in sends
+`workspace/semanticTokens/refresh` to a client that takes it, which asks
+again.
+
+A header several units include is read through the first: what its names
+are is almost always the same in each, and where it differs, as a name the
+header uses that one unit declares as a parameter and another as a net, it
+is coloured as the first unit has it
+([limitations](limitations.md#a-header-several-units-include-is-coloured-as-the-first-reads-it)).
+
+On OpenTitan, release, `spi_device_reg_top.sv`, 560 kB, has 23,763
+tokens. The first request after a load takes 23 ms in the server, most of
+it making the unit's sites; each after it 4.4 ms, and 11 ms for the client,
+which reads the 370 kB answer. That is fast enough on each edit that
+neither `full/delta` nor a cache of the answer is built.
+
 ## Decisions
 
 | # | Decision | Why |
@@ -709,6 +785,7 @@ or a macro no `` `define `` defines.
 | L28 | Hover shows a declaration as written, read from the raw tree of its file, with the comment above it in the same code block. A value is said at the defaults and for each distinct value under the tops, an integer atom type's as a plain number | Lowering keeps a declaration's name and not its range ([S74](sema.md#decisions)), and the raw tree has every declaration as written, the ones a branch hides too, so a hover reads the one file it shows. A comment in SystemVerilog is plain text, which markdown would mangle, and in the block it is shown as written. A sized literal says a value exactly, and `32'sd8` for an `int` is noise where `8` says the same. |
 | L29 | A code action is made from what was last published for the file, while that was published for the buffer's version; a quick fix for each diagnostic the request names that was published with a fix, and fix all as `lint --fix` fixes the buffer, at the levels it was published with | A fix is bytes of the text its finding was found in, and the buffer's findings are found again on every change, so what was published for the version is what the fix is right for. Matching the client's diagnostics against what was published, rather than finding again what lies in the range, offers nothing for a diagnostic the client holds from an older text. Fix all lints the fixed text again, as `lint --fix` does, since a fix that overlaps another is right only for the text the other leaves; its first pass is what was published, the same text at the same levels. |
 | L30 | References scan each unit's kept sites for those that mean what the cursor's mean, a symbol or a member by where its name is spelled and a definition by its name, in the units whose text spells the name. No table from a declaration to its uses is kept. A name in an opaque region is not listed | The sites are what costs, and the lookup keeps them already; a table built from them would be built again on every edit, for a request a reader makes now and then, where the scan takes milliseconds. A header's symbol is one per unit that includes it, and a reader means one. Whether a text spells a name is a superset of where a use may be, where the index's references are not: a name sema finds among the definitions, as the head of `top.sig`, is no reference in a summary. The protocol's answer is a flat list with no place to say one is uncertain, and an opaque region's name may mean any declaration of it. |
+| L31 | Semantic tokens say what a name is, from the first unit that holds the file, in standard types where one fits and with a custom modifier for a port's direction and a net. Nothing the grammar colours gets a token, and no `full/delta` | The grammar already colours keywords, literals and comments, and a token over them would fight the theme for nothing. Asking every unit that includes a header would walk each one's HIR on every edit, 595 of them for `prim_assert.sv`, to settle a disagreement that almost never arises. A custom type is coloured by no theme, where a custom modifier on `variable` falls back to the variable's colour. The whole of a 560 kB file takes 4.4 ms. |
 
 ## Prior art
 

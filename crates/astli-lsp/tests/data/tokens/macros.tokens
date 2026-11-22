@@ -1,0 +1,14 @@
+macros.sv
+  4:17 `w` variable
+  7:8 `macros` class declaration
+  8:9 `w` variable declaration
+  9:18 `P` variable declaration readonly
+  10:14 `sum` variable declaration net
+  10:20 ``TWICE` macro
+  10:27 `P` variable readonly
+  11:14 `read` variable declaration net
+  11:21 ``READ_W` macro
+  12:3 ``DECLARE` macro
+  12:12 `made` variable declaration
+  13:26 ``__LINE__` macro defaultLibrary
+  13:37 `made` variable

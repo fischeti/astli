@@ -1,0 +1,15 @@
+ports.sv
+  2:8 `ports` class declaration
+  3:16 `a` variable declaration input
+  4:16 `b` variable declaration output
+  5:16 `c` variable declaration inout
+  6:16 `d` variable declaration ref
+  8:10 `b` variable output
+  8:14 `a` variable input
+  9:10 `c` variable inout
+  9:14 `d` variable ref
+  13:8 `old_style` class declaration
+  13:19 `x` variable declaration input
+  13:22 `y` variable declaration output
+  16:10 `y` variable output
+  16:14 `x` variable input
