@@ -16,6 +16,7 @@ workspace = true
 [dependencies]
 astli-fmt.workspace = true
 astli-index.workspace = true
+astli-lint.workspace = true
 astli-parse.workspace = true
 astli-sema.workspace = true
 astli-syntax.workspace = true

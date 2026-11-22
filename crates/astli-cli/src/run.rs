@@ -50,6 +50,9 @@ pub struct Run<'r> {
     /// several designs, of several packages or of one package's sets of
     /// defines, which read many of the same files.
     once: AtomicBool,
+    /// Whether a load read the package without its dependencies, since it
+    /// could not settle or read them.
+    without_dependencies: AtomicBool,
     /// Each resolution made, with what it was resolved from.
     resolved: Mutex<Vec<(Resolving, Resolution)>>,
     /// Each package's files as walked, with what the walk read. A walk is
@@ -147,6 +150,7 @@ impl<'r> Run<'r> {
             warned: Once::new(),
             packages: AtomicBool::new(false),
             once: AtomicBool::new(false),
+            without_dependencies: AtomicBool::new(false),
             resolved: Mutex::default(),
             walked: Mutex::default(),
             lowered: Mutex::default(),
@@ -186,6 +190,20 @@ impl<'r> Run<'r> {
     /// a command's run, which wrote each.
     pub fn problems(&self) -> Vec<Problem> {
         (self.kept.as_ref()).map_or_else(Vec::new, |kept| std::mem::take(&mut *held(kept)))
+    }
+
+    /// Notes that the package is read without its dependencies, which a
+    /// load that [loads what it can](Run::loads_what_it_can) does when it
+    /// cannot settle or read them.
+    pub fn read_without_dependencies(&self) {
+        self.without_dependencies.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether the package was read without its dependencies: every name
+    /// one of them declares is then unknown, and a caller does not report
+    /// what that makes of the design.
+    pub fn lacks_dependencies(&self) -> bool {
+        self.without_dependencies.load(Ordering::Relaxed)
     }
 
     /// The store the environment names, refusing every clone and fetch if

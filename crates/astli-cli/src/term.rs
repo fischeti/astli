@@ -469,10 +469,11 @@ impl Problem {
         &self.help
     }
 
-    /// The file it is in, the place there, and what is at it, if anywhere.
-    pub fn place(&self) -> Option<(&Path, &Place, Option<&str>)> {
+    /// The code it is shown with, the file it is in, the place there, and
+    /// what is at it, if anywhere.
+    pub fn place(&self) -> Option<(Code, &Path, &Place, Option<&str>)> {
         let at = self.at.as_ref()?;
-        Some((&at.path, &at.place, at.label.as_deref()))
+        Some((at.code, &at.path, &at.place, at.label.as_deref()))
     }
 
     /// Writes the problem to stderr, in one piece, as

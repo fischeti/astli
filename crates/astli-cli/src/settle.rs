@@ -216,6 +216,7 @@ pub fn loaded(run: &Run, here: Here) -> Result<(Here, Loaded)> {
     (err.problem())
         .note("the package is read without its dependencies")
         .report(run);
+    run.read_without_dependencies();
     let mut here = here;
     let manifest = &mut here.package.package.manifest;
     manifest.dependencies.clear();

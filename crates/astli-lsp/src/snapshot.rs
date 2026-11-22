@@ -2,12 +2,14 @@
 //! analyses it, and what went wrong on the way, all of it in the library
 //! crates' types, so that a request reads it without the driver.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use astli_index::Index;
-use astli_sema::{Elaboration, FileId};
+use astli_lint::Config;
+use astli_sema::{BodyId, Elaboration, FileId};
 use astli_text::{Diagnostic, LineCol, Origins, Severity};
 
 /// A design root's design as one load found it, never changed once built.
@@ -31,6 +33,16 @@ pub struct Snapshot {
     /// How many units the load expanded, parsed and lowered; it took the
     /// rest from an earlier load.
     pub lowered: usize,
+    /// Whether the load read the package without its dependencies, since it
+    /// could not settle or read them, as `problems` says: every name they
+    /// declare is then unknown, so what the design makes of that is no
+    /// finding to show.
+    pub lacks_dependencies: bool,
+    /// The levels `lint` reads each file of the root package at, headers
+    /// too, by path, as its units name it; a file not here is not linted.
+    /// Files at the same levels share them. Empty if the configuration
+    /// does not read, which `problems` then says.
+    pub levels: HashMap<PathBuf, Arc<Config>>,
 }
 
 impl Snapshot {
@@ -48,6 +60,9 @@ pub struct Analysed {
     pub index: Index,
     /// Each unit, in the order of the design's files.
     pub units: Vec<Unit>,
+    /// The body of each top the design is elaborated from, which what is
+    /// built is walked down from; none where the manifest names no top.
+    pub tops: Vec<BodyId>,
 }
 
 /// A file compiled on its own, as its design holds it.
@@ -59,6 +74,14 @@ pub struct Unit {
     pub origins: Arc<Origins>,
     /// What its expansion and its parse reported, in the order found.
     pub parsed: Vec<Diagnostic>,
+    /// Whether `check` reports its findings: a file of the root package, or
+    /// of a dependency read from disk, among those the tops reach if there
+    /// are tops.
+    pub checked: bool,
+    /// Whether the rules of `lint` that read a design report its findings:
+    /// a file of the root package with its levels in
+    /// [`Snapshot::levels`], among those the tops reach if there are tops.
+    pub linted: bool,
 }
 
 /// Something wrong with a load that is no finding of a unit, as plain text.
@@ -77,6 +100,8 @@ pub struct Problem {
 /// Where in a file a problem is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct At {
+    /// What the problem is called, as a diagnostic's code.
+    pub code: String,
     pub path: PathBuf,
     pub place: Place,
     /// What is at the place, if it says more than the message.

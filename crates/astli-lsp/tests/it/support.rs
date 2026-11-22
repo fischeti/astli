@@ -3,6 +3,7 @@
 //! what it read, and lays a file out as the test says, or analyses the
 //! files it read as a design.
 
+use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -127,6 +128,8 @@ impl Host for Files {
             designs,
             problems: Vec::new(),
             lowered: 0,
+            lacks_dependencies: false,
+            levels: HashMap::new(),
         })
     }
 
@@ -163,12 +166,15 @@ fn analysed(root: &Path, texts: &[(String, String)]) -> Analysed {
             file,
             origins,
             parsed: Vec::new(),
+            checked: false,
+            linted: false,
         })
         .collect();
     Analysed {
         index: astli_index::Index::new(summaries),
         elaboration,
         units,
+        tops: Vec::new(),
     }
 }
 

@@ -218,6 +218,7 @@ version = "0.1.0"
 dependencies = [
  "astli-fmt",
  "astli-index",
+ "astli-lint",
  "astli-parse",
  "astli-preproc",
  "astli-sema",
