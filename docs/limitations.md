@@ -1050,6 +1050,20 @@ the protocol every current editor has. **Revisit when** a client without
 it is used with the server. **Where** `astli-lsp/src/actions.rs`
 (`Fixable::actions`)
 
+### An instance a macro call writes has no inlay hints
+
+Inlay hints are placed only at text the file writes and uses where it is
+written ([inlay hints](lsp.md#inlay-hints)). An instance a macro's body
+writes, one written in a call's argument, and an actual that is a macro
+call, are placed through the call: the text is spelled in the
+`` `define `` or the argument, where one place may stand for each of
+several expansions, each a different instance. So none of them is hinted,
+though an argument used once could be. **Revisit when** a design that
+wraps its instances in macros is read in an editor: a hint at an
+argument's text could be placed there where every expansion of the call
+gives it alike, as the units of a header are agreed. **Where**
+`astli-lsp/src/inlay.rs` (`File::written`)
+
 ### A lone `\r` does not end a line
 
 The protocol ends a line at `\n`, `\r\n` or `\r`; astli's line table, and so

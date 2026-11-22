@@ -49,6 +49,7 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
             "documentSymbolProvider": true,
             "foldingRangeProvider": true,
             "hoverProvider": true,
+            "inlayHintProvider": true,
             "positionEncoding": "utf-8",
             "referencesProvider": true,
             "semanticTokensProvider": {

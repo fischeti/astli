@@ -1,0 +1,17 @@
+// Only what the file writes, and uses where it is written, is hinted: not
+// what a macro wrote, nor what a macro call's argument gave it, since one
+// place there may stand for every expansion.
+
+`define SIG sig_b
+`define INST(name) leaf name (sig_a, sig_b);
+`define WRAP(body) body
+
+module leaf (input logic a_i, input logic b_i);
+endmodule
+
+module top;
+  logic sig_a, sig_b;
+  `INST(u_written_by_a_macro)
+  `WRAP(leaf u_in_an_argument (sig_a, sig_b);)
+  leaf u_given_a_macro (sig_a, `SIG);
+endmodule

@@ -152,7 +152,8 @@ impl Host for Files {
 /// `texts`, the files a load of the design at `root` read, by name, as one
 /// design: each `.sv` a unit, which searches `root` for what it includes
 /// through `reader`, every unit reported, and every file read linted at
-/// the default levels.
+/// the default levels. The definition called `top`, where one is declared,
+/// is the design's top.
 ///
 /// A text holding `unfetched` makes the design one read without its
 /// dependencies, which a problem at its manifest says; one holding
@@ -188,6 +189,7 @@ fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Sna
         lowered.push((path, Arc::new(origins), found, recorded));
     }
     let elaboration = Elaboration::new(Arc::new(Design::new(hirs)));
+    let tops = elaboration.top("top").into_iter().collect();
     let files: Vec<FileId> = elaboration.design().files().map(|(file, _)| file).collect();
     let units: Vec<Unit> = (lowered.into_iter().zip(files))
         .map(
@@ -258,7 +260,7 @@ fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Sna
             elaboration,
             Index::new(summaries),
             units,
-            Vec::new(),
+            tops,
         )],
         problems,
         lacks_dependencies: holds("unfetched"),
@@ -343,7 +345,7 @@ impl Client {
     /// server answered.
     pub fn initialize(names: &[&str], capabilities: Value) -> (Client, Value) {
         let layout: Layout = Box::new(|_| Ok(Some(Options::default())));
-        Client::initialize_with(names, false, layout, capabilities)
+        Client::initialize_with(names, false, false, layout, capabilities)
     }
 
     /// Starts a server whose host lowers the `.sv` files of `names` into a
@@ -351,19 +353,27 @@ impl Client {
     /// `capabilities`.
     pub fn designing(names: &[&str], capabilities: Value) -> Client {
         let layout: Layout = Box::new(|_| Ok(Some(Options::default())));
-        Client::initialize_with(names, true, layout, capabilities).0
+        Client::initialize_with(names, true, false, layout, capabilities).0
+    }
+
+    /// Starts a server as [`designing`](Self::designing) does, which
+    /// answers every kind of inlay hint, those it leaves out too.
+    pub fn hinting(names: &[&str], capabilities: Value) -> Client {
+        let layout: Layout = Box::new(|_| Ok(Some(Options::default())));
+        Client::initialize_with(names, true, true, layout, capabilities).0
     }
 
     /// Starts a server whose host reads no file of a design and lays each
     /// file out as `layout` says, and completes the handshake in UTF-8 if
     /// `utf8`, or else in UTF-16.
     pub fn laid_out(layout: Layout, utf8: bool) -> Client {
-        Client::initialize_with(&[], false, layout, offered(utf8)).0
+        Client::initialize_with(&[], false, false, layout, offered(utf8)).0
     }
 
     fn initialize_with(
         names: &[&str],
         designs: bool,
+        every_hint: bool,
         layout: Layout,
         capabilities: Value,
     ) -> (Client, Value) {
@@ -381,7 +391,10 @@ impl Client {
             release: released,
             forgot: forgetting,
         };
-        let server = std::thread::spawn(move || astli_lsp::serve(&server, Arc::new(host)));
+        let server = std::thread::spawn(move || match every_hint {
+            true => astli_lsp::serve_every_hint(&server, Arc::new(host)),
+            false => astli_lsp::serve(&server, Arc::new(host)),
+        });
         let mut client = Client {
             connection: client,
             server,

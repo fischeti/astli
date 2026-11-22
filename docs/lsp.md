@@ -8,8 +8,8 @@
 > on the pool; diagnostics are published from the buffer and the snapshot,
 > the branches the build did not take among them, and their fixes offered
 > as code actions. A position is looked up in the snapshot, and go to
-> definition, references, document highlights and hover answer from it;
-> semantic tokens say what each name of a file is.
+> definition, references, document highlights, hover and inlay hints answer
+> from it; semantic tokens say what each name of a file is.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -44,7 +44,7 @@ lowered and elaborated, as `check` builds it.
 | Workspace symbols | each snapshot's index | every module, interface, program, checker, primitive, package and class of the packages and their dependencies |
 | Definition, references, highlights | the snapshot | where a name is declared and used, a macro's `` `define `` and calls, an `` `include ``'s header |
 | Hover | the snapshot | a declaration's type and width, a parameter's value, a macro call's expansion |
-| Inlay hints | the snapshot | the formal a positional connection lands on, what `.*` connects, an override's value |
+| Inlay hints | the snapshot | the formal a positional connection or override lands on, what `.*` connects, the value of an override or a parameter where every body agrees on it |
 | Semantic tokens | the snapshot | what a name is |
 
 ## Buffers, units and snapshots
@@ -257,8 +257,8 @@ handing its work to the pool.
 change that implements it: so far the position encoding, incremental
 text document sync, document symbols, folding ranges, formatting,
 workspace symbols, definition, references, document highlights, hover,
-semantic tokens of the whole file and of a range, and code actions of
-the kinds `quickfix` and `source.fixAll.astli`. A
+inlay hints, semantic tokens of the whole file and of a range, and code
+actions of the kinds `quickfix` and `source.fixAll.astli`. A
 request the server does not know is answered `MethodNotFound`, and a
 notification it does not know is dropped. After `shutdown` every request is
 refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
@@ -776,6 +776,69 @@ it making the unit's sites; each after it 4.4 ms, and 11 ms for the client,
 which reads the 370 kB answer. That is fast enough on each edit that
 neither `full/delta` nor a cache of the answer is built.
 
+## Inlay hints
+
+`textDocument/inlayHint` is answered on the pool from the lookup at the
+start of the requested range, so a buffer that differs from the text its
+snapshot read answers `ContentModified` ([L26](#decisions)), and a file not
+open or not loaded answers nothing. Each unit that holds the file gives
+its hints between the range's two ends; one that several units give alike
+is given once, and two that differ at a place, as a header's instance may
+mean something else in each unit, are both left out.
+
+| Kind | Where | Says | Answered |
+| --- | --- | --- | --- |
+| formal | before a positional override or connection | the parameter or port it lands on, `clk_i:` | yes |
+| `.*` | after it | the ports it connects, those no other connection beside it takes | yes |
+| value | after an override, or a parameter's declared value, that is not a literal, nor a concatenation or pattern of literals | what it evaluates to, `= 32'h1000_0000`, as hover writes a value | yes |
+| port | before a named connection, `.name(…)` or `.name` | the port's direction and type, as its declaration would write them | no |
+
+Nothing is hinted that the text says already: a named connection has no
+formal, an argument written as the formal's name, `clk_i` given to
+`clk_i`, has none, nor a value written as hover would write it, as an enum
+member's name. Nothing is hinted at an instance of a definition no file
+declares, a gate, or an argument past the last formal.
+
+A hint is placed only at text the file writes and uses where it is
+written. What a macro wrote, and what a macro call's argument gave it, are
+placed through the call, so their one place in the `` `define `` or in the
+argument may stand for every expansion, and none of it is hinted
+([limitations](limitations.md#an-instance-a-macro-call-writes-has-no-inlay-hints)).
+
+A value, and a port's type, depend on the body, so each is hinted only
+where it is one for sure ([L33](#decisions)): in a package or at a file's
+top level, in a definition without parameters, or where the manifest
+names tops that build the definition around it, when its defaults and
+every body they build agree. An override's is what the instance's body is
+given, from each body of the definition the instance stands in. A
+definition with parameters and no tops is known only at its defaults,
+which a hint cannot say, as hover does, and a definition's instances
+seldom all keep.
+
+A label holds 32 characters at most: a longer value is cut to `…`, and a
+list of ports to the names that fit and `…`, and the whole is the hint's
+tooltip.
+
+Which kinds are answered is a table in the server, since an editor
+switches hints on and off as a whole and the server has no settings
+([L2](#decisions)). Counted over the corpus packages' own files, each
+asked for its whole text, release, with every kind answered and no tops:
+
+| Package | Files | Lines | formal | `.*` | value | port |
+| --- | --- | --- | --- | --- | --- | --- |
+| common_cells | 214 | 24 395 | 19 | 6 | 16 | 2 459 |
+| axi | 92 | 35 496 | 34 | 15 | 30 | 3 405 |
+| cva6 | 96 | 39 435 | 0 | 6 | 121 | 2 484 |
+| cheshire | 12 | 7 185 | 1 | 2 | 13 | 786 |
+
+A port's type would stand at nearly every connection, since real code
+connects by name: six to eleven in a hundred lines, and in `axi_cdc.sv` 54
+in 254 lines, one on nearly every line of each instantiation. The other
+kinds are a few in a thousand lines, and where they are dense they are
+what a reader would otherwise count out or look up: what a `.*` connects,
+a package's computed constants, 96 of cva6's 121 values in the opcode masks
+of `instr_tracer_pkg.sv`.
+
 ## Decisions
 
 | # | Decision | Why |
@@ -812,6 +875,7 @@ neither `full/delta` nor a cache of the answer is built.
 | L30 | References scan each unit's kept sites for those that mean what the cursor's mean, a symbol or a member by where its name is spelled and a definition by its name, in the units whose text spells the name. No table from a declaration to its uses is kept. A name in an opaque region is not listed | The sites are what costs, and the lookup keeps them already; a table built from them would be built again on every edit, for a request a reader makes now and then, where the scan takes milliseconds. A header's symbol is one per unit that includes it, and a reader means one. Whether a text spells a name is a superset of where a use may be, where the index's references are not: a name sema finds among the definitions, as the head of `top.sig`, is no reference in a summary. The protocol's answer is a flat list with no place to say one is uncertain, and an opaque region's name may mean any declaration of it. |
 | L31 | Semantic tokens say what a name is, from the first unit that holds the file, in standard types where one fits and with a custom modifier for a port's direction and a net. Nothing the grammar colours gets a token, and no `full/delta` | The grammar already colours keywords, literals and comments, and a token over them would fight the theme for nothing. Asking every unit that includes a header would walk each one's HIR on every edit, 595 of them for `prim_assert.sv`, to settle a disagreement that almost never arises. A custom type is coloured by no theme, where a custom modifier on `variable` falls back to the variable's colour. The whole of a 560 kB file takes 4.4 ms. |
 | L32 | A branch the build did not take is a hint diagnostic tagged `Unnecessary`, published with the design's findings, and only where every unit that reads the file left it out. Not a `comment` semantic token | The protocol has no token for inactive code. A `comment` token recolours the code as a comment, which hides what it is from a reader who still reads it as code; a faded hint keeps the grammar's colours and stays out of the problems list. Published as a diagnostic, it is versioned, kept across a change and cleared as every other finding is, and it is the design's, as which branch is taken depends on the build. A header's branch taken by one unit is code there. |
+| L33 | Inlay hints are the formal a positional argument lands on, what a `.*` connects, and a value that is not a literal where it is one for sure: in a package, at a file's top level, in a definition without parameters, or where the tops build the definition and every body agrees. A port's direction and type at a named connection is built but not answered. Only text written and used in the file is hinted; a label is cut at 32 characters, the whole in its tooltip | An editor switches hints on and off as a whole, so a kind that floods is worse than one missing: counted over the corpus, a port's type is six to eleven hints in a hundred lines, one at nearly every connection, and the others a few in a thousand. A value at a definition's defaults is what hover marks as the defaults', which a hint cannot; most instances override them. A macro's text stands for every expansion at one place. |
 
 ## Prior art
 

@@ -78,6 +78,7 @@ mod diagnostics;
 mod folding;
 mod formatting;
 mod hover;
+mod inlay;
 mod position;
 mod references;
 mod server;
@@ -239,6 +240,17 @@ impl Stdio {
 /// Runs the server over `connection`: the handshake, then each message
 /// until `exit`.
 pub fn serve(connection: &Connection, host: Arc<dyn Host>) -> Ended {
+    serve_hinting(connection, host, inlay::answered())
+}
+
+/// [`serve`], answering every kind of inlay hint, those it leaves out too,
+/// so that a test can see each.
+#[doc(hidden)]
+pub fn serve_every_hint(connection: &Connection, host: Arc<dyn Host>) -> Ended {
+    serve_hinting(connection, host, inlay::every())
+}
+
+fn serve_hinting(connection: &Connection, host: Arc<dyn Host>, hints: Vec<inlay::Kind>) -> Ended {
     let (id, params) = match connection.initialize_start() {
         Ok(started) => started,
         Err(err) => return Ended::Failed(err.to_string()),
@@ -263,6 +275,7 @@ pub fn serve(connection: &Connection, host: Arc<dyn Host>) -> Ended {
 
     let mut server = Server::new(connection.sender.clone(), encoding, host, watches);
     server.client = params.capabilities;
+    server.hints = hints;
     // Cloned, so that the loop can hand the server to a handler while it
     // waits on the pool.
     let done = server.tasks.receiver.clone();
@@ -320,6 +333,7 @@ fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
             document_symbol_provider: Some(true.into()),
             folding_range_provider: Some(FoldingRangeProvider::Bool(true)),
             hover_provider: Some(true.into()),
+            inlay_hint_provider: Some(true.into()),
             references_provider: Some(true.into()),
             semantic_tokens_provider: Some(tokens::options().into()),
             workspace_symbol_provider: Some(true.into()),
