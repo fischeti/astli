@@ -65,6 +65,12 @@ impl Analysis {
         let outcome = cmd::each(out, &plan.units, run, None, |_, path| {
             run.current()?;
             let unit = plan.unit(path);
+            // A load summarizes every unit, so one kept is summarized.
+            if let Some(units) = run.units() {
+                let build = plan.build(unit);
+                let lower = |reader: &dyn Reader| lowered(path, build, true, reader);
+                return units.lowered(path, build, run.reader(), lower);
+            }
             match plan.made(unit) {
                 // The designs of a workspace hold mostly the same files,
                 // built alike, so each is lowered once for all of them that

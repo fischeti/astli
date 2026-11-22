@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use astli_fmt::Options;
 use astli_lsp::{Analysed, At, Place, Problem, Snapshot, Unit, Watched};
@@ -21,6 +21,7 @@ use crate::error::{Error, Result};
 use crate::run::Run;
 use crate::target::Target;
 use crate::term;
+use crate::units::{Load, Units};
 
 /// The driver's side of the server: what each design root's loads keep
 /// for the next.
@@ -49,6 +50,9 @@ struct Kept {
     /// which a load that does not discover again reports too; `None` if it
     /// failed, so that the next load discovers again and tells why.
     plan: (u64, Option<(Plan, Vec<term::Problem>)>),
+    /// The units the root's loads lowered, which the next load takes
+    /// where what they read is unchanged.
+    units: (u64, Arc<Units>),
 }
 
 impl astli_lsp::Host for Host {
@@ -79,11 +83,21 @@ impl astli_lsp::Host for Host {
         overtaken: &(dyn Fn() -> bool + Sync),
     ) -> Option<Snapshot> {
         let ticket = self.ticket();
-        let run = Run::loading(reader).abandoning(overtaken);
+        let before = (held(&self.roots).get(root))
+            .map(|it| it.units.1.clone())
+            .unwrap_or_default();
+        let load = Load::new(before);
+        let run = Run::loading(reader).abandoning(overtaken).keeping(&load);
         let mut problems = Vec::new();
-        let designs = match self.analysed(root, &run, discover, ticket, &mut problems) {
+        let analysed = self.analysed(root, &run, discover, ticket, &mut problems);
+        let finished = analysed.is_ok();
+        let designs = match analysed {
             Ok(designs) => designs,
-            Err(Error::Overtaken) => return None,
+            Err(Error::Overtaken) => {
+                drop(run);
+                self.keep(root, ticket, load, false);
+                return None;
+            }
             // Its problems are kept already.
             Err(Error::Silent) => Vec::new(),
             Err(err) => {
@@ -92,9 +106,12 @@ impl astli_lsp::Host for Host {
             }
         };
         problems.extend(run.problems());
+        drop(run);
+        let lowered = load.count();
+        self.keep(root, ticket, load, finished);
         Some(Snapshot {
             root: root.to_path_buf(),
-            lowered: designs.iter().map(|it| it.units.len()).sum(),
+            lowered,
             designs,
             problems: problems.iter().map(plain).collect(),
         })
@@ -132,10 +149,35 @@ impl Host {
     /// Runs `keep` on what `root`'s loads keep, unless the root was
     /// forgotten since `ticket` was handed out. What `keep` hands back, such
     /// as what it replaced, is dropped once the lock is let go.
-    fn keep<T>(&self, root: &Path, ticket: u64, keep: impl FnOnce(&mut Kept) -> T) -> Option<T> {
+    fn kept<T>(&self, root: &Path, ticket: u64, keep: impl FnOnce(&mut Kept) -> T) -> Option<T> {
         let mut roots = held(&self.roots);
         let kept = roots.entry(root.to_path_buf()).or_default();
         (ticket >= kept.floor).then(|| keep(kept))
+    }
+
+    /// Keeps the units `load` used or lowered for the next load of `root`,
+    /// unless a later load kept its own already: in place of those kept,
+    /// if the load `finished`, so that a unit no load uses is not kept for
+    /// ever; else over them, since a load that stopped short says nothing
+    /// of the units it did not reach, and what it lowered is newer than
+    /// what it took.
+    fn keep(&self, root: &Path, ticket: u64, load: Load, finished: bool) {
+        let used = load.into_used();
+        let dropped = self.kept(root, ticket, |kept| match kept.units.0 > ticket {
+            true => Some(Arc::new(used)),
+            false => {
+                kept.units.0 = ticket;
+                match finished {
+                    true => Some(std::mem::replace(&mut kept.units.1, Arc::new(used))),
+                    false => {
+                        Arc::make_mut(&mut kept.units.1).extend(used);
+                        None
+                    }
+                }
+            }
+        });
+        // Dropped here, on the pool, once the lock is let go.
+        drop(dropped);
     }
 
     /// Each design `check` analyses of the design at `root`, adding what
@@ -179,7 +221,7 @@ impl Host {
             problems.extend(found.iter().cloned());
             (plan.clone(), found)
         });
-        let dropped = self.keep(root, ticket, |kept| match kept.plan.0 > ticket {
+        let dropped = self.kept(root, ticket, |kept| match kept.plan.0 > ticket {
             true => found,
             false => {
                 kept.plan.0 = ticket;
@@ -301,6 +343,47 @@ mod tests {
     }
 
     #[test]
+    fn a_load_lowers_again_only_the_units_that_read_a_change() {
+        let fixture = Fixture::new("cli-host-units");
+        let manifest = "[package]\nname = 'units'\ninclude-dirs = ['first', 'second']\n";
+        fixture.file("astli.toml", manifest);
+        fixture.dir("first");
+        let header = fixture.file("second/a.svh", "`define WIDTH 8\n");
+        let unit = |name: &str| format!("`include \"a.svh\"\nmodule {name};\nendmodule\n");
+        let one = fixture.file("one.sv", &unit("one"));
+        fixture.file("two.sv", &unit("two"));
+        fixture.file("three.sv", "module three;\nendmodule\n");
+        let host = Host::default();
+        let root = host.design(&one);
+        let mut buffers = Buffers(HashMap::new());
+        let load = |buffers: &Buffers| {
+            let snapshot = host.load(&root, buffers, false, &|| false).unwrap();
+            assert!(snapshot.problems.is_empty(), "{:?}", snapshot.problems);
+            assert_eq!(snapshot.units(), 3);
+            snapshot
+        };
+        assert_eq!(load(&buffers).lowered, 3);
+
+        let edited = "`include \"a.svh\"\nmodule edited;\nendmodule\n";
+        buffers.0.insert(one.clone(), edited.to_string());
+        let snapshot = load(&buffers);
+        assert_eq!(snapshot.lowered, 1);
+        let design = snapshot.designs[0].elaboration.design();
+        assert!(design.definition("edited").is_some());
+        assert!(design.definition("one").is_none());
+
+        buffers.0.insert(header, "`define WIDTH 16\n".to_string());
+        assert_eq!(load(&buffers).lowered, 2);
+        assert_eq!(load(&buffers).lowered, 0);
+
+        // Found earlier in the search, a header of the same name is what
+        // the units that searched for it include now.
+        fixture.file("first/a.svh", "`define WIDTH 32\n");
+        assert_eq!(load(&buffers).lowered, 2);
+        assert_eq!(load(&buffers).lowered, 0);
+    }
+
+    #[test]
     fn a_manifest_that_does_not_parse_is_a_problem() {
         let fixture = Fixture::new("cli-host-unparsed");
         fixture.file("astli.toml", "[package\n");
@@ -382,7 +465,8 @@ mod tests {
             assert_eq!(load(true).units(), 3);
         });
         assert_eq!(earlier.units(), 2);
-        assert_eq!(load(false).units(), 3);
+        let later = load(false);
+        assert_eq!((later.units(), later.lowered), (3, 0));
 
         // A load ending after its root was forgotten keeps nothing.
         let earlier = held_while(&host, &root, || {
@@ -390,6 +474,7 @@ mod tests {
             fixture.file("four.sv", &module("four"));
         });
         assert_eq!(earlier.units(), 3);
-        assert_eq!(load(false).units(), 4);
+        let later = load(false);
+        assert_eq!((later.units(), later.lowered), (4, 4));
     }
 }
