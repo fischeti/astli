@@ -1,6 +1,6 @@
 //! Search path configuration and resolution for `` `include `` directives.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,7 +13,7 @@ use astli_text::clean;
 pub const MAX_DEPTH: usize = 200;
 
 /// Search directories for resolving `` `include `` directive targets.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub(crate) struct Includes {
     /// Search paths for quoted includes (`` `include "filename" ``).
     pub quoted: Vec<PathBuf>,
@@ -21,8 +21,8 @@ pub(crate) struct Includes {
     pub angle: Vec<PathBuf>,
     /// Files a quoted include no search path resolves may name by a suffix
     /// of their path, by file name. Shared, since a build is cloned for
-    /// every file.
-    pub by_suffix: Arc<HashMap<OsString, Vec<PathBuf>>>,
+    /// every file. Ordered, so that a build can be hashed.
+    pub by_suffix: Arc<BTreeMap<OsString, Vec<PathBuf>>>,
 }
 
 impl Includes {
