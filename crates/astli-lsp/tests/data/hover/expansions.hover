@@ -1,0 +1,131 @@
+expansions.sv:47:3 `BUS_PARAMS
+    macro `BUS_PARAMS`
+
+    ```systemverilog
+    `define BUS_PARAMS                  \
+      parameter int  Width = 8,         \
+      parameter type data_t = logic [Width-1:0]
+    ```
+
+    expands here to
+
+    ```systemverilog
+    parameter int  Width  = 8,
+    parameter type data_t = logic [Width-1:0]
+    ```
+
+expansions.sv:50:3 `BUS_PORTS
+    macro `BUS_PORTS`
+
+    ```systemverilog
+    `define BUS_PORTS(p)          \
+      input  logic       p``_valid, \
+      output logic       p``_ready, \
+      input  logic [7:0] p``_data
+    ```
+
+    expands here to
+
+    ```systemverilog
+    input  logic       in_valid,
+    output logic       in_ready,
+    input  logic [7:0] in_data
+    ```
+
+expansions.sv:57:27 `REQ_T
+    macro `REQ_T`
+
+    ```systemverilog
+    `define REQ_T(Width)           \
+      struct packed {              \
+        `CHAN_T(Width) a;          \
+        logic          a_valid;    \
+        logic          d_ready;    \
+      }
+    ```
+
+    expands here to
+
+    ```systemverilog
+    struct packed {
+      struct packed {
+        logic [2:0]           opcode;
+        logic [AddrWidth-1:0] address;
+      } a;
+      logic a_valid;
+      logic d_ready;
+    }
+    ```
+
+expansions.sv:59:26 `FIELDS
+    macro `FIELDS`
+
+    ```systemverilog
+    `define FIELDS logic first; logic [7:0] second;
+    ```
+
+    expands here to
+
+    ```systemverilog
+    logic       first;
+    logic [7:0] second;
+    ```
+
+expansions.sv:63:27 `WIDEST
+    macro `WIDEST`
+
+    ```systemverilog
+    `define WIDEST(a, b) ((a) > (b) ? (a) : (b))
+    ```
+
+    expands here to
+
+    ```systemverilog
+    ((FirstWidthParameter) > (SecondWidthParameter) ? (FirstWidthParameter) :
+     (SecondWidthParameter))
+    ```
+
+expansions.sv:68:5 `CLEAR
+    macro `CLEAR`
+
+    ```systemverilog
+    `define CLEAR(q)          \
+      if (!rst_ni) begin      \
+        q <= '0;              \
+      end
+    ```
+
+    expands here to
+
+    ```systemverilog
+    if (!rst_ni) begin
+      q <= '0;
+    end
+    ```
+
+expansions.sv:77:3 `REGISTERS_BEGIN
+    macro `REGISTERS_BEGIN`
+
+    ```systemverilog
+    `define REGISTERS_BEGIN(name)                                          \
+      always_ff @(posedge clk_i) begin : name                             \
+          first_register_with_a_long_name  <= first_register_with_a_long_name_d;  \
+          second_register_with_a_long_name <= second_register_with_a_long_name_d; \
+          third_register_with_a_long_name  <= third_register_with_a_long_name_d;  \
+          fourth_register_with_a_long_name <= fourth_register_with_a_long_name_d; \
+          fifth_register_with_a_long_name  <= fifth_register_with_a_long_name_d;  \
+          sixth_register_with_a_long_name  <= sixth_register_with_a_long_name_d;
+    ```
+
+    expands here to
+
+    ```systemverilog
+    always_ff @(posedge clk_i) begin : regs
+    first_register_with_a_long_name  <= first_register_with_a_long_name_d;
+    second_register_with_a_long_name <= second_register_with_a_long_name_d;
+    third_register_with_a_long_name  <= third_register_with_a_long_name_d;
+    fourth_register_with_a_long_name <= fourth_register_with_a_long_name_d;
+    fifth_register_with_a_long_name  <= fifth_register_with_a_long_name_d;
+    …
+    ```
+

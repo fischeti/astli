@@ -967,6 +967,18 @@ when** references are built, which needs every call of a macro from its
 what both would answer. **Where** `astli-lsp/src/definition.rs`
 (`targets`)
 
+### An expansion nothing lays out loses its first line's indentation
+
+Hover lays out what a call expands to by parsing it in a wrapper for each
+thing a macro commonly stands for ([hover](lsp.md#hover)). A fragment that
+parses as none of them, such as a body that opens a `begin` its caller
+closes, is shown as written, its lines after the first without the
+indentation they share. The expansion starts at the body's first token, so
+how far its first line was indented is not in it, and a block opened there
+shows its lines level with its opener. **Revisit when** a reader asks for
+it: the `` `define `` as written holds that indentation. **Where**
+`astli-lsp/src/hover/expansion.rs` (`tidied`)
+
 ### A place in another file edited since the load is placed in the text the load read
 
 Definition answers only where the text its snapshot read of the cursor's
