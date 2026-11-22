@@ -28,6 +28,8 @@ formatter.
   what is cached where, and profiles.
 - [`docs/cli.md`](docs/cli.md) — what the driver writes to the terminal
   besides its results: problems, status, progress, colour.
+- [`docs/lsp.md`](docs/lsp.md) — the language server: what each request
+  reads, and how it stays current as buffers change.
 - [`docs/grammar-coverage.md`](docs/grammar-coverage.md) — what the parser
   handles so far.
 - [`docs/limitations.md`](docs/limitations.md) — deliberate gaps and shortcuts,
