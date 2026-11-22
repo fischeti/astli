@@ -161,11 +161,17 @@ impl Host for Files {
 /// is placed. A unit whose text holds `unsound` has origins that hold none
 /// of its text, so that placing what is found in it panics. A file whose
 /// text holds `restriction` is linted with that group's rules warned too.
+/// A unit whose text holds `BUILT` is expanded with `BUILT` defined, as a
+/// package's build defines a name.
 fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Snapshot {
     let (mut hirs, mut summaries, mut lowered) = (Vec::new(), Vec::new(), Vec::new());
     for (name, text) in texts.iter().filter(|(name, _)| name.ends_with(".sv")) {
         let path = clean(&root.join(name));
-        let build = Arc::new(Build::new().include_dir(root));
+        let build = match text.contains("BUILT") {
+            true => Build::new().include_dir(root).define("BUILT", ""),
+            false => Build::new().include_dir(root),
+        };
+        let build = Arc::new(build);
         let mut session = Session::reading(reader).building((*build).clone());
         let file = session.add(&path, text.clone());
         let expanded = session.expand(file);

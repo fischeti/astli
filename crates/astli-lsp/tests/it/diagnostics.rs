@@ -286,6 +286,124 @@ fn a_problem_placed_in_text_the_buffer_no_longer_holds_is_dropped() {
     client.finish();
 }
 
+/// Each branch body `published` says the build left out, as its range,
+/// each position `line:character` from 1, and its message.
+fn faded(published: &Published) -> Vec<String> {
+    let at = |it: &Value| {
+        format!(
+            "{}:{}",
+            it["line"].as_u64().unwrap() + 1,
+            it["character"].as_u64().unwrap() + 1
+        )
+    };
+    (published.diagnostics.iter())
+        .filter(|it| it["code"] == "inactive-code")
+        .map(|it| {
+            // A hint the client fades, which no problems list shows.
+            assert_eq!((&it["severity"], &it["tags"]), (&json!(4), &json!([1])));
+            let range = &it["range"];
+            let message = it["message"].as_str().unwrap();
+            format!("{}-{} {message}", at(&range["start"]), at(&range["end"]))
+        })
+        .collect()
+}
+
+#[test]
+fn a_branch_the_build_did_not_take_is_faded() {
+    let mut client = Client::designing(&["a.sv"], json!({}));
+    let uri = &uri("a.sv");
+    let text = "\
+module a;
+`ifdef MISSING
+  wire w1;
+`else
+  wire w2;
+`endif
+`ifndef MISSING
+  wire w3;
+`elsif OTHER
+  wire w4;
+`else
+  wire w5;
+  wire w6;
+`endif
+`define OUTER
+`ifdef OUTER
+  `ifdef INNER
+    wire w7;
+  `endif
+`else
+  `ifdef INNER
+    wire w8;
+  `endif
+`endif
+`ifdef MISSING `endif
+endmodule
+";
+    client.open(uri, text);
+    let found = client.published(uri, |it| !faded(it).is_empty());
+    assert_eq!(
+        faded(&found),
+        [
+            "3:1-3:11 not built: `MISSING` is not defined",
+            "10:1-10:11 not built under this build's defines",
+            "12:1-13:11 not built: a branch before it is taken",
+            "18:1-18:13 not built: `INNER` is not defined",
+            "21:1-23:9 not built: a branch before it is taken",
+        ]
+    );
+    // It is no finding with a fix.
+    let hint = found.with("inactive-code").clone();
+    let params = json!({
+        "textDocument": { "uri": uri },
+        "range": hint["range"],
+        "context": { "diagnostics": [hint] },
+    });
+    let actions = client.request("textDocument/codeAction", params);
+    assert_eq!(actions.expect("answered"), json!([]));
+    client.finish();
+}
+
+#[test]
+fn a_branch_the_package_build_defines_is_taken() {
+    let mut client = Client::designing(&["a.sv"], json!({}));
+    let uri = &uri("a.sv");
+    let text =
+        "// BUILT\nmodule a;\n`ifdef BUILT\n  wire on;\n`else\n  wire off;\n`endif\nendmodule\n";
+    client.open(uri, text);
+    let found = client.published(uri, |it| !faded(it).is_empty());
+    assert_eq!(
+        faded(&found),
+        ["6:1-6:12 not built: a branch before it is taken"]
+    );
+    client.finish();
+}
+
+#[test]
+fn a_header_branch_is_faded_only_where_every_unit_left_it_out() {
+    let mut client = Client::designing(&["a.sv", "b.sv", "h.svh"], json!({}));
+    let header = &uri("h.svh");
+    let text = "\
+`ifdef WIDE
+wire [63:0] bus;
+`else
+wire [31:0] bus;
+`endif
+`ifdef NEVER
+wire never;
+`endif
+";
+    client.open(header, text);
+    let unit = |name: &str| format!("module {name};\n  `include \"h.svh\"\nendmodule\n");
+    client.open(&uri("a.sv"), &format!("`define WIDE\n{}", unit("a")));
+    client.open(&uri("b.sv"), &unit("b"));
+    client.logged(loaded);
+    let last = client.latest(header).expect("published");
+    // `a` takes the first branch and `b` the second, so neither is faded.
+    assert_eq!(faded(&last), ["7:1-7:12 not built: `NEVER` is not defined"]);
+    client.finish();
+}
+
 #[test]
 fn a_panic_finding_what_the_design_says_keeps_the_snapshot() {
     let mut client = Client::designing(&["a.sv"], json!({}));

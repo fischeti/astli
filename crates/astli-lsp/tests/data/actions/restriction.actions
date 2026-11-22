@@ -14,6 +14,8 @@ restriction.sv 8:16-8:17 undriven-signal
   nothing
 restriction.sv 9:16-9:17 port-name-suffix
   nothing
+restriction.sv 12:1-12:24 inactive-code
+  nothing
 restriction.sv 12:18-12:23 mixed-operator-parentheses
   quickfix "Fix `mixed-operator-parentheses`"
     @@ -12 +12 @@
