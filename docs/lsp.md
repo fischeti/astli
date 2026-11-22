@@ -1,9 +1,12 @@
 # Language server
 
 > **Status:** the loop is built: the handshake, the buffers, positions,
-> cancellation and panics. Formatting is answered from the buffer, and
-> document symbols and folding from its raw tree; nothing over the design
-> yet. Milestone M12 in [`plan.md`](plan.md#5-milestones).
+> **Status:** the loop is built: the handshake, the buffers, positions,
+> cancellation and panics; and each open file's design is loaded when it is
+> opened and again after edits, reusing every unit the edit left alone.
+> Formatting is answered from the buffer, and document symbols and folding
+> from its raw tree; nothing over the design yet. Milestone M12 in
+> [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
 one. More and more of a design is written by an agent and read by a person,
@@ -65,6 +68,99 @@ again and a new snapshot is built from them and from every unit the edit left
 alone. A rebuild an edit overtakes is abandoned. A change to `astli.toml`, to
 `astli.lock` or to which files exist runs discovery again.
 
+## Where a snapshot ends
+
+A snapshot is one design root's: the package the file is in, found from its
+directory as `check` with no arguments finds it
+([P1](packages.md#decisions)), or outside any package the file alone, as
+`check` reads a file named. Every open file with the same root shares its
+snapshot, and files of several packages, or of none, have one each. A
+workspace member is a root of its own, read as `check` in its directory reads
+it, its dependencies and the siblings it requires among them; a sibling's
+file opened is the sibling's snapshot. A header belongs to the root of the
+directory it is in, and is read through the units that include it.
+
+A snapshot holds every design `check` analyses of its package: one for each
+set of defines the package's tops give, which is one for most packages. Each
+has its elaboration, its index, and each unit's path, origins and parse
+diagnostics, and beside them is what the loader found wrong, as data: a
+manifest that does not read, a dependency the store lacks, a file that cannot
+be read. It is made of library types alone, so a handler in `astli-lsp`
+reads it without the driver.
+
+## Staying current
+
+The server asks the driver two things of a design, through the trait `astli-lsp`
+defines and `astli-cli` implements: which design root a file is in, asked
+once when it is opened, and to load a root through a `Reader`. A load is
+handed a copy of the buffers as they were when it started, each buffer's
+text shared rather than copied, and whether to discover again.
+
+An open, a change or a close of a buffer overtakes at once every load of the
+design the buffer is in and of every design whose last load read the file or
+asked whether it exists, and makes each due 100 ms later, a due time the
+next edit pushes back. A load runs on a thread of its own, not on the pool
+its units are lowered on: it waits for them, and a pool thread that waited
+would hold one they need. It asks between units whether a later edit
+overtook it; one that was stops lowering and is dropped. One that was not
+is swapped in whole, and the snapshot it replaces is dropped on the pool.
+If a buffer the load read changed before the load reached it, as a file
+outside the root opened while the load had yet to read it, the snapshot is
+still taken, as the nearest there is, and the design is due again. A load
+not taken that discovered the package leaves the next to discover it.
+
+Generations are counted for the whole server, never per design, so that a
+load of a design closed is never taken for one of the design opened again.
+Once no open file is in a design, its load running is overtaken and the
+driver forgets what its loads kept for the next.
+
+A root's plan, the packages, their files and builds, is kept from one load
+to the next, and discovery runs again only when the client says a manifest,
+the lock or a dependency's `Bender.yml` changed, or that a source file was
+created or deleted. The server registers for `workspace/didChangeWatchedFiles`
+where the client can register it dynamically. A source changed on disk that
+is not open makes due the designs that read it. A client that cannot
+register tells the server nothing of the disk: a design is discovered again
+only when it is made again, after its files are closed and one is reopened.
+
+The driver keeps each unit lowered, per root, keyed by its path and its
+build, and with what lowering it read: every file's text, and the answer to
+every question of whether a file exists, which is how an include directory
+is searched. A unit is reused while every one of those reads gives the same
+answer again, compared exactly; the text a unit's origins hold is what a
+read is compared with, so the cache keeps no second copy of the sources. A
+load keeps the units it used or made and lets the rest go; one that stopped
+short keeps them over the units kept. Each load takes a ticket as it starts,
+and what it keeps, plan or units, is kept only if no load that started
+later kept its own already, and the root has not been forgotten since.
+
+### What a rebuild costs
+
+On OpenTitan, 1953 units, on ten cores, release, as the server logs each
+load (`scripts/lsp-rebuild.py`, five servers of five edits each; the 100 ms
+debounce comes on top):
+
+| Load | Units lowered | Median | Range |
+| --- | --- | --- | --- |
+| Cold, on opening a unit | 1953 | 637 ms | 626–688 ms |
+| After an edit to one unit | 1 | 57 ms | 55–65 ms |
+| After an edit to `prim_assert.sv`, which 595 units include | 595 | 305 ms | 294–347 ms |
+| Cold `astli check`, for comparison | 1953 | 1.10 s | |
+
+The server holds 0.80 GB once loaded, where a cold `check` peaks at 0.83
+GB. Edits to one unit leave it near 0.85 GB. Edits to the header raise it to
+a plateau: over a hundred edits, every other one to the header, it stays
+between 1.16 and 1.34 GB and ends at 1.20 GB. While a header's snapshot is
+swapped in, the old and the new copies of its 595 units are alive at once,
+and the allocator keeps that peak's pages for the next rebuild; telling it
+to return freed memory at once does not lower the plateau. Of the 57 ms
+after one unit's edit, about 40 go to reading every source again to see
+that the kept units still hold, and lowering the one that does not; 13 to
+15 to `Design::new`, 3 to the index and 2 to the elaboration. That is fast
+enough that nothing finer is built ([L6](#decisions)). Comparing each file's
+modification time rather than its text would save most of the 40, but
+would no longer be exact.
+
 ## From a cursor to a meaning
 
 Sema answers by id: what an expression resolves to, what type a symbol has in
@@ -94,13 +190,14 @@ bodies the definition has under them are found by walking down from each.
 ## The loop
 
 One thread runs the server (`astli-lsp`), started by `astli lsp`, which
-hands it what the server says of itself and points `term` at the client's
-log. It takes each message
-from the client in turn, owns the buffers, and sends every response. A
-request that reads only the buffers is answered there; one over the design
-is handed to the pool with the snapshot it reads, and its answer comes back
-on a channel the loop waits on beside the client's. A handler is an arm of
-the server's dispatch, answering at once or handing its work to the pool.
+hands it the driver's host and points `term` at the client's log. It takes
+each message from the client in turn, owns the buffers, and sends every
+response. A request that reads only the buffers is answered there; one over
+the design is handed to the pool with the snapshot it reads, and its answer
+comes back on a channel the loop waits on beside the client's. So does each
+load of a design when it ends, and the loop wakes when the next design is
+due. A handler is an arm of the server's dispatch, answering at once or
+handing its work to the pool.
 
 `initialize` announces only what is built, each capability added by the
 change that implements it: so far the position encoding, incremental
@@ -200,6 +297,9 @@ stays in view.
 | L15 | Every editor but VS Code starts `astli lsp` from its own configuration, upstreamed where the editor keeps a list of servers. The Claude Code plugin names it in a `.lsp.json`. VS Code gets a thin extension that ships the binary and has no view, command or setting beyond the binary's path | The binary is the product, and is already built for each platform. VS Code starts no server without an extension, and one that downloads nothing and configures nothing is one a user never has to think about. |
 | L16 | Only work on the pool is cancelled: `$/cancelRequest` sets the request's flag, which its work reads between steps, and a request cancelled before its answer is sent is answered `RequestCancelled`, whatever its work made. A request answered on the main loop has been answered before the cancellation is read | Requests over the design are the ones that take long. One answered on the loop has already been answered by the time the loop reads the next message. A flag the work reads costs nothing until it is set, and the work decides where it can stop. |
 | L17 | A panic is caught around each message on the main loop, and around each piece of work on the pool, and told to the client's log; a request's answer is `InternalError`. What `term` writes, which a command writes to stderr, goes to the client's log as `window/logMessage`, without colour. The standard panic hook still writes to stderr | A panic on a rayon thread that reached rayon would abort the process. Stdout is the protocol's, and nothing in astli writes there but a command's result; stderr a client may not show. The hook's line names where the panic was, which a bug report wants. |
+| L18 | A snapshot is one design root's: the package an open file is in, as `check` with no arguments finds it, or the file alone outside any. Files of one root share it; a workspace member is a root of its own | It is what `check` would say in the file's directory, which is what a user compares the editor with. A root is cheap to find from a path and never depends on what else is open, so opening a file never changes another's design. A member's file read inside a sibling's design would be read with the sibling's build, and which sibling would depend on the order files were opened. |
+| L19 | A unit is cached under its path and build, valid while every file it read reads the same and every file it asked after exists as it did. No hash, and no knowledge of the preprocessor | What a unit read is all it depends on, and recording it at the `Reader` catches what a list of included files would miss: a header created earlier on the include path. Comparing with the text its origins already hold is exact and costs no memory. |
+| L20 | A root's plan is kept until a manifest, the lock or the set of source files changes, as `workspace/didChangeWatchedFiles` says; edits debounce for 100 ms | Discovery walks the package and settles its dependencies, which an edit to a source file does not change. 100 ms is longer than the pause between keys and short enough that the design is current by the time the reader looks. |
 
 ## Prior art
 
