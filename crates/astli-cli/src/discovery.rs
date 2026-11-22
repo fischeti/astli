@@ -186,26 +186,27 @@ impl Plan {
         }
     }
 
-    /// What `check` with no argument reads for the source file at `path`:
-    /// the package it is in, found at or above its directory, with that
-    /// package's default features and no flag; or, outside any package, the
-    /// file alone, as `check` reads a file named.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "for a caller that is no command, which none is yet"
-        )
-    )]
-    pub fn load(path: &Path, run: &Run) -> Result<Plan> {
+    /// The root of the design the source file at `path` is in, for an
+    /// editor: the root of the package at or above its directory, as
+    /// `check` with no argument finds it there, or else the file itself.
+    pub fn design(path: &Path) -> PathBuf {
         let dir = (path.parent())
             .filter(|it| !it.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
-        let target = Target::new(dir.to_path_buf());
-        let sources = match target.package()? {
-            Some(_) => Sources::default(),
-            None => Sources {
-                files: vec![path.to_path_buf()],
+        let dir = std::path::absolute(dir).ok();
+        (dir.and_then(|it| Root::holding(&it))).unwrap_or_else(|| path.to_path_buf())
+    }
+
+    /// What `check` with no argument reads of the design at `root`, as
+    /// [`Plan::design`] names it: the package there, with its default
+    /// features and no flag; or, for a file outside any package, the file
+    /// alone, as `check` reads a file named.
+    pub fn load(root: &Path, run: &Run) -> Result<Plan> {
+        let target = Target::new(root.to_path_buf());
+        let sources = match root.is_dir() {
+            true => Sources::default(),
+            false => Sources {
+                files: vec![root.to_path_buf()],
                 ..Sources::default()
             },
         };
@@ -673,7 +674,7 @@ mod tests {
         let names = ["top", "on_disk", "in_buffer"];
 
         let run = Run::loading(&Disk);
-        let on_disk = loaded(Plan::load(&top, &run).unwrap(), &run, &names);
+        let on_disk = loaded(Plan::load(&Plan::design(&top), &run).unwrap(), &run, &names);
         let buffers = Buffers(HashMap::from([
             (
                 top.clone(),
@@ -682,7 +683,7 @@ mod tests {
             (extra, "module in_buffer;\nendmodule\n".into()),
         ]));
         let run = Run::loading(&buffers);
-        let in_buffers = loaded(Plan::load(&top, &run).unwrap(), &run, &names);
+        let in_buffers = loaded(Plan::load(&Plan::design(&top), &run).unwrap(), &run, &names);
 
         assert_eq!(
             on_disk,
@@ -714,7 +715,7 @@ mod tests {
         let store = Store::at(fixture.dir("cache")).offline(true);
 
         let run = Run::loading(&Disk).storing(store);
-        let plan = Plan::load(&top, &run).unwrap();
+        let plan = Plan::load(&Plan::design(&top), &run).unwrap();
         let problems = run.problems();
         let design = loaded(plan, &run, &["top", "cells"]);
 
@@ -738,7 +739,7 @@ mod tests {
         )]));
 
         let run = Run::loading(&buffers);
-        let plan = Plan::load(&alone, &run).unwrap();
+        let plan = Plan::load(&Plan::design(&alone), &run).unwrap();
 
         assert_eq!(
             loaded(plan, &run, &["on_disk", "in_buffer"]),

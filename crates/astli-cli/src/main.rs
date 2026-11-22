@@ -12,6 +12,7 @@ mod error;
 mod filelist;
 mod formats;
 mod git;
+mod host;
 mod json;
 mod listing;
 mod manifest;

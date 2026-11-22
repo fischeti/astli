@@ -1,6 +1,6 @@
 [package]
 name = "astli-lsp"
-description = "The SystemVerilog language server's loop, its buffers and positions, for the astli driver"
+description = "The SystemVerilog language server's loop, its buffers, snapshots and positions, for the astli driver"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -15,7 +15,9 @@ workspace = true
 
 [dependencies]
 astli-fmt.workspace = true
+astli-index.workspace = true
 astli-parse.workspace = true
+astli-sema.workspace = true
 astli-syntax.workspace = true
 astli-text.workspace = true
 crossbeam-channel.workspace = true

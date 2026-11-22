@@ -342,7 +342,8 @@ fn turn<T, W: Write>(
 
     match write(out) {
         Ok(value) => outcome.values.push(value),
-        Err(err @ Error::Output(_)) => return Err(err),
+        // Neither is the file's: the run stops.
+        Err(err @ (Error::Output(_) | Error::Overtaken)) => return Err(err),
         Err(err) => {
             out.flush()?;
             err.problem().report(run);

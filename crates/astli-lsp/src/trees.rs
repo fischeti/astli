@@ -32,9 +32,9 @@ impl Server {
         trees.retain(|path, _| self.buffers.get(path).is_some());
         let stale = trees
             .get(&path)
-            .is_none_or(|tree| tree.source() != buffer.text);
+            .is_none_or(|tree| tree.source() != &*buffer.text);
         if stale {
-            let tree = SyntaxTree::parse(Path::new(&path), buffer.text.clone());
+            let tree = SyntaxTree::parse(Path::new(&path), buffer.text.to_string());
             trees.insert(path.clone(), tree);
         }
         Some((buffer, &trees[&path]))

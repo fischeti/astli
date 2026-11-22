@@ -3,7 +3,7 @@
 
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 
 pub(crate) const TINY: &str = "\
 module tiny #(
@@ -122,6 +122,21 @@ impl Run {
     pub(crate) fn env(mut self, name: &str, value: impl AsRef<std::ffi::OsStr>) -> Run {
         self.command.env(name, value);
         self
+    }
+
+    /// Starts the driver with `args`, its stdin and stdout piped, for a test
+    /// that talks to it while it runs.
+    pub(crate) fn spawn<I, S>(mut self, args: I) -> Child
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<std::ffi::OsStr>,
+    {
+        (self.command.args(args))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("the driver runs")
     }
 
     /// Runs the driver with `args` and waits for it.

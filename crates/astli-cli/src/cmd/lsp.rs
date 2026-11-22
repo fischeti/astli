@@ -7,17 +7,14 @@
 //!
 //! What it answers is a preview, and may change in any release.
 
-use std::path::Path;
 use std::sync::Arc;
 
-use astli_fmt::Options;
-use astli_lsp::{Ended, Host, Stdio};
+use astli_lsp::{Ended, Stdio};
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
-use crate::config::FmtConfig;
 use crate::error::{Error, Result};
-use crate::target::Target;
+use crate::host::Host;
 use crate::term;
 
 /// Run the language server over stdin and stdout (preview)
@@ -34,11 +31,7 @@ impl RunWith<Ctx<'_>> for Lsp {
         let stdio = Stdio::open();
         let log = stdio.log();
         term::redirect(Some(Box::new(move |text| log.send(text))));
-        let host = Host {
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            fmt_options: Arc::new(fmt_options),
-        };
-        let ended = stdio.serve(&host);
+        let ended = stdio.serve(Arc::new(Host::default()));
         term::redirect(None);
         match ended {
             Ended::Exited => Ok(()),
@@ -47,15 +40,4 @@ impl RunWith<Ctx<'_>> for Lsp {
             Ended::Failed(why) => Err(Error::failed(why)),
         }
     }
-}
-
-/// The layout of the file at `path`: the `[fmt]` of the package it is in,
-/// as `astli fmt` run beside it reads it, or `None` if its `exclude` names
-/// the file. The manifest is read on each request, so that an edit to it
-/// counts from the next format on.
-fn fmt_options(path: &Path) -> std::result::Result<Option<Options>, String> {
-    let dir = path.parent().unwrap_or(path);
-    let config = FmtConfig::load(&Target::new(dir.to_path_buf()), None);
-    let config = config.map_err(|err| err.to_string())?;
-    Ok((!config.excludes(path)).then_some(config.options))
 }

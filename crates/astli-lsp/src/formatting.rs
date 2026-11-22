@@ -6,10 +6,6 @@
 //! The client's formatting options are ignored: `astli.toml` is the
 //! configuration, and every run in a project lays a file out the same.
 
-use std::path::Path;
-use std::sync::Arc;
-
-use astli_fmt::Options;
 use astli_parse::SyntaxTree;
 use astli_text::Lines;
 use lsp_server::{ErrorCode, RequestId};
@@ -20,11 +16,6 @@ use similar::{DiffTag, TextDiff};
 use crate::buffers;
 use crate::position::Encoding;
 use crate::server::{Server, error};
-
-/// The formatter's options for the file at a path: `None` if the package's
-/// `[fmt] exclude` leaves it as it is, and an error, said as `astli fmt`
-/// says it, if the configuration cannot be read.
-pub type FmtOptions = Arc<dyn Fn(&Path) -> Result<Option<Options>, String> + Send + Sync>;
 
 impl Server {
     /// Answers with the edits that format the buffer, or none if the file
@@ -44,7 +35,7 @@ impl Server {
         let Some((buffer, path)) = open else {
             return self.answer(id, Ok(Vec::<TextEdit>::new()));
         };
-        let options = match (self.fmt_options)(&path) {
+        let options = match self.host.fmt_options(&path) {
             Ok(Some(options)) => options,
             Ok(None) => return self.answer(id, Ok(Vec::<TextEdit>::new())),
             Err(why) => {
@@ -52,7 +43,7 @@ impl Server {
                 return self.answer(id, Ok(Vec::<TextEdit>::new()));
             }
         };
-        let tree = SyntaxTree::parse(&path, buffer.text.clone());
+        let tree = SyntaxTree::parse(&path, buffer.text.to_string());
         match astli_fmt::format(&tree, &options) {
             Ok(formatted) => {
                 let edits = edits(&buffer.text, &buffer.lines, &formatted, self.encoding);
