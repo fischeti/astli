@@ -508,13 +508,41 @@ A value is said at the defaults ([L12](#decisions)): of a parameter of a
 definition with parameters, "at `fifo`'s defaults", and of a package's or
 a file's, plainly. Where there are tops, each value the bodies they build
 of the definition take follows, four at most and a count of the rest, or
-once that every body agrees with the defaults. A value of an integer atom
-type, `int`, `byte`, `shortint`, `longint` or `integer`, signed or not, is a
-plain decimal number with its sign, where every bit is known; any other
-value is the literal it is, `8'd240`, `32'sbx`. A type keeps its width,
-sign and states rather than its keyword, so an atom type is a vector
-`[n-1:0]` of 8, 16, 32 or 64 bits that is two-state or signed, and a vector
-written out alike, `bit signed [31:0]`, is plain too.
+once that every body agrees with the defaults.
+
+A value is written by its type, on one line, as a reader of the source
+would rather than as the one decimal literal `elab` prints:
+
+- A value of an integer atom type, `int`, `byte`, `shortint`, `longint` or
+  `integer`, signed or not, is a plain decimal number with its sign, where
+  every bit is known. A type keeps its width, sign and states rather than
+  its keyword, so an atom type is a vector `[n-1:0]` of 8, 16, 32 or 64
+  bits that is two-state or signed, and a vector written out alike, `bit
+  signed [31:0]`, is plain too.
+- Any other vector of 32 bits or more is hex, `_` every four digits from
+  the right: `32'h1000_0000`, `40'shff_ffff_ffff`. A digit whose bits are
+  all `x` or all `z` is that letter, `32'hffff_xxzz`, and a value all one of
+  them a single one, `64'hx`; a digit that mixes known and unknown bits has
+  no hex digit, so that value is binary, grouped alike. A narrower vector,
+  or an atom with an unknown bit, is the literal it is, `8'd240`, `32'sbx`.
+- A struct, packed or not, is an assignment pattern by member, `'{Addr: 32,
+  Speed: Fast}`, and an array, packed or not, one by element, the first
+  written first: a packed one's first is its most significant. Each member
+  and element is in its own type's form.
+- An enum is its member's name, the member's value read in the body the
+  value is, as a parameter may give it, then in the body that declares
+  it. A value no member has is its base type's form, as is an enum
+  member's own value.
+- A union is its bits as a vector
+  ([limitations](limitations.md#hover-writes-a-unions-value-as-its-bits)).
+
+An aggregate is cut so the line stays short: a struct after 8 members, an
+array after 4 elements, and either once the line is about 160 characters, with
+`… n more`; one nested below 3 levels of aggregates is `'{…}`. A struct
+or union type with no name is cut in the type line to its first 4
+members, one nested in it to `struct {…}`, as the declaration below it
+shows the rest; laid out over lines it would push the declaration as
+written, which shows it whole, out of the popup.
 
 What a call expands to is not in the snapshot: the unit is expanded again
 with its build, reading the texts its origins hold, so it reads what the

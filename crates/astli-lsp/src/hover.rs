@@ -9,9 +9,8 @@
 //! as code. A value depends on the instance, and which one a reader means
 //! is state the protocol has no place for, so a value is said at the
 //! defaults of the definition around it and, where there are tops, once for
-//! each value the bodies they build of it take. A value of an integer atom
-//! type, `int` and the like, is written as a plain number, any other as the
-//! literal it is.
+//! each value the bodies they build of it take, written by its type, as
+//! [`value`] says.
 
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -23,7 +22,7 @@ use astli_parse::SyntaxTree;
 use astli_preproc::{Session, render};
 use astli_sema::{
     BodyId, FileId, MemberTy, Packed, Parameter, ParameterKind, Resolution, ScopeId, ScopeKind,
-    Shape, Site, SiteKind, SymbolKind, SymbolRef, Ty, Value,
+    Shape, Site, SiteKind, SymbolKind, SymbolRef, Ty,
 };
 use astli_syntax::{
     SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, first_significant, last_significant,
@@ -253,10 +252,21 @@ impl<'a> Hover<'a> {
         if let Some(is_type) = is_type {
             let around = self.around(at.file, symbol.scope);
             let value = |body| match is_type {
-                true => elaboration.type_of(body, at.symbol).to_string(),
+                true => value::shown(&elaboration.type_of(body, at.symbol)),
                 false => {
-                    let ty = elaboration.type_of(body, at.symbol);
-                    number(&ty, &elaboration.value(body, at.symbol))
+                    // An enum member's own value is its base type's, not
+                    // its own name.
+                    let ty = match (elaboration.type_of(body, at.symbol), &symbol.kind) {
+                        (
+                            Ty::Packed(Packed {
+                                shape: Shape::Enum(ty),
+                                ..
+                            }),
+                            SymbolKind::EnumMember { .. },
+                        ) => Ty::Packed(ty.base.clone()),
+                        (ty, _) => ty,
+                    };
+                    value::said(elaboration, body, &ty, &elaboration.value(body, at.symbol))
                 }
             };
             out += &self.across("value", around, body, value);
@@ -304,12 +314,13 @@ impl<'a> Hover<'a> {
                     let name = &hir[parameter].name.text;
                     match &hir[parameter].kind {
                         SymbolKind::Parameter(it) if it.is_type => {
-                            format!("{name} = {}", elaboration.type_of(built, parameter))
+                            let ty = elaboration.type_of(built, parameter);
+                            format!("{name} = {}", value::shown(&ty))
                         }
                         _ => {
                             let ty = elaboration.type_of(built, parameter);
                             let value = elaboration.value(built, parameter);
-                            format!("{name} = {}", number(&ty, &value))
+                            format!("{name} = {}", value::said(elaboration, built, &ty, &value))
                         }
                     }
                 });
@@ -543,7 +554,7 @@ fn typed(ty: &Ty, name: &str) -> Option<String> {
             ..
         })
     );
-    let shown = ty.to_string();
+    let shown = value::shown(ty);
     let width = match ty.bits() {
         Some(1) if !says_width => Some("1 bit".to_string()),
         Some(bits) if !says_width => Some(format!("{bits} bits")),
@@ -555,31 +566,6 @@ fn typed(ty: &Ty, name: &str) -> Option<String> {
         (false, Some(width)) => Some(format!("`{shown}`, {width}")),
         (false, None) => Some(format!("`{shown}`")),
     }
-}
-
-/// `value`, of type `ty`, in plain decimal with its sign where `ty` is one
-/// of the integer atom types and every bit is known; else as a literal.
-///
-/// A type keeps its width, its sign and its states rather than its keyword,
-/// so an atom type is a vector `[n-1:0]` of 8, 16, 32 or 64 bits that is
-/// two-state or signed, as `integer` is the one atom type of four states.
-/// A vector written out alike, `bit signed [31:0]`, is plain too.
-fn number(ty: &Ty, value: &Value) -> String {
-    let atom = match ty {
-        Ty::Packed(Packed {
-            width: width @ (8 | 16 | 32 | 64),
-            signed,
-            four_state,
-            shape: Shape::Vector { left, right: 0 },
-        }) => *left == i64::from(*width) - 1 && (*signed || !*four_state),
-        _ => false,
-    };
-    let known = value.bits().filter(|bits| atom && !bits.has_unknown());
-    let plain = known.and_then(|bits| match bits.is_signed() {
-        true => bits.to_i64().map(|it| it.to_string()),
-        false => bits.to_u64().map(|it| it.to_string()),
-    });
-    plain.unwrap_or_else(|| value.to_string())
 }
 
 /// The member `ty` declares, or a struct in it does, that `is` holds for.
@@ -844,6 +830,8 @@ fn fenced(out: &mut String, code: &str) {
     }
     writeln!(out, "{fence}systemverilog\n{code}\n{fence}\n").unwrap();
 }
+
+mod value;
 
 #[cfg(test)]
 mod tests;
