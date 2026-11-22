@@ -2,7 +2,6 @@
 //! `snapshot`, `tree`, `path`, `init` and the cache.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::support::*;
 
@@ -721,10 +720,43 @@ fn cache_clean_deletes_the_checkouts_and_a_run_fetches_again() {
 fn a_patch_reads_a_dependency_from_a_clone_and_leaves_the_lock_alone() {
     let fixture = Fixture::new("patch");
     let root = depends_on_cells(&fixture);
-    let first = driver(&fixture).dir(&root).cache().args(["files"]);
+    // A repository a hook runs the driver from, which neither the mirror
+    // nor the clone may write to.
+    let hook = fixture.path().join("hook");
+    std::fs::create_dir_all(&hook).expect("a directory");
+    git(&hook, &["init", "--quiet", "--initial-branch=main"]);
+    git(
+        &hook,
+        &["remote", "add", "origin", "https://example.com/hook"],
+    );
+    git(
+        &hook,
+        &["commit", "--quiet", "--allow-empty", "--message", "one"],
+    );
+    let hooked = || {
+        let config = std::fs::read_to_string(hook.join(".git/config")).expect("a config");
+        (
+            config,
+            git(&hook, &["for-each-ref"]),
+            git(&hook, &["status", "--porcelain"]),
+        )
+    };
+    let before = hooked();
+    let first = (driver(&fixture).dir(&root).cache())
+        .hook_in(&hook)
+        .args(["files"]);
     let lock = std::fs::read_to_string(root.join("astli.lock")).expect("a lock");
 
-    let patched = driver(&fixture).dir(&root).cache().args(["patch", "cells"]);
+    // Configuration the environment carries reaches the `git` it starts,
+    // here a template its clone copies.
+    let template = fixture.path().join("template");
+    fixture.file("template/from-the-environment", "");
+    let patched = (driver(&fixture).dir(&root).cache())
+        .hook_in(&hook)
+        .env("GIT_CONFIG_COUNT", "1")
+        .env("GIT_CONFIG_KEY_0", "init.templateDir")
+        .env("GIT_CONFIG_VALUE_0", &template)
+        .args(["patch", "cells"]);
     let clone = root.join(".astli/patch/cells");
     std::fs::write(clone.join("fifo.sv"), "module fifo;\nendmodule\n").expect("a clone to edit");
     let run = driver(&fixture).dir(&root).cache().args(["files"]);
@@ -750,13 +782,9 @@ fn a_patch_reads_a_dependency_from_a_clone_and_leaves_the_lock_alone() {
         std::fs::read_to_string(root.join(".astli/.gitignore")).expect("an ignore file"),
         "*\n"
     );
-    let origin = Command::new("git")
-        .args(["remote", "get-url", "origin"])
-        .current_dir(&clone)
-        .output()
-        .expect("git runs");
+    assert!(clone.join(".git/from-the-environment").is_file());
     assert_eq!(
-        stdout(&origin).trim_end(),
+        git(&clone, &["remote", "get-url", "origin"]),
         fixture.path().join("cells").display().to_string()
     );
     assert!(run.status.success(), "{}", stderr(&run));
@@ -787,6 +815,7 @@ fn a_patch_reads_a_dependency_from_a_clone_and_leaves_the_lock_alone() {
     assert!(clone.join("fifo.sv").is_file());
     assert!(after.status.success(), "{}", stderr(&after));
     assert!(!stdout(&after).contains("fifo.sv"), "{}", stdout(&after));
+    assert_eq!(hooked(), before);
 }
 
 #[test]

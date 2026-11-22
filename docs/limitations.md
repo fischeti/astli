@@ -713,6 +713,24 @@ past it to new packages, waits on each. **Revisit when** such runs matter:
 fetching a package's dependencies in parallel as soon as its manifest
 names them overlaps those waits too. **Where** `astli-resolve/src/resolve.rs`
 
+### A mirror `gix` opens reads the repository variables `git` sets
+
+`git` sets `GIT_DIR` for a hook or a `rebase --exec` it runs, and a user may
+set `GIT_WORK_TREE` or `GIT_INDEX_FILE`. They name the repository astli was
+started in, never a mirror, so each `git` and `git-lfs` astli starts runs
+without them. `gix` still applies `GIT_WORK_TREE`, `GIT_INDEX_FILE` and
+`GIT_SHALLOW_FILE` to a mirror it opens, and allows them only together with
+every other `GIT_*` variable it reads, `GIT_SSL_NO_VERIFY` and
+`GIT_ALLOW_PROTOCOL` among them. With `GIT_WORK_TREE` set, a mirror takes
+that directory as its work tree and a branch can resolve to the wrong
+commit; nothing is written to that repository. The `git-lfs filter-process`
+`gix` starts for a checkout gets the mirror's `GIT_DIR` from `gix`, but
+inherits the rest, `GIT_COMMON_DIR` among them. **Revisit when** `gix` can
+open a repository without the variables that name one, as it does for a
+submodule, or when astli can clear them in its own process without
+`unsafe`. **Where** `astli-resolve/src/mirror.rs` (`Mirror::open`,
+`Mirror::write_tree`)
+
 ### A load that cannot read one dependency reads the package without any
 
 A run that loads what it can, as a language server's does, keeps why the
