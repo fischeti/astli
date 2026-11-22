@@ -64,7 +64,7 @@ impl Region {
 }
 
 /// Parses the conditional region opening at token index `at`, up to `limit`.
-pub fn region(input: &Input, at: u32, limit: u32) -> Region {
+pub(crate) fn region(input: &Input, at: u32, limit: u32) -> Region {
     use DirectiveType::*;
 
     let mut open = parse(input, at).expect("a region is introduced by a directive");
@@ -112,38 +112,11 @@ pub fn region(input: &Input, at: u32, limit: u32) -> Region {
     }
 }
 
-/// Discovers all outermost conditional regions directly contained within `span`.
-pub fn regions(input: &Input, span: TokenSpan) -> Vec<Region> {
-    use DirectiveType::*;
-
-    let mut out = Vec::new();
-    let mut cursor = span.start;
-
-    while cursor < span.end {
-        let Some(found) = parse(input, cursor) else {
-            cursor += 1;
-            continue;
-        };
-        cursor = match found.ty {
-            Ifdef | Ifndef => {
-                let found = region(input, cursor, span.end);
-                let end = found.tokens.end;
-                out.push(found);
-                end
-            }
-            _ => found.tokens.end,
-        }
-        .max(cursor + 1);
-    }
-    out
-}
-
 /// Every conditional region within `span`, nested ones included, in the
 /// order they open.
 ///
-/// The same regions as [`regions`] and then [`regions`] again on each branch,
-/// found in one pass: that is quadratic in how deep they nest, which is no
-/// bound at all.
+/// One pass finds them all: finding the outermost and then asking again of
+/// each branch is quadratic in how deep they nest, which is no bound at all.
 pub fn all_regions(input: &Input, span: TokenSpan) -> Vec<Region> {
     use DirectiveType::*;
 

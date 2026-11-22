@@ -1,6 +1,6 @@
 # The public API
 
-What a caller outside the crates writes. The internal types (`Input`, `Tokens`,
+What a caller outside the crates writes. The internal types (`Tokens`,
 `Events`) are documented next to their code.
 
 ## Two tiers
@@ -52,6 +52,39 @@ Both return `Parsed`. `span` is how a caller finds where a token came from
 without knowing which mode made the tree: in raw mode it is the token's range
 in the file. `unparsed` is asked for rather than among the diagnostics,
 because a tool that only reads names, like the index, has no use for it.
+
+## The raw scan
+
+What a file writes, before anything is expanded, as the preprocessor reads
+it: its tokens, its directives and macro references, and its conditional
+regions with every branch at once. The parser shapes raw mode from it, the
+formatter's transparency check compares directives by it, and `pickle` and
+the package walk find each `` `include `` with it.
+
+```rust
+let input = session.input(file);            // Input: the file's text and tokens, by index
+input.kind(at);                             // SyntaxKind; also `text`, `token`
+let all = input.span(0..input.len());       // TokenSpan: token indices in one file
+
+let found = scan(&input);                   // Scan: directives and macro references, in order
+let found = scan_seeded(&input, expanded.macros);  // the same, arities known from a table
+session.scan(file);                         // scan, of the session's file
+found.directives();                         // &Directive: its type, operands and tokens
+found.references();                         // &MacroRef: a call, with its arguments
+found.includes(&input);                     // each `include, and the name it writes if not a macro's
+
+all_regions(&input, all);                   // Vec<Region>: every `ifdef … `endif, nested ones too
+region.branches[0].taken;                   // Taken: the condition its Branch is taken under
+span.bytes(&input.tokens);                  // Span: the bytes a TokenSpan covers
+```
+
+A span here is token indices, not bytes, since the readers walk tokens:
+`bytes` gives the `Span` a diagnostic points at. A reference's arguments
+depend on its macro's arity, which raw mode rarely knows, so `scan_seeded`
+starts from the table an expansion ends with. `all_regions` finds nested
+regions in the same pass as those around them, in the order they open, so a
+reader that needs a region's branches before the region around it walks the
+list backwards.
 
 ## Diagnostics
 

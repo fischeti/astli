@@ -80,7 +80,7 @@ impl DirectiveType {
     /// Whether the directive still means something once preprocessing is
     /// done, so that an expansion keeps it: a compiler reading the expansion
     /// needs its `` `timescale `` as much as its modules.
-    pub fn survives_expansion(self) -> bool {
+    pub(crate) fn survives_expansion(self) -> bool {
         use DirectiveType::*;
         matches!(
             self,
