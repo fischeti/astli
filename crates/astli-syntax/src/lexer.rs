@@ -16,7 +16,8 @@
 use logos::Logos;
 
 use crate::keyword;
-use crate::{KeywordVersion, SyntaxKind, SyntaxKind::*};
+use crate::keyword::KeywordVersion;
+use crate::{SyntaxKind, SyntaxKind::*};
 
 /// A source token consisting of a syntax kind and half-open byte range `[start, end)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,13 +45,13 @@ impl Token {
 }
 
 /// Lexer for tokenizing SystemVerilog source text.
-pub struct Lexer<'a> {
+struct Lexer<'a> {
     source: &'a str,
 }
 
 impl<'a> Lexer<'a> {
     /// Creates a new lexer for `source`.
-    pub fn new(source: &'a str) -> Self {
+    fn new(source: &'a str) -> Self {
         Lexer { source }
     }
 
@@ -67,7 +68,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Tokenizes the source text and returns all tokens including the terminating `EOF`.
-    pub fn tokenize(&self) -> Vec<Token> {
+    fn tokenize(&self) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut inner = SyntaxKind::lexer(self.source);
         let mut line = Line::Code;
