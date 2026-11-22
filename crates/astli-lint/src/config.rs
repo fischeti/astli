@@ -66,12 +66,6 @@ impl Config {
         }
     }
 
-    /// The level of the rule called `name`, if there is one.
-    pub fn level(&self, name: &str) -> Option<Level> {
-        let at = RULES.iter().position(|rule| rule.name == name)?;
-        Some(self.levels[at])
-    }
-
     /// Whether a rule is on that reads `layer`, or one made from it, so
     /// that there is a reason to make it.
     pub fn needs(&self, layer: Layer) -> bool {
