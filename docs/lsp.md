@@ -5,9 +5,9 @@
 > opened and again after edits, reusing every unit the edit left alone.
 > Formatting is answered from the buffer, document symbols and folding
 > from its raw tree, and workspace symbols from the loaded designs' indexes,
-> on the pool; diagnostics are published from the buffer and the snapshot.
-> A position is looked up in the snapshot, and go to definition and hover
-> answer from it.
+> on the pool; diagnostics are published from the buffer and the snapshot,
+> and their fixes offered as code actions. A position is looked up in the
+> snapshot, and go to definition and hover answer from it.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -38,7 +38,7 @@ lowered and elaborated, as `check` builds it.
 | Document symbols, folding | the raw tree | definitions, classes, subroutines, declarations, instances, blocks, each with its range; every branch of a conditional |
 | Formatting | the buffer | `astli fmt`'s output under the package's `[fmt]`, as an edit of the lines that differ |
 | Diagnostics | both | the raw parse's and the tree lint rules' at once; the preprocessor's, the expanded parse's, `check`'s and the design lint rules' from the snapshot |
-| Code actions | a diagnostic's fix | the edits `lint --fix` would apply, one finding or the whole file |
+| Code actions | what was published | the edits `lint --fix` would apply, one finding or the whole file |
 | Workspace symbols | each snapshot's index | every module, interface, program, checker, primitive, package and class of the packages and their dependencies |
 | Definition, references | the snapshot | where a name is declared and used, a macro's `` `define ``, an `` `include ``'s header |
 | Hover | the snapshot | a declaration's type and width, a parameter's value, a macro call's expansion |
@@ -252,7 +252,8 @@ handing its work to the pool.
 `initialize` announces only what is built, each capability added by the
 change that implements it: so far the position encoding, incremental
 text document sync, document symbols, folding ranges, formatting,
-workspace symbols, definition and hover. A
+workspace symbols, definition, hover, and code actions of the kinds
+`quickfix` and `source.fixAll.astli`. A
 request the server does not know is answered `MethodNotFound`, and a
 notification it does not know is dropped. After `shutdown` every request is
 refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
@@ -447,6 +448,46 @@ write a drive letter, otherwise than the path's own URI does. A file not
 open is published under the URI its path makes, and cleared under the one
 it was last published under.
 
+## Code actions
+
+`textDocument/codeAction` offers the fixes of what was last published for
+the file, and only while that was published for the buffer's version
+([L29](#decisions)). A fix is a finding's edits of its file's text
+([S43](sema.md#decisions)), kept beside the diagnostic when it is
+published, as bytes of the text it was found in, and converted to a range
+of the buffer in the negotiated encoding when an action is made. Only the
+tree rules fix what they find, so a fix comes from the buffer step, which
+runs on every change and reads the text as it is now. A finding the design
+step keeps across a change loses its fix, since its bytes are those of the
+text before. A fix is kept only where every edit is in the file the finding
+is told in, as written: not in a header it includes, nor in the text a
+macro call placed. A file the raw parse did not read whole is offered no
+fix, as `lint --fix` leaves it alone.
+
+The fixes are gathered on the loop and the actions made on the pool, each
+checked to parse whole once applied, as `lint --fix` drops a pass that
+would not.
+
+- **A quick fix**, `quickfix`, for each diagnostic the request's
+  `context.diagnostics` names that was published with a fix: one with the
+  same range, code and message. A diagnostic the client still holds from
+  an older version names a range or a message the server no longer has,
+  and is offered nothing. It is marked preferred, since a fix keeps what
+  the code means.
+- **Fix all**, `source.fixAll.astli`, every fix of the file, applied as a
+  pass of `lint --fix` applies them: in the order of the file, each whole,
+  one overlapping a fix before it left out. It is one pass, where `--fix`
+  runs up to eight
+  ([limitations](limitations.md#fixing-all-of-a-file-is-one-pass-of-lint---fix)),
+  and its edit is one per run of lines that changed, as formatting's.
+
+`context.only` keeps the kinds it names or a kind under one: `source`
+asks for fix all, `quickfix` for the quick fixes. Without it, both are
+offered. An edit names the buffer's version where the client takes
+versioned edits (`workspace.workspaceEdit.documentChanges`), so a client
+whose buffer moved on since refuses it; otherwise it is the edits of the
+file's URI. A file not open, or with nothing to fix, is offered nothing.
+
 ## Definition
 
 `textDocument/definition` is answered on the pool from the lookup, and
@@ -603,6 +644,7 @@ or a macro no `` `define `` defines.
 | L26 | A lookup in a file whose buffer differs from the text its snapshot read answers `ContentModified` | The position is in the buffer's text, and the snapshot's places are in the text it read, so any answer would be placed where the text no longer is. The edit has made the design due already, and the client asks again. Mapping the position back through the edit would need the edits kept since the load. |
 | L27 | Definition answers every place what stands at the cursor leads to, each once: a name's declaration, each declaration of a definition several files declare, what a macro-written name is in each expansion. A declaration answers itself, as links where the client takes them | A name in a header or a macro's body means one thing per inclusion or expansion, and a reader asking where it is declared wants all of them, not the first unit's. An answer of itself lets a client say "this is the definition" rather than nothing. A link's origin tells the client what the answer was for, which a macro call or a positional connection spans more widely than the word under the cursor. |
 | L28 | Hover shows a declaration as written, read from the raw tree of its file, with the comment above it in the same code block. A value is said at the defaults and for each distinct value under the tops, an integer atom type's as a plain number | Lowering keeps a declaration's name and not its range ([S74](sema.md#decisions)), and the raw tree has every declaration as written, the ones a branch hides too, so a hover reads the one file it shows. A comment in SystemVerilog is plain text, which markdown would mangle, and in the block it is shown as written. A sized literal says a value exactly, and `32'sd8` for an `int` is noise where `8` says the same. |
+| L29 | A code action is made from what was last published for the file, while that was published for the buffer's version; a quick fix for each diagnostic the request names that was published with a fix, and fix all as one pass of `lint --fix` | A fix is bytes of the text its finding was found in, and the buffer's findings are found again on every change, so what was published for the version is what the fix is right for. Matching the client's diagnostics against what was published, rather than finding again what lies in the range, offers nothing for a diagnostic the client holds from an older text. |
 
 ## Prior art
 

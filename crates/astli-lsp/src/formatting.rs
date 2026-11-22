@@ -64,8 +64,8 @@ impl Server {
 
 /// The edits that turn `text` into `formatted`: one for each run of lines
 /// that differ, each replacing whole lines, so that a line the formatter
-/// left alone is not touched.
-fn edits(text: &str, lines: &Lines, formatted: &str, encoding: Encoding) -> Vec<TextEdit> {
+/// left alone is not touched. Fixing a whole file is answered the same way.
+pub fn edits(text: &str, lines: &Lines, formatted: &str, encoding: Encoding) -> Vec<TextEdit> {
     let diff = TextDiff::from_lines(text, formatted);
     let new: Vec<&str> = diff.iter_new_slices().collect();
     // The offset of the start of line `line`, or the end of the text for

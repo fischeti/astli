@@ -266,6 +266,7 @@ impl Server {
                 self.shut_down = true;
                 self.answer(id, Ok(()));
             }
+            "textDocument/codeAction" => self.code_actions(id, params),
             "textDocument/definition" => self.definition(id, params),
             "textDocument/hover" => self.hover(id, params),
             "textDocument/documentSymbol" => {
@@ -349,10 +350,13 @@ impl Server {
         self.touch(&path, root.as_deref());
         // What the design found before the change is still where it was,
         // until the design is loaded again; what it found after may not be.
-        // A load's problems placed in the file are its findings too.
+        // A load's problems placed in the file are its findings too. A fix
+        // is bytes of the text it was found in, which is no longer the
+        // buffer's, so one kept is not offered.
         let before = |it: &Told| it.reach < earliest;
         if let Some(design) = self.design.get_mut(&path) {
             design.retain(before);
+            design.iter_mut().for_each(|it| it.fix.clear());
         }
         for slot in self.slots.values_mut() {
             if let Some(problems) = slot.problems.get_mut(&path) {

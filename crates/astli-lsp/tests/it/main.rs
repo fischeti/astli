@@ -4,6 +4,7 @@
 //! Each drives a server as a client drives it, over an in-memory connection,
 //! with a host of its own in place of the driver's.
 
+mod actions;
 mod buffers;
 mod definition;
 mod diagnostics;

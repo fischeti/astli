@@ -1,0 +1,6 @@
+malformed.sv 3:1-3:7 unclosed-at-end-of-file
+  nothing
+malformed.sv 4:3-4:6 forbid-reg
+  nothing
+malformed.sv all
+  nothing

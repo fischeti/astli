@@ -23,7 +23,7 @@ use astli_diag::resolve_all;
 use astli_lint::{Config, Layer, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_sema::{check, check_built};
-use astli_text::{Diagnostic as Finding, LineCol, Lines, Origins, Reader, Severity, Span};
+use astli_text::{Diagnostic as Finding, Edit, LineCol, Lines, Origins, Reader, Severity, Span};
 use lsp_server::Notification;
 use lsp_types::{
     Code, CodeDescription, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location,
@@ -42,8 +42,8 @@ pub type ByPath = HashMap<PathBuf, Vec<Told>>;
 
 /// What was last published for each file: the URI it was published under,
 /// the version of the buffer it was published for, if the file was open,
-/// and the diagnostics.
-pub type Published = HashMap<PathBuf, (Uri, Option<i32>, Vec<Diagnostic>)>;
+/// and the diagnostics, each with its fix, which code actions offer.
+pub type Published = HashMap<PathBuf, (Uri, Option<i32>, Vec<Told>)>;
 
 /// A diagnostic as the client is told it, with how far what it says
 /// reaches in its own file: the end of its range, or of a related place in
@@ -55,6 +55,10 @@ pub type Published = HashMap<PathBuf, (Uri, Option<i32>, Vec<Diagnostic>)>;
 pub struct Told {
     pub diagnostic: Diagnostic,
     pub reach: Position,
+    /// The finding's fix, as edits of the bytes of the text it was found
+    /// in, which is the file's it is told in; empty where it has none, or
+    /// one that would edit anything but that file as written.
+    pub fix: Vec<Edit>,
 }
 
 /// The page of the site that lists the lint rules, a table for each group
@@ -285,6 +289,10 @@ fn waivers(unit: &Unit) -> Waivers {
 /// it is about, as the CLI places it, and what explains it are related
 /// places: its labels, the text a macro call stands for, each call of the
 /// macro chain, and each `` `include `` that reached its file.
+///
+/// Its fix is kept only where every edit is in that file, as written: an
+/// edit in a header the file includes, or in the text a macro call placed,
+/// is not the file's to make.
 pub fn converted(
     origins: &Origins,
     found: &[Finding],
@@ -327,6 +335,15 @@ pub fn converted(
             relate(site, "included from here".to_string());
         }
         let finding = resolved.diagnostic;
+        let in_file = |edit: &Edit| {
+            let source = edit.at.src_id;
+            origins.placed_by(source).is_none()
+                && origins.path(source).map(key) == Some(path.clone())
+        };
+        let fix = match finding.fix.iter().all(in_file) {
+            true => finding.fix.clone(),
+            false => Vec::new(),
+        };
         let said = Said {
             severity: finding.severity,
             code: finding.code.as_str(),
@@ -340,7 +357,14 @@ pub fn converted(
             .map(|it| it.range.end)
             .fold(range.end, Position::max);
         let diagnostic = said.told(range, related, shape);
-        converted.push((path, Told { diagnostic, reach }));
+        converted.push((
+            path,
+            Told {
+                diagnostic,
+                reach,
+                fix,
+            },
+        ));
     }
     converted
 }
@@ -376,7 +400,15 @@ fn placed(problem: &Problem, at: &At, reader: &dyn Reader, shape: Shape) -> (Pat
     };
     let diagnostic = said.told(range, related, shape);
     let reach = range.end;
-    (path, Told { diagnostic, reach })
+    let fix = Vec::new();
+    (
+        path,
+        Told {
+            diagnostic,
+            reach,
+            fix,
+        },
+    )
 }
 
 /// The bytes of `text` that `place` covers, clamped to the text.
@@ -532,6 +564,10 @@ impl Server {
     /// What the raw parse keeps as written is not told: a macro standing
     /// for syntax is such a region, and the expanded parse says what a
     /// compiler would not read.
+    ///
+    /// A fix is kept only where the raw parse read the file whole, as `lint
+    /// --fix` fixes only such a file: where the parser guessed, a token may
+    /// not be what the rule took it for.
     pub fn find_own(&mut self, path: &Path) {
         let levels = self
             .snapshot(path)
@@ -547,8 +583,16 @@ impl Server {
             found.extend(invalid);
             found.extend(lint(tree, &waivers, &levels));
         }
+        let whole = tree.diagnostics().is_empty();
         let own = converted(tree.origins(), &found, shape, |_| true);
-        let own = own.into_iter().map(|(_, it)| it).collect();
+        let own = (own.into_iter())
+            .map(|(_, mut it)| {
+                if !whole {
+                    it.fix.clear();
+                }
+                it
+            })
+            .collect();
         self.own.insert(path.to_path_buf(), own);
     }
 
@@ -641,7 +685,10 @@ impl Server {
             .cloned()
             .collect();
         dedup(&mut all);
-        let all = (all.into_iter()).map(|it| self.as_opened(it.diagnostic));
+        let all = (all.into_iter()).map(|mut it| {
+            it.diagnostic = self.as_opened(it.diagnostic);
+            it
+        });
         let told = (uri, version, all.collect::<Vec<_>>());
         let nothing = version.is_none() && told.2.is_empty();
         let same = match last {
@@ -658,7 +705,8 @@ impl Server {
         {
             self.send_published(was.clone(), None, Vec::new());
         }
-        self.send_published(told.0.clone(), told.1, told.2.clone());
+        let diagnostics = told.2.iter().map(|it| it.diagnostic.clone()).collect();
+        self.send_published(told.0.clone(), told.1, diagnostics);
         match nothing {
             true => self.published.remove(path),
             false => self.published.insert(path.to_path_buf(), told),

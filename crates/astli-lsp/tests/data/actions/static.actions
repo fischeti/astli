@@ -1,0 +1,23 @@
+static.sv 2:8-2:18 module-filename
+  nothing
+static.sv 4:9-4:10 unused-signal
+  nothing
+static.sv 4:9-4:14 explicit-static
+  quickfix "Fix `explicit-static`"
+    @@ -4 +4 @@
+    -    int a = 1;
+    +    static int a = 1;
+static.sv 5:9-5:10 unused-signal
+  nothing
+static.sv 5:9-5:14 explicit-static
+  quickfix "Fix `explicit-static`"
+    @@ -5 +5 @@
+    -    int b = 2;
+    +    static int b = 2;
+static.sv all
+  source.fixAll.astli "Fix all lint findings"
+    @@ -4,2 +4,2 @@
+    -    int a = 1;
+    -    int b = 2;
+    +    static int a = 1;
+    +    static int b = 2;
