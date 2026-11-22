@@ -1,6 +1,7 @@
 //! `textDocument/codeAction`: the fixes of the findings published for an
-//! open file, one finding's as a quick fix, and every one as
-//! `source.fixAll.astli`, for an editor to run on save.
+//! open file, one finding's as a quick fix, and `source.fixAll.astli`,
+//! which fixes the whole file as `lint --fix` does, for an editor to run on
+//! save.
 //!
 //! An action is made from what was last published for the file, and only
 //! while that was published for the buffer's version, since a fix is bytes
@@ -9,11 +10,17 @@
 //! what was published, so that one the client holds from an older version
 //! is offered nothing. Where the client takes versioned edits, each names
 //! the version too, and a client whose buffer moved on refuses it.
+//!
+//! Fix all lints the buffer again at the levels it was published with,
+//! pass after pass, so that a fix overlapping another is applied too: its
+//! first pass finds what was published, in the same text at the same
+//! levels.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use astli_lint::Config;
 use astli_parse::SyntaxTree;
 use astli_text::{Edit, Lines, apply};
 use lsp_server::{RequestId, ResponseError};
@@ -36,7 +43,7 @@ use crate::tasks::Cancel;
 pub const FIX_ALL: &str = "source.fixAll.astli";
 
 /// An open file's findings that have a fix, as they were published for its
-/// buffer's version, and the text they were found in.
+/// buffer's version, and the text and levels they were found at.
 struct Fixable {
     path: PathBuf,
     uri: Uri,
@@ -46,6 +53,9 @@ struct Fixable {
     /// Each diagnostic published with a fix, with it, in the order of the
     /// file.
     found: Vec<(Diagnostic, Vec<Edit>)>,
+    /// The levels the file's own findings were found at, which fix all
+    /// lints it at again; `None` if its design has not loaded.
+    levels: Option<Arc<Config>>,
     /// Whether the client takes an edit that names the version it is for.
     versioned: bool,
 }
@@ -87,6 +97,9 @@ impl Server {
             .and_then(|it| it.workspace_edit.as_ref())
             .and_then(|it| it.document_changes)
             .unwrap_or(false);
+        // The snapshot whose levels the published findings were found at:
+        // the buffer's findings are found again whenever it is swapped.
+        let levels = (self.snapshot(&path)).and_then(|it| it.levels.get(&path).cloned());
         Some(Fixable {
             path,
             uri: buffer.uri.clone(),
@@ -94,6 +107,7 @@ impl Server {
             text: buffer.text.clone(),
             encoding: self.encoding,
             found,
+            levels,
             versioned,
         })
     }
@@ -102,7 +116,7 @@ impl Server {
 impl Fixable {
     /// The actions `context` asks for, of the kinds its `only` names: a
     /// quick fix for each diagnostic it names that was published with a
-    /// fix, and every fix in the file at once.
+    /// fix, and the whole file fixed, if one was.
     fn actions(
         &self,
         context: &CodeActionContext,
@@ -125,7 +139,7 @@ impl Fixable {
                     (it.range, &it.code, &it.message)
                         == (diagnostic.range, &diagnostic.code, &diagnostic.message)
                 });
-                if !asked || self.fixed(&[fix]).is_none() {
+                if !asked || !self.parses_with(fix) {
                     continue;
                 }
                 let edits = (fix.iter())
@@ -152,11 +166,14 @@ impl Fixable {
                 });
             }
         }
-        if wanted(FIX_ALL) && !self.found.is_empty() {
+        if let Some(levels) = &self.levels
+            && wanted(FIX_ALL)
+            && !self.found.is_empty()
+        {
             cancel.check()?;
-            let fixes: Vec<&[Edit]> = (self.found.iter()).map(|(_, fix)| fix.as_slice()).collect();
-            if let Some(fixed) = self.fixed(&fixes) {
-                let edits = formatting::edits(&self.text, &lines, &fixed, self.encoding);
+            let tree = SyntaxTree::parse(&self.path, self.text.to_string());
+            if let Some((fixed, _)) = astli_lint::fix(&tree, levels) {
+                let edits = formatting::edits(&self.text, &lines, fixed.source(), self.encoding);
                 actions.push(CodeAction {
                     title: "Fix all lint findings".to_string(),
                     kind: Some(CodeActionKind::new(FIX_ALL)),
@@ -168,15 +185,11 @@ impl Fixable {
         Ok(actions)
     }
 
-    /// The text with `fixes` applied as a pass of `lint --fix` applies
-    /// them, a fix overlapping one before it left out; `None` if it would
-    /// not parse whole, as `--fix` drops such a pass.
-    fn fixed(&self, fixes: &[&[Edit]]) -> Option<String> {
-        let (text, _) = apply(&self.text, fixes);
-        let tree = SyntaxTree::parse(&self.path, text);
-        tree.diagnostics()
-            .is_empty()
-            .then(|| tree.source().to_string())
+    /// Whether the text with `fix` applied parses whole, as `lint --fix`
+    /// drops a pass that would not.
+    fn parses_with(&self, fix: &[Edit]) -> bool {
+        let (text, _) = apply(&self.text, &[fix]);
+        SyntaxTree::parse(&self.path, text).diagnostics().is_empty()
     }
 
     /// `edits` of the file as the client takes them: naming the version

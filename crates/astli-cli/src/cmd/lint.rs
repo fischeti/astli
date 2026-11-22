@@ -33,9 +33,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use astli_lint::{Config, Layer, Level, Linter, RULES, RuleOption, Waivers, lint};
-use astli_parse::{NOT_PARSED, SyntaxTree};
+use astli_parse::NOT_PARSED;
 use astli_sema::Built;
-use astli_text::{Diagnostic, Edit, Origins, Reader, apply};
+use astli_text::{Diagnostic, Origins, Reader};
 use rayon::prelude::*;
 use usage_rs::{Args, RunWith};
 
@@ -237,47 +237,17 @@ impl Lint {
     }
 }
 
-/// How many times a file is fixed at most: a fix that overlaps another
-/// waits for the next pass, and a file that still has one after this many
-/// is left with it rather than run on.
-const PASSES: usize = 8;
-
 /// Rewrites each of `files`, at the levels `levels` holds for it, with the
-/// fixes its tree rules find, pass after
-/// pass until none is left, and says how many it applied. A file the parser
-/// did not read whole is left alone, since a fix is only known safe in a
-/// tree that says what each token is; a pass whose result would not parse
-/// whole is dropped.
+/// fixes its tree rules find, as [`astli_lint::fix`] applies them, and says
+/// how many it applied.
 fn fix(files: &[PathBuf], levels: &[Config]) -> Result {
     let fixed: Vec<usize> = (files.par_iter().zip(levels))
         .map(|(path, config)| {
-            let original = crate::session::tree(path, &astli_text::Disk)?;
-            if !original.diagnostics().is_empty() {
+            let tree = crate::session::tree(path, &astli_text::Disk)?;
+            let Some((tree, fixed)) = astli_lint::fix(&tree, config) else {
                 return Ok(0);
-            }
-            let (mut tree, mut fixed) = (None, 0);
-            for _ in 0..PASSES {
-                let current = tree.as_ref().unwrap_or(&original);
-                let (waivers, _) = Waivers::read(current);
-                let found = lint(current, &waivers, config);
-                let fixes: Vec<&[Edit]> = (found.iter())
-                    .map(|it| it.fix.as_slice())
-                    .filter(|it| !it.is_empty())
-                    .collect();
-                if fixes.is_empty() {
-                    break;
-                }
-                let (text, applied) = apply(current.source(), &fixes);
-                let next = SyntaxTree::parse(path, text);
-                if !next.diagnostics().is_empty() {
-                    break;
-                }
-                fixed += applied;
-                tree = Some(next);
-            }
-            if let Some(tree) = tree {
-                std::fs::write(path, tree.source()).map_err(|err| Error::io(path, err))?;
-            }
+            };
+            std::fs::write(path, tree.source()).map_err(|err| Error::io(path, err))?;
             Ok(fixed)
         })
         .collect::<Result<_>>()?;

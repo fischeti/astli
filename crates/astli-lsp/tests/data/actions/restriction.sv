@@ -1,5 +1,5 @@
 // With the restriction rules on, several fixes in one file. Two insert
-// at the same place, so fixing all of them leaves one for the next run.
+// at the same place, so fixing all of them takes a second pass.
 module restricted (
   input  logic a,
   input  logic b,

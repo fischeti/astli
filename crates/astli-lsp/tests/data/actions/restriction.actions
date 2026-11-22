@@ -50,6 +50,6 @@ restriction.sv all
     +`endif // FAST
     @@ -16 +15 @@
     -      assign y = a == b && c || d;
-    +      assign y = (a == b) && c || d;
+    +      assign y = ((a == b) && c) || d;
     @@ -18 +16,0 @@
     -  endgenerate

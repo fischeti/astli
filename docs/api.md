@@ -438,6 +438,7 @@ let (waivers, invalid) = Waivers::read(&tree);  // Waivers, Vec<Diagnostic>
 let found = astli_lint::lint(&tree, &waivers, &Config::default());  // Vec<Diagnostic>
 let fixes: Vec<&[Edit]> = found.iter().map(|it| it.fix.as_slice()).collect();
 let (fixed, applied) = astli_text::apply(tree.source(), &fixes);  // String, usize
+let fixed = astli_lint::fix(&tree, &config);  // Option<(SyntaxTree, usize)>: pass after pass
 config.set("lowrisc", Level::Allow)?;  // a group, or one rule by name
 config.set_option("port-name-suffix", "input", &["i_*"])?;  // as `astli.toml` spells it
 ```
@@ -445,7 +446,11 @@ config.set_option("port-name-suffix", "input", &["i_*"])?;  // as `astli.toml` s
 A rule's name is its diagnostics' code. A diagnostic's `fix` is the edits
 that do away with it, empty when it has none; it lives on `Diagnostic`
 rather than in the linter, since an editor offering it reads only
-diagnostics, and `apply` takes it whole or not at all. `RULES` lists every rule with its
+diagnostics, and `apply` takes it whole or not at all. `astli_lint::fix`
+is what `lint --fix` and the language server's fix all both run: lint,
+apply, parse again, until nothing is left to fix. It takes a tree and
+returns one, reading and writing no file, so the server fixes a buffer
+with it. `RULES` lists every rule with its
 `Group`, which sets its default level, so `--list` is read off it, and the
 `RuleOption`s it takes. An option's values are strings, as configuration
 writes them, so a driver reading `astli.toml` needs to know no option's
