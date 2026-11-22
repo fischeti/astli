@@ -76,6 +76,7 @@ mod definition;
 mod diagnostics;
 mod folding;
 mod formatting;
+mod hover;
 mod position;
 mod server;
 mod slots;
@@ -306,6 +307,7 @@ fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
             document_formatting_provider: Some(true.into()),
             document_symbol_provider: Some(true.into()),
             folding_range_provider: Some(FoldingRangeProvider::Bool(true)),
+            hover_provider: Some(true.into()),
             workspace_symbol_provider: Some(true.into()),
             ..ServerCapabilities::default()
         },

@@ -267,6 +267,7 @@ impl Server {
                 self.answer(id, Ok(()));
             }
             "textDocument/definition" => self.definition(id, params),
+            "textDocument/hover" => self.hover(id, params),
             "textDocument/documentSymbol" => {
                 self.reply(id, &method, params, Server::document_symbols);
             }

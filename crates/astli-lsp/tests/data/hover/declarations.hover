@@ -1,0 +1,138 @@
+declarations.sv:18:8 counter
+    module `counter`
+
+    ```systemverilog
+    module counter (
+    //     ^
+
+      // The clock, rising edge.
+      input  logic       clk_i,
+      input  logic       rst_ni, // Active low.
+      output logic [7:0] count_o
+    );
+    ```
+
+declarations.sv:26:8 w
+    net `w`: `logic`
+
+    ```systemverilog
+    wire w
+    ```
+
+declarations.sv:30:21 last
+    variable `last`: `logic [7:0]`
+
+    ```systemverilog
+    // The next count and the one before.
+    logic [7:0] last
+    ```
+
+declarations.sv:33:3 state_e
+    typedef `state_e`, 2 bits
+
+    ```systemverilog
+    typedef enum logic [1:0] {
+      // Nothing to do.
+      IDLE,
+      BUSY = 2'd2 // Working.
+    } state_e
+    ```
+
+declarations.sv:33:11 state
+    variable `state`: `state_e`, 2 bits
+
+    ```systemverilog
+    state_e state
+    ```
+
+declarations.sv:36:11 entry
+    variable `entry`: `entry_t`, 5 bits
+
+    ```systemverilog
+    entry_t entry
+    ```
+
+declarations.sv:41:34 bump
+    function `bump` returning `logic [7:0]`
+
+    ```systemverilog
+    /* Counts up
+       by one. */
+    function automatic logic [7:0] bump(input logic [7:0] value);
+    ```
+
+declarations.sv:46:18 idle
+    task `idle`
+
+    ```systemverilog
+    task automatic idle();
+    ```
+
+declarations.sv:50:10 next
+    variable `next`: `logic [7:0]`
+
+    ```systemverilog
+    // The next count and the one before.
+    logic [7:0] next
+    ```
+
+declarations.sv:50:17 bump
+    function `bump` returning `logic [7:0]`
+
+    ```systemverilog
+    /* Counts up
+       by one. */
+    function automatic logic [7:0] bump(input logic [7:0] value);
+    ```
+
+declarations.sv:50:22 count_o
+    output port `count_o`: `logic [7:0]`
+
+    ```systemverilog
+    output logic [7:0] count_o
+    ```
+
+declarations.sv:52:14 clk_i
+    input port `clk_i`: `logic`
+
+    ```systemverilog
+    // The clock, rising edge.
+    input  logic clk_i
+    ```
+
+declarations.sv:52:22 rst_ni
+    input port `rst_ni`: `logic`
+
+    ```systemverilog
+    input  logic rst_ni // Active low.
+    ```
+
+declarations.sv:54:18 IDLE
+    enum member `IDLE`: `state_e`, 2 bits
+
+    ```systemverilog
+    // Nothing to do.
+    IDLE
+    ```
+
+    value `2'd0`
+
+declarations.sv:56:18 BUSY
+    enum member `BUSY`: `state_e`, 2 bits
+
+    ```systemverilog
+    BUSY = 2'd2 // Working.
+    ```
+
+    value `2'd2`
+
+declarations.sv:58:10 implicit
+    implicit net `implicit`: 1 bit
+
+declarations.sv:61:15 i
+    genvar `i`: `logic signed [31:0]`
+
+    ```systemverilog
+    genvar i = 0
+    ```
+

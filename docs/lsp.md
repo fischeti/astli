@@ -6,8 +6,8 @@
 > Formatting is answered from the buffer, document symbols and folding
 > from its raw tree, and workspace symbols from the loaded designs' indexes,
 > on the pool; diagnostics are published from the buffer and the snapshot.
-> A position is looked up in the snapshot, and go to definition answers
-> from it.
+> A position is looked up in the snapshot, and go to definition and hover
+> answer from it.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -212,8 +212,9 @@ request says what several agree on once.
 A unit's sites are made the first time a request asks for them, and kept
 with the unit for as long as its snapshot lives. Its macro calls, and the
 branch bodies its expansion skipped, the driver keeps in the snapshot as it
-lowers the unit: they are a few ids and spans a unit, where its expanded
-tokens are the size of the text it read ([L25](#decisions)). A call is
+lowers the unit, with the build it was expanded with: they are a few ids
+and spans a unit, and a build its units share, where its expanded tokens
+are the size of the text it read ([L25](#decisions)). A call is
 found among the calls a file writes outside any other, so one written in
 another's argument is not found
 ([limitations](limitations.md#a-macro-call-in-another-calls-argument-is-not-found-from-a-cursor)).
@@ -251,7 +252,7 @@ handing its work to the pool.
 `initialize` announces only what is built, each capability added by the
 change that implements it: so far the position encoding, incremental
 text document sync, document symbols, folding ranges, formatting,
-workspace symbols and definition. A
+workspace symbols, definition and hover. A
 request the server does not know is answered `MethodNotFound`, and a
 notification it does not know is dropped. After `shutdown` every request is
 refused as `InvalidRequest`, and `exit` ends the process with 0, or with 1
@@ -477,6 +478,59 @@ Each place is answered once, in the order found, as a `LocationLink` where
 the client takes links, whose origin is what the cursor was on, and as a
 `Location` otherwise ([L27](#decisions)).
 
+## Hover
+
+`textDocument/hover` is answered on the pool from the lookup, as markdown
+with code in `systemverilog` blocks, over the range of what it is about.
+What the design does not keep, the declaration as written and the comment
+above it, is read from the raw tree of the file that declares it, parsed
+once a request ([L28](#decisions)).
+
+| At the cursor | Says |
+| --- | --- |
+| a declaration, or a name used that sema resolves | its kind, a port's direction, its type as elaborated with its width where the type does not show it, and the declaration as written: of several names, what comes before the first and its own; a definition's or a subroutine's header up to its `;` |
+| a parameter, an enum member | also its value at the defaults of the definition around it, and where there are tops, each distinct value the bodies they build take, with the path of an instance that has it |
+| an instance, or the definition it names | the definition's header as written, and what its overrides evaluate to in the body it builds, as values are said |
+| `.name` of a connection or an override, a positional one | the port or the parameter, as its declaration is said |
+| a struct's member, used or declared; an import's package and item; a `bind`'s target | what it refers to, as its declaration is said |
+| an implicit net | that it is one, one bit wide |
+| `` `NAME `` of a macro call | its `` `define `` with the comment above it, and what this call expands to; a built-in, what it stands for |
+| an `` `include `` | the header it read, by its path under the design root |
+
+The comment directly above a declaration, on lines of its own and with no
+blank line between, is shown above it in its block, the six lines nearest
+it; without one, a comment after it on its line is shown after it. A
+declaration shows eight lines at most. A comment opening a file is above
+the first declaration unless a blank line is between them, as a licence
+header often is not.
+
+A value is said at the defaults ([L12](#decisions)): of a parameter of a
+definition with parameters, "at `fifo`'s defaults", and of a package's or
+a file's, plainly. Where there are tops, each value the bodies they build
+of the definition take follows, four at most and a count of the rest, or
+once that every body agrees with the defaults. A value of an integer atom
+type, `int`, `byte`, `shortint`, `longint` or `integer`, signed or not, is a
+plain decimal number with its sign, where every bit is known; any other
+value is the literal it is, `8'd240`, `32'sbx`. A type keeps its width,
+sign and states rather than its keyword, so an atom type is a vector
+`[n-1:0]` of 8, 16, 32 or 64 bits that is two-state or signed, and a vector
+written out alike, `bit signed [31:0]`, is plain too.
+
+What a call expands to is not in the snapshot: the unit is expanded again
+with its build, reading the texts its origins hold, so it reads what the
+load read, and the call is the one at the same place among its calls. On
+OpenTitan's largest unit, `spi_device_reg_top.sv` at 560 kB with
+`prim_assert.sv` included, `astli preprocess` takes 11 ms, so no expansion
+is kept. The expansion is laid out by the formatter where it parses as a
+module's items, twenty lines at most, and is the text it renders to
+otherwise, cut at 400 characters.
+
+Each unit that holds the file is asked, and what they say is said once,
+apart by a rule: a name `.name` connects and the port it connects to are
+both said, and a name a macro wrote that means one thing in every expansion
+is said once. Nothing is said of a name sema does not resolve, a keyword,
+or a macro no `` `define `` defines.
+
 ## Decisions
 
 | # | Decision | Why |
@@ -508,6 +562,7 @@ the client takes links, whose origin is what the cursor was on, and as a
 | L25 | A request at a position goes through one lookup, which gives each unit that holds the file, the byte, the sites there, the macro call and the `` `include ``. A unit's sites are made on the first ask and kept with it; its macro calls and skipped branches the driver keeps in the snapshot, and not its expanded tokens | Definition, references, hover and inlay hints all start from what stands at a place, and finding it is the same for each. Sites take a walk of the unit's HIR, which a header's 595 units make 45 ms of, so they are made once a snapshot rather than once a request, and only for the units asked about. A unit's calls are ids into the origins the snapshot keeps already. Its tokens would cost as much as its text again, for every unit, to show the expansion of a call a reader hovers, which expanding that one unit again from its build, kept in the snapshot, gives when asked. |
 | L26 | A lookup in a file whose buffer differs from the text its snapshot read answers `ContentModified` | The position is in the buffer's text, and the snapshot's places are in the text it read, so any answer would be placed where the text no longer is. The edit has made the design due already, and the client asks again. Mapping the position back through the edit would need the edits kept since the load. |
 | L27 | Definition answers every place what stands at the cursor leads to, each once: a name's declaration, each declaration of a definition several files declare, what a macro-written name is in each expansion. A declaration answers itself, as links where the client takes them | A name in a header or a macro's body means one thing per inclusion or expansion, and a reader asking where it is declared wants all of them, not the first unit's. An answer of itself lets a client say "this is the definition" rather than nothing. A link's origin tells the client what the answer was for, which a macro call or a positional connection spans more widely than the word under the cursor. |
+| L28 | Hover shows a declaration as written, read from the raw tree of its file, with the comment above it in the same code block. A value is said at the defaults and for each distinct value under the tops, an integer atom type's as a plain number | Lowering keeps a declaration's name and not its range ([S74](sema.md#decisions)), and the raw tree has every declaration as written, the ones a branch hides too, so a hover reads the one file it shows. A comment in SystemVerilog is plain text, which markdown would mangle, and in the block it is shown as written. A sized literal says a value exactly, and `32'sd8` for an `int` is noise where `8` says the same. |
 
 ## Prior art
 

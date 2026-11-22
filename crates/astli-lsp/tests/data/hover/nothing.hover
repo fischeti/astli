@@ -1,0 +1,12 @@
+nothing.sv:6:14 missing
+    nothing
+
+nothing.sv:8:27 thing
+    nothing
+
+nothing.sv:10:3 initial
+    nothing
+
+nothing.sv:13:3 `UNDEFINED
+    nothing
+
