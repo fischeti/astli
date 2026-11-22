@@ -9,93 +9,34 @@
 //! running
 //!
 //! ```text
-//! UPDATE_EXPECT=1 cargo nextest run -p astli-lsp --test symbols
+//! UPDATE_EXPECT=1 cargo nextest run -p astli-lsp symbols::
 //! ```
 
 use std::path::Path;
-use std::thread::JoinHandle;
-use std::time::Duration;
 
-use astli_lsp::{Ended, Host};
 use astli_testing::snapshots;
 use expect_test::expect;
-use lsp_server::{Connection, Message, Notification, Request, RequestId};
 use lsp_types::{DocumentSymbol, FoldingRange, Position, Range};
 use serde_json::{Value, json};
 
-/// A client, with the server it started on a thread.
-struct Client {
-    connection: Connection,
-    server: JoinHandle<Ended>,
-    next: i32,
+use crate::support::{self, Client};
+
+/// Starts a server for a client that offers no encoding, so positions are
+/// UTF-16, and has the text document `capabilities`.
+fn start(capabilities: Value) -> Client {
+    Client::initialize(&[], json!({ "textDocument": capabilities })).0
 }
 
-impl Client {
-    /// Starts a server for a client that offers no encoding, so positions
-    /// are UTF-16, and has the text document `capabilities`.
-    fn start(capabilities: Value) -> Client {
-        let (client, server) = Connection::memory();
-        let server = std::thread::spawn(move || {
-            let host = Host {
-                version: "VERSION".to_string(),
-                // Neither request formats.
-                fmt_options: std::sync::Arc::new(|_| Ok(None)),
-            };
-            astli_lsp::serve(&server, &host)
-        });
-        let mut client = Client {
-            connection: client,
-            server,
-            next: 0,
-        };
-        let params = json!({
-            "processId": null,
-            "rootUri": null,
-            "capabilities": { "textDocument": capabilities },
-        });
-        client.request("initialize", params);
-        client.notify("initialized", json!({}));
-        client
-    }
+/// Opens `text` as `name`, returning its URI.
+fn open(client: &Client, name: &str, text: &str) -> String {
+    let uri = support::uri(name);
+    client.open(&uri, text);
+    uri
+}
 
-    fn request(&mut self, method: &str, params: Value) -> Value {
-        self.next += 1;
-        let id = RequestId::from(self.next);
-        let request = Request::new(id.clone(), method.to_string(), params);
-        self.connection.sender.send(request.into()).expect("sent");
-        loop {
-            let message = (self.connection.receiver)
-                .recv_timeout(Duration::from_secs(10))
-                .expect("an answer");
-            if let Message::Response(response) = message {
-                assert_eq!(response.id, id, "answers in the order asked");
-                return response.response_result.expect("answered");
-            }
-        }
-    }
-
-    fn notify(&self, method: &str, params: Value) {
-        let notification = Notification::new(method.to_string(), params);
-        let sent = self.connection.sender.send(notification.into());
-        sent.expect("sent");
-    }
-
-    /// Opens `text` as `name`, returning its URI.
-    fn open(&self, name: &str, text: &str) -> String {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(name);
-        let uri = lsp_types::Uri::from_file_path(path).expect("absolute");
-        let uri = uri.to_string();
-        let document =
-            json!({ "uri": uri, "languageId": "systemverilog", "version": 1, "text": text });
-        self.notify("textDocument/didOpen", json!({ "textDocument": document }));
-        uri
-    }
-
-    fn finish(mut self) {
-        assert_eq!(self.request("shutdown", Value::Null), Value::Null);
-        self.notify("exit", Value::Null);
-        assert_eq!(self.server.join().expect("no panic"), Ended::Exited);
-    }
+/// Asks `method` of the document at `uri`, which it answers.
+fn ask(client: &mut Client, method: &str, uri: &str) -> Value {
+    client.request(method, document(uri)).expect("answered")
 }
 
 /// What a client that takes symbols nested and folds whole lines says.
@@ -114,9 +55,9 @@ fn document(uri: &str) -> Value {
 fn snapshots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/symbols");
     snapshots::check_with(&root, "symbols", &["folds"], |name, text| {
-        let mut client = Client::start(capabilities());
-        let uri = client.open(name, &text);
-        let symbols = client.request("textDocument/documentSymbol", document(&uri));
+        let mut client = start(capabilities());
+        let uri = open(&client, name, &text);
+        let symbols = ask(&mut client, "textDocument/documentSymbol", &uri);
         client.finish();
         let symbols: Vec<DocumentSymbol> = serde_json::from_value(symbols).expect("symbols");
         let mut out = String::new();
@@ -124,9 +65,9 @@ fn snapshots() {
         out
     });
     snapshots::check_with(&root, "folds", &["symbols"], |name, text| {
-        let mut client = Client::start(capabilities());
-        let uri = client.open(name, &text);
-        let folds = client.request("textDocument/foldingRange", document(&uri));
+        let mut client = start(capabilities());
+        let uri = open(&client, name, &text);
+        let folds = ask(&mut client, "textDocument/foldingRange", &uri);
         client.finish();
         let folds: Vec<FoldingRange> = serde_json::from_value(folds).expect("folds");
         let lines: Vec<&str> = text.lines().collect();
@@ -173,11 +114,11 @@ fn range(range: Range) -> String {
 /// closer, `endmodule`, which stays in view.
 #[test]
 fn flat_symbols_and_folds_within_a_line() {
-    let mut client = Client::start(json!({}));
+    let mut client = start(json!({}));
     let text = "module top;\n  wire /* é */ w;\nendmodule\n";
-    let uri = client.open("flat.sv", text);
-    let symbols = client.request("textDocument/documentSymbol", document(&uri));
-    let folds = client.request("textDocument/foldingRange", document(&uri));
+    let uri = open(&client, "flat.sv", text);
+    let symbols = ask(&mut client, "textDocument/documentSymbol", &uri);
+    let folds = ask(&mut client, "textDocument/foldingRange", &uri);
     client.finish();
     let mut symbols = symbols;
     for symbol in symbols.as_array_mut().expect("a list") {

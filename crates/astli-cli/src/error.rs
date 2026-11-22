@@ -24,6 +24,8 @@ pub enum Error {
     /// A program the run ran, such as a simulation, failed with this status,
     /// and said why itself: the run exits with the same status.
     Exited(u8),
+    /// A load for an editor stopped, since an edit made it stale.
+    Overtaken,
 }
 
 impl Error {
@@ -105,6 +107,7 @@ impl fmt::Display for Error {
             Error::Output(err) => write!(f, "{err}"),
             Error::Silent => Ok(()),
             Error::Exited(code) => write!(f, "exited with status {code}"),
+            Error::Overtaken => write!(f, "an edit overtook the load"),
         }
     }
 }

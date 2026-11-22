@@ -454,6 +454,27 @@ impl Problem {
         self
     }
 
+    /// How bad it is.
+    pub fn severity(&self) -> Severity {
+        self.severity
+    }
+
+    /// What explains it, each with its marks.
+    pub fn notes(&self) -> &[String] {
+        &self.notes
+    }
+
+    /// What to do about it, each with its marks.
+    pub fn helps(&self) -> &[String] {
+        &self.help
+    }
+
+    /// The file it is in, the place there, and what is at it, if anywhere.
+    pub fn place(&self) -> Option<(&Path, &Place, Option<&str>)> {
+        let at = self.at.as_ref()?;
+        Some((&at.path, &at.place, at.label.as_deref()))
+    }
+
     /// Writes the problem to stderr, in one piece, as
     ///
     /// ```text

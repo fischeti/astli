@@ -96,3 +96,90 @@ impl Encoding {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use astli_text::Lines;
+    use lsp_types::Position;
+
+    use super::Encoding;
+
+    #[test]
+    fn positions_convert_to_offsets_and_back() {
+        use Encoding::{Utf8, Utf16};
+        let text = "a\n// 𝄞é x\r\n\nend";
+        let lines = Lines::new(text);
+        // Each row is an offset and its position, which convert both ways.
+        let rows: &[(Encoding, u32, [u32; 2])] = &[
+            (Utf16, 0, [0, 0]),
+            (Utf16, 1, [0, 1]),
+            (Utf16, 2, [1, 0]),
+            (Utf16, 5, [1, 3]),
+            (Utf16, 9, [1, 5]),
+            (Utf16, 11, [1, 6]),
+            (Utf16, 13, [1, 8]),
+            (Utf16, 15, [2, 0]),
+            (Utf16, 16, [3, 0]),
+            (Utf16, 19, [3, 3]),
+            (Utf8, 5, [1, 3]),
+            (Utf8, 9, [1, 7]),
+            (Utf8, 11, [1, 9]),
+            (Utf8, 13, [1, 11]),
+            (Utf8, 19, [3, 3]),
+        ];
+        for &(encoding, offset, [line, character]) in rows {
+            let position = Position { line, character };
+            let row = format!("{encoding:?} {offset}");
+            assert_eq!(encoding.position(text, &lines, offset), position, "{row}");
+            assert_eq!(encoding.offset(text, &lines, position), offset, "{row}");
+        }
+
+        // A position past its line, or inside a character, comes back clamped.
+        let clamped: &[(Encoding, [u32; 2], u32)] = &[
+            (Utf16, [0, 9], 1),
+            (Utf16, [1, 4], 5),
+            (Utf16, [1, 99], 13),
+            (Utf8, [1, 5], 5),
+            (Utf8, [1, 99], 13),
+            (Utf16, [2, 1], 15),
+            (Utf16, [3, 9], 19),
+            (Utf16, [4, 0], 19),
+            (Utf8, [u32::MAX, 0], 19),
+        ];
+        for &(encoding, [line, character], offset) in clamped {
+            let position = Position { line, character };
+            let row = format!("{encoding:?} {position:?}");
+            assert_eq!(encoding.offset(text, &lines, position), offset, "{row}");
+        }
+
+        // So does an offset past the end, or inside a character.
+        assert_eq!(
+            Utf16.position(text, &lines, 99),
+            Position {
+                line: 3,
+                character: 3
+            }
+        );
+        assert_eq!(
+            Utf16.position(text, &lines, 7),
+            Position {
+                line: 1,
+                character: 3
+            }
+        );
+        assert_eq!(
+            Utf8.position(text, &lines, 10),
+            Position {
+                line: 1,
+                character: 7
+            }
+        );
+
+        let range = Utf16.range(text, &lines, 5..11);
+        assert_eq!(Utf16.bytes(text, &lines, range), 5..11);
+        assert_eq!(
+            Utf8.range("", &Lines::new(""), 0..0).end,
+            Position::default()
+        );
+    }
+}

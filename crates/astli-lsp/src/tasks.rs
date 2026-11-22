@@ -130,3 +130,46 @@ pub fn panic_message(payload: &(dyn Any + Send)) -> &str {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use lsp_server::{ErrorCode, RequestId};
+    use serde_json::Value;
+
+    use super::{Tasks, panic_message};
+
+    #[test]
+    fn a_cancelled_request_is_answered_as_cancelled() {
+        let mut tasks = Tasks::new();
+        let id = RequestId::from(1);
+        // Waits for its cancellation, or answers after ten seconds, which
+        // fails the test.
+        tasks.spawn(id.clone(), "wait".to_string(), |cancel| {
+            let start = Instant::now();
+            while start.elapsed() < Duration::from_secs(10) {
+                cancel.check()?;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            Ok(Value::from("not cancelled"))
+        });
+        // Cancelling a request never sent changes nothing.
+        tasks.cancel(&RequestId::from(2));
+        tasks.cancel(&id);
+        let done = tasks.receiver.recv().unwrap();
+        let answer = tasks.finish(done).expect("no panic");
+        assert_eq!(answer.unwrap_err().code, ErrorCode::RequestCanceled as i32);
+    }
+
+    #[test]
+    fn a_panic_on_the_pool_is_caught() {
+        let mut tasks = Tasks::new();
+        tasks.spawn(RequestId::from(1), "panic".to_string(), |_| {
+            panic!("work on the pool asked to panic")
+        });
+        let done = tasks.receiver.recv().unwrap();
+        let payload = tasks.finish(done).expect_err("a panic");
+        assert_eq!(panic_message(&*payload), "work on the pool asked to panic");
+    }
+}

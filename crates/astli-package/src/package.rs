@@ -304,16 +304,23 @@ impl Root {
     /// first.
     pub fn find(dir: &Path) -> Result<Option<Root>, Error> {
         let dir = std::path::absolute(dir).map_err(|err| Error::Io(dir.to_path_buf(), err))?;
-        // Cleaned, so that the ancestors of `a/b/..` are those of `a`.
-        let dir = clean(&dir);
-        for ancestor in dir.ancestors() {
-            // A worktree or a submodule has a `.git` file rather than a
-            // directory.
-            if ancestor.join(MANIFEST).is_file() || ancestor.join(".git").exists() {
-                return Root::at(ancestor).map(Some);
-            }
+        match Root::holding(&dir) {
+            Some(root) => Root::at(&root).map(Some),
+            None => Ok(None),
         }
-        Ok(None)
+    }
+
+    /// The root of the package the absolute directory `dir` is in, as
+    /// [`Root::find`] finds it, without reading its manifest, so that a
+    /// manifest that does not parse still names its package's root.
+    pub fn holding(dir: &Path) -> Option<PathBuf> {
+        // Cleaned, so that the ancestors of `a/b/..` are those of `a`.
+        let dir = clean(dir);
+        // A worktree or a submodule has a `.git` file rather than a
+        // directory.
+        (dir.ancestors())
+            .find(|it| it.join(MANIFEST).is_file() || it.join(".git").exists())
+            .map(Path::to_path_buf)
     }
 
     /// The root package at `dir`: its manifest, or the defaults without

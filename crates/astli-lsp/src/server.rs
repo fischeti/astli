@@ -1,10 +1,14 @@
 //! What the main loop does with each message: the state it owns, and a
 //! handler for each request and notification it knows.
 
+use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Instant;
 
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{ErrorCode, Message, Notification, Request, RequestId, Response, ResponseError};
 use lsp_types::{
     CancelParams, ClientCapabilities, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
@@ -14,12 +18,12 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::Ended;
 use crate::buffers::{self, Buffers};
-use crate::formatting::FmtOptions;
 use crate::position::Encoding;
+use crate::slots::{Loaded, Slot, drop_later};
 use crate::tasks::{Cancel, Done, Outcome, Tasks, panic_message};
 use crate::trees::Trees;
+use crate::{Ended, Host, Snapshot};
 
 /// The server's state, owned by the main loop.
 pub struct Server {
@@ -28,8 +32,17 @@ pub struct Server {
     pub buffers: Buffers,
     pub trees: Trees,
     pub tasks: Tasks,
-    /// The host's answer to what layout a file takes.
-    pub fmt_options: FmtOptions,
+    pub host: Arc<dyn Host>,
+    /// The design root of each open buffer, asked of the host when it was
+    /// opened: a file moves to another design only when discovery runs
+    /// again.
+    roots: HashMap<PathBuf, PathBuf>,
+    /// Each design an open buffer is in, by its root.
+    slots: HashMap<PathBuf, Slot>,
+    /// What the loads send back.
+    loads: Sender<Loaded>,
+    /// What the main loop waits on beside the client and the requests.
+    pub loaded: Receiver<Loaded>,
     /// What the client said it can take in `initialize`.
     pub client: ClientCapabilities,
     /// Whether the client has sent `shutdown`, after which every request is
@@ -38,14 +51,19 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(sender: Sender<Message>, encoding: Encoding, fmt_options: FmtOptions) -> Server {
+    pub fn new(sender: Sender<Message>, encoding: Encoding, host: Arc<dyn Host>) -> Server {
+        let (loads, loaded) = crossbeam_channel::unbounded();
         Server {
             sender,
             encoding,
             buffers: Buffers::default(),
             trees: Trees::default(),
             tasks: Tasks::new(),
-            fmt_options,
+            host,
+            roots: HashMap::new(),
+            slots: HashMap::new(),
+            loads,
+            loaded,
             client: ClientCapabilities::default(),
             shut_down: false,
         }
@@ -86,6 +104,78 @@ impl Server {
         ControlFlow::Continue(())
     }
 
+    /// Starts a load of each design whose edits have settled, and says when
+    /// the next one is due.
+    pub fn load_due(&mut self, now: Instant) -> Option<Instant> {
+        for (root, slot) in &mut self.slots {
+            if slot.due.is_some_and(|due| due <= now) {
+                let texts = self.buffers.texts();
+                slot.load(root, texts, &self.host, &self.loads);
+            }
+        }
+        self.slots.values().filter_map(|slot| slot.due).min()
+    }
+
+    /// Swaps in the snapshot a load made, if no edit has overtaken it, and
+    /// tells the client's log; a load that panicked is told too. What is
+    /// dropped of a design is dropped off the loop.
+    pub fn swap(&mut self, loaded: Loaded) {
+        let root = loaded.root.clone();
+        let Some(slot) = self.slots.get_mut(&root) else {
+            return drop_later(loaded);
+        };
+        match slot.swap(loaded, &self.buffers) {
+            Ok(Some(snapshot)) => {
+                let (units, lowered) = (snapshot.units(), snapshot.lowered);
+                let took = slot.took.as_millis();
+                let root = root.display();
+                let said = format!("loaded {root}: {units} units, {lowered} lowered, in {took} ms");
+                self.log(MessageType::Log, said);
+            }
+            Ok(None) => {}
+            Err(panicked) => {
+                let said = format!("loading {} panicked: {panicked}", root.display());
+                self.log(MessageType::Error, said);
+            }
+        }
+    }
+
+    /// The snapshot current for the file at `path`, if it is open and its
+    /// design has loaded.
+    #[expect(dead_code, reason = "the requests over the design call it")]
+    pub fn snapshot(&self, path: &Path) -> Option<Arc<Snapshot>> {
+        let root = self.roots.get(&buffers::key(path))?;
+        self.slots.get(root)?.current.clone()
+    }
+
+    /// Marks stale every design that the file at `path` is in, by `root`
+    /// or by what its load read, or that a load running reads, so that a
+    /// load running stops and another is made once the edits settle.
+    fn touch(&mut self, path: &Path, root: Option<&Path>) {
+        let now = Instant::now();
+        for (at, slot) in &mut self.slots {
+            if Some(at.as_path()) == root || slot.reads(path) {
+                slot.stale(now);
+            }
+        }
+    }
+
+    /// Drops each design no open buffer is in, off the loop: overtakes its
+    /// load running, and tells the host to forget what it kept of it.
+    fn drop_unused(&mut self) {
+        let unused: Vec<PathBuf> = (self.slots.keys())
+            .filter(|root| !self.roots.values().any(|it| it == *root))
+            .cloned()
+            .collect();
+        for root in unused {
+            if let Some(slot) = self.slots.remove(&root) {
+                slot.overtake();
+                self.host.forget(&root);
+                drop_later(slot);
+            }
+        }
+    }
+
     /// Answers the request whose work on the pool is `done`.
     pub fn finish(&mut self, done: Done) {
         let (id, method) = (done.id.clone(), done.method.clone());
@@ -115,8 +205,6 @@ impl Server {
             }
             "textDocument/foldingRange" => self.reply(id, &method, params, Server::folding_ranges),
             "textDocument/formatting" => self.formatting(id, params),
-            #[cfg(test)]
-            method if method.starts_with("test/") => self.test_request(id, method, params),
             _ => {
                 let _ = params;
                 let said = format!("`{method}` is not a request astli answers");
@@ -143,17 +231,24 @@ impl Server {
             "textDocument/didOpen" => self.with(&method, params, Server::open),
             "textDocument/didChange" => self.with(&method, params, Server::change),
             "textDocument/didClose" => self.with(&method, params, Server::close),
-            #[cfg(test)]
-            "test/panic" => panic!("a notification asked to panic"),
             _ => {}
         }
     }
 
     fn open(&mut self, params: DidOpenTextDocumentParams) {
         let document = params.text_document;
-        if let Some(path) = buffers::path(&document.uri) {
-            self.buffers.open(&path, document.text, document.version);
-        }
+        let Some(path) = buffers::path(&document.uri) else {
+            return;
+        };
+        // Asked first, so that a host that panics leaves no buffer without
+        // a design.
+        let root = self.host.design(&path);
+        self.buffers.open(&path, document.text);
+        self.slots.entry(root.clone()).or_insert_with(Slot::new);
+        self.roots.insert(path.clone(), root.clone());
+        self.touch(&path, Some(&root));
+        // Opened again, a file may be in another design than before.
+        self.drop_unused();
     }
 
     fn change(&mut self, params: DidChangeTextDocumentParams) {
@@ -163,17 +258,25 @@ impl Server {
             return;
         };
         let changes = params.content_changes;
-        if !(self.buffers).change(&path, document.version, changes, self.encoding) {
-            self.log(
+        if !(self.buffers).change(&path, changes, self.encoding) {
+            return self.log(
                 MessageType::Warning,
                 format!("{uri} changed, and is not open"),
             );
         }
+        let root = self.roots.get(&path).cloned();
+        self.touch(&path, root.as_deref());
     }
 
     fn close(&mut self, params: DidCloseTextDocumentParams) {
-        if let Some(path) = buffers::path(&params.text_document.uri) {
-            self.buffers.close(&path);
+        let Some(path) = buffers::path(&params.text_document.uri) else {
+            return;
+        };
+        if self.buffers.close(&path) {
+            self.roots.remove(&path);
+            // What the disk holds may not be what the buffer did.
+            self.touch(&path, None);
+            self.drop_unused();
         }
     }
 
@@ -213,10 +316,7 @@ impl Server {
     /// Hands `work` to the pool with the request's params, answering it
     /// when it is done. `work` takes what it reads by value; whether the
     /// client has cancelled the request it asks of the [`Cancel`].
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the requests over the design call it")
-    )]
+    #[expect(dead_code, reason = "the requests over the design call it")]
     pub fn spawn<P, R>(
         &mut self,
         id: RequestId,
@@ -287,43 +387,5 @@ pub fn error(code: ErrorCode, message: impl Into<String>) -> ResponseError {
         code: code as i32,
         message: message.into(),
         data: None,
-    }
-}
-
-/// Requests only the tests send, to reach what no request of the protocol
-/// does yet: a buffer as the server holds it, a panic, and work on the pool
-/// that waits to be cancelled.
-#[cfg(test)]
-impl Server {
-    fn test_request(&mut self, id: RequestId, method: &str, params: Value) {
-        match method {
-            "test/buffer" => {
-                let uri: lsp_types::Uri = serde_json::from_value(params).expect("a URI");
-                let path = buffers::path(&uri);
-                let buffer = path.as_deref().and_then(|it| self.buffers.get(it));
-                let buffer = buffer.map(|it| (it.version, it.text.clone()));
-                self.answer(id, Ok(buffer));
-            }
-            "test/panic" => panic!("a request asked to panic"),
-            "test/panicOnPool" => self.spawn(
-                id,
-                method,
-                params,
-                |(): (), _| -> Result<(), ResponseError> {
-                    panic!("work on the pool asked to panic")
-                },
-            ),
-            // Waits for its cancellation, or answers after ten seconds,
-            // which fails the test that waited.
-            "test/wait" => self.spawn(id, method, params, |(): (), cancel| {
-                let start = std::time::Instant::now();
-                while start.elapsed().as_secs() < 10 {
-                    cancel.check()?;
-                    std::thread::sleep(std::time::Duration::from_millis(1));
-                }
-                Ok("not cancelled")
-            }),
-            _ => self.answer::<()>(id, Err(error(ErrorCode::MethodNotFound, method))),
-        }
     }
 }

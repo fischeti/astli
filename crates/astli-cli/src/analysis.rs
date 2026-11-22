@@ -63,6 +63,7 @@ impl Analysis {
     ) -> Result<Self> {
         let summarize = summarize || plan.overrides() || !chosen.tops.is_empty();
         let outcome = cmd::each(out, &plan.units, run, None, |_, path| {
+            run.current()?;
             let unit = plan.unit(path);
             match plan.made(unit) {
                 // The designs of a workspace hold mostly the same files,
@@ -233,6 +234,28 @@ impl Designs {
         ends: bool,
         mut each: impl FnMut(&mut W, Plan, &mut Analysis, &mut Flags) -> Result<T>,
     ) -> Result<Vec<T>> {
+        let leaks = ends && !run.several_packages();
+        let kept = |out: &mut W, plan, mut analysis: Analysis, flags: &mut _, last| {
+            let made = each(out, plan, &mut analysis, flags);
+            match last && leaks {
+                true => analysis.leak(),
+                false => drop(analysis),
+            }
+            made
+        };
+        self.each_kept(out, plan, run, summarize, kept)
+    }
+
+    /// Analyses each design as [`Designs::each`] does, and hands `each` the
+    /// analysis to keep, and whether it is the last.
+    pub(crate) fn each_kept<T, W: Write>(
+        &mut self,
+        out: &mut W,
+        plan: Plan,
+        run: &Run,
+        summarize: bool,
+        mut each: impl FnMut(&mut W, Plan, Analysis, &mut Flags, bool) -> Result<T>,
+    ) -> Result<Vec<T>> {
         if self.chosen.len() > 1 {
             run.tell_once();
         }
@@ -248,12 +271,8 @@ impl Designs {
             .expect("the plan is kept for the last design")
             .for_tops(tops, run)?;
             plan.define(tops);
-            let mut analysis = Analysis::new(out, &mut plan, tops, &self.flags, run, summarize)?;
-            made.push(each(out, plan, &mut analysis, &mut self.flags)?);
-            match last && ends && !run.several_packages() {
-                true => analysis.leak(),
-                false => drop(analysis),
-            }
+            let analysis = Analysis::new(out, &mut plan, tops, &self.flags, run, summarize)?;
+            made.push(each(out, plan, analysis, &mut self.flags, last)?);
         }
         Ok(made)
     }

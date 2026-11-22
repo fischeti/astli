@@ -19,7 +19,7 @@ use astli_text::{Diagnostic, Disk, Reader};
 use crate::analysis::Lowered;
 use crate::cli::RunArgs;
 use crate::discovery::Made;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::term::{self, Problem};
 
 /// A run of a command, made once in `main` and shared by reference with
@@ -34,6 +34,9 @@ pub struct Run<'r> {
     /// that renders them itself; `None` for a command, which writes each
     /// as it is found.
     kept: Option<Mutex<Vec<Problem>>>,
+    /// Whether an edit has made a load stale, for a caller that loads
+    /// again once it has; never, for a command.
+    overtaken: Option<&'r (dyn Fn() -> bool + Sync)>,
     store: OnceLock<Store>,
     warned: Once,
     /// Whether the command runs once for each of several packages, as
@@ -89,13 +92,6 @@ impl<'r> Run<'r> {
     /// no progress, and keeps each problem for [`Run::problems`] rather
     /// than writing it. Dependencies it cannot settle or read are a problem
     /// too, and the package is read without them.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "for a caller that is no command, which none is yet"
-        )
-    )]
     pub fn loading(reader: &'r dyn Reader) -> Run<'r> {
         let args = RunArgs {
             quiet: true,
@@ -106,11 +102,30 @@ impl<'r> Run<'r> {
         Run::with(args, reader, Some(Mutex::default()))
     }
 
+    /// Makes the load stop at the next unit once `overtaken` says an edit
+    /// has made it stale, ending in [`Error::Overtaken`].
+    ///
+    /// [`Error::Overtaken`]: crate::error::Error::Overtaken
+    pub fn abandoning(mut self, overtaken: &'r (dyn Fn() -> bool + Sync)) -> Run<'r> {
+        self.overtaken = Some(overtaken);
+        self
+    }
+
+    /// `Err` once an edit has made the load stale, for its work to return
+    /// with `?`.
+    pub fn current(&self) -> Result<()> {
+        match self.overtaken.is_some_and(|it| it()) {
+            true => Err(Error::Overtaken),
+            false => Ok(()),
+        }
+    }
+
     fn with(args: RunArgs, reader: &'r dyn Reader, kept: Option<Mutex<Vec<Problem>>>) -> Run<'r> {
         Run {
             args,
             reader,
             kept,
+            overtaken: None,
             store: OnceLock::new(),
             warned: Once::new(),
             packages: AtomicBool::new(false),
@@ -152,13 +167,6 @@ impl<'r> Run<'r> {
 
     /// The problems kept since the last call, in the order found; none for
     /// a command's run, which wrote each.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "for a caller that is no command, which none is yet"
-        )
-    )]
     pub fn problems(&self) -> Vec<Problem> {
         (self.kept.as_ref()).map_or_else(Vec::new, |kept| std::mem::take(&mut *held(kept)))
     }

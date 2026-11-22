@@ -1,6 +1,7 @@
 //! The language server behind `astli lsp`: its loop, the buffers it keeps
-//! of the client's open files, and the positions it converts. It serves the
-//! driver, which starts it, and promises no API to anyone else.
+//! of the client's open files, the snapshots of the designs they are in, and
+//! the positions it converts. It serves the driver, which starts it, and
+//! promises no API to anyone else.
 //!
 //! One thread runs the loop: it owns the open buffers, takes each message
 //! from the client in turn, and sends every response. It answers a request
@@ -9,18 +10,53 @@
 //! alone, so the driver sends what it would write to stderr to the client's
 //! log, through [`Log`].
 //!
+//! What a design is, and how it is loaded, is the driver's: it implements
+//! [`Host`], and the server asks it which design a file is in and to load
+//! one through the buffers. Each design an open file is in is loaded again
+//! on a thread of its own after the client's edits settle, and its
+//! [`Snapshot`] is swapped in whole.
+//!
 //! A request is added as an arm of the server's dispatch, answered on the
 //! spot from the buffers, or handed to the pool with what it reads.
 //!
 //! ```no_run
+//! # use std::path::{Path, PathBuf};
+//! # use std::sync::Arc;
+//! # use astli_text::Reader;
+//! struct Files;
+//!
+//! impl astli_lsp::Host for Files {
+//!     fn version(&self) -> String {
+//!         "0.1.0".to_string()
+//!     }
+//!
+//!     fn fmt_options(&self, _: &Path) -> Result<Option<astli_fmt::Options>, String> {
+//!         Ok(Some(astli_fmt::Options::default()))
+//!     }
+//!
+//!     fn design(&self, path: &Path) -> PathBuf {
+//!         path.to_path_buf()
+//!     }
+//!
+//!     fn load(
+//!         &self,
+//!         root: &Path,
+//!         _: &dyn Reader,
+//!         _: bool,
+//!         _: &(dyn Fn() -> bool + Sync),
+//!     ) -> Option<astli_lsp::Snapshot> {
+//!         let (designs, problems) = (Vec::new(), Vec::new());
+//!         let root = root.to_path_buf();
+//!         Some(astli_lsp::Snapshot { root, designs, problems, lowered: 0 })
+//!     }
+//!
+//!     fn forget(&self, _: &Path) {}
+//! }
+//!
 //! let stdio = astli_lsp::Stdio::open();
 //! let log = stdio.log();
 //! log.send("written to the client's log");
-//! let host = astli_lsp::Host {
-//!     version: "0.1.0".to_string(),
-//!     fmt_options: std::sync::Arc::new(|_| Ok(Some(astli_fmt::Options::default()))),
-//! };
-//! assert_eq!(stdio.serve(&host), astli_lsp::Ended::Exited);
+//! assert_eq!(stdio.serve(Arc::new(Files)), astli_lsp::Ended::Exited);
 //! ```
 
 mod buffers;
@@ -28,32 +64,68 @@ mod folding;
 mod formatting;
 mod position;
 mod server;
+mod slots;
+mod snapshot;
 mod symbols;
 mod tasks;
-#[cfg(test)]
-mod tests;
 mod trees;
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
-use crossbeam_channel::{Sender, select};
+use astli_fmt::Options;
+use astli_text::Reader;
+use crossbeam_channel::{Sender, after, never, select};
 use lsp_server::{Connection, ErrorCode, IoThreads, Message, Response};
 use lsp_types::{
     FoldingRangeProvider, InitializeParams, InitializeResult, MessageType, ServerCapabilities,
     ServerInfo, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
-pub use formatting::FmtOptions;
 use position::Encoding;
 use server::Server;
 
-/// What the caller hands the server: what it says of itself to the
-/// client, and what only the driver can read.
-pub struct Host {
+pub use snapshot::{Analysed, At, Place, Problem, Snapshot, Unit};
+
+/// What the server needs of the driver: what it says of itself, what only
+/// the driver can read, and what a design is and how one is loaded. Shared
+/// with the threads that load on it.
+pub trait Host: Send + Sync + 'static {
     /// The version `initialize` names: the command's, which a user knows.
-    pub version: String,
-    /// The `[fmt]` of the package a file is in, which formatting reads.
-    pub fmt_options: FmtOptions,
+    fn version(&self) -> String;
+
+    /// The `[fmt]` of the package the file at `path` is in, which
+    /// formatting reads: `None` if the package's `[fmt] exclude` leaves it
+    /// as it is, and an error, said as `astli fmt` says it, if the
+    /// configuration cannot be read.
+    fn fmt_options(&self, path: &Path) -> Result<Option<Options>, String>;
+
+    /// The root of the design the file at `path` is in, as [`Snapshot`]
+    /// says what that is. Every file of one design gives the same root.
+    fn design(&self, path: &Path) -> PathBuf;
+
+    /// Loads the design at `root`, reading every source file through
+    /// `reader`. With `discover`, the package is found and read again;
+    /// without, what the last load of `root` found of it may be kept.
+    ///
+    /// `overtaken` says whether an edit has made the load stale, and is
+    /// asked between units: `None` if the load stopped for it. What went
+    /// wrong otherwise is in the snapshot's problems, a snapshot with no
+    /// design if the load could not analyse one.
+    fn load(
+        &self,
+        root: &Path,
+        reader: &dyn Reader,
+        discover: bool,
+        overtaken: &(dyn Fn() -> bool + Sync),
+    ) -> Option<Snapshot>;
+
+    /// Forgets what the loads of the design at `root` kept for the next,
+    /// once no open file is in it: a load of it started before keeps
+    /// nothing either. Asked on the main loop, so what it drops is dropped
+    /// elsewhere.
+    fn forget(&self, root: &Path);
 }
 
 /// How the server ended.
@@ -109,7 +181,7 @@ impl Stdio {
 
     /// Serves the client until it says `exit`, then cuts every [`Log`] off,
     /// since the connection closes only once nothing can write to it.
-    pub fn serve(self, host: &Host) -> Ended {
+    pub fn serve(self, host: Arc<dyn Host>) -> Ended {
         let Stdio {
             connection,
             threads,
@@ -132,7 +204,7 @@ impl Stdio {
 
 /// Runs the server over `connection`: the handshake, then each message
 /// until `exit`.
-pub fn serve(connection: &Connection, host: &Host) -> Ended {
+pub fn serve(connection: &Connection, host: Arc<dyn Host>) -> Ended {
     let (id, params) = match connection.initialize_start() {
         Ok(started) => started,
         Err(err) => return Ended::Failed(err.to_string()),
@@ -148,19 +220,21 @@ pub fn serve(connection: &Connection, host: &Host) -> Ended {
     };
     let general = params.capabilities.general.clone().unwrap_or_default();
     let encoding = Encoding::negotiate(&general.position_encodings.unwrap_or_default());
-    let result = Response::new_ok(id, initialized(encoding, host));
+    let result = Response::new_ok(id, initialized(encoding, &*host));
     let _ = connection.sender.send(result.into());
 
-    let mut server = Server::new(
-        connection.sender.clone(),
-        encoding,
-        host.fmt_options.clone(),
-    );
+    let mut server = Server::new(connection.sender.clone(), encoding, host);
     server.client = params.capabilities;
     // Cloned, so that the loop can hand the server to a handler while it
     // waits on the pool.
     let done = server.tasks.receiver.clone();
+    let loaded = server.loaded.clone();
     loop {
+        // Starts each load that is due, and wakes when the next one is.
+        let next = server.load_due(Instant::now());
+        let wake = next.map_or_else(never, |it| {
+            after(it.saturating_duration_since(Instant::now()))
+        });
         select! {
             recv(connection.receiver) -> message => {
                 let Ok(message) = message else {
@@ -174,13 +248,17 @@ pub fn serve(connection: &Connection, host: &Host) -> Ended {
             recv(done) -> finished => {
                 server.finish(finished.expect("the server holds a sender"));
             }
+            recv(loaded) -> finished => {
+                server.swap(finished.expect("the server holds a sender"));
+            }
+            recv(wake) -> _ => {}
         }
     }
 }
 
 /// What the server answers `initialize` with: the capabilities this
 /// version has, each announced by what implements it.
-fn initialized(encoding: Encoding, host: &Host) -> InitializeResult {
+fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
     let sync = TextDocumentSyncOptions {
         open_close: Some(true),
         change: Some(TextDocumentSyncKind::Incremental),
@@ -197,7 +275,7 @@ fn initialized(encoding: Encoding, host: &Host) -> InitializeResult {
         },
         server_info: Some(ServerInfo {
             name: "astli".to_string(),
-            version: Some(host.version.clone()),
+            version: Some(host.version()),
         }),
     }
 }
