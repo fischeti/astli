@@ -20,6 +20,7 @@
 //! spot from the buffers, or handed to the pool with what it reads.
 //!
 //! ```no_run
+//! # use std::collections::HashMap;
 //! # use std::path::{Path, PathBuf};
 //! # use std::sync::Arc;
 //! # use astli_text::Reader;
@@ -45,9 +46,14 @@
 //!         _: bool,
 //!         _: &(dyn Fn() -> bool + Sync),
 //!     ) -> Option<astli_lsp::Snapshot> {
-//!         let (designs, problems) = (Vec::new(), Vec::new());
-//!         let root = root.to_path_buf();
-//!         Some(astli_lsp::Snapshot { root, designs, problems, lowered: 0 })
+//!         Some(astli_lsp::Snapshot {
+//!             root: root.to_path_buf(),
+//!             designs: Vec::new(),
+//!             problems: Vec::new(),
+//!             lowered: 0,
+//!             lacks_dependencies: false,
+//!             levels: HashMap::new(),
+//!         })
 //!     }
 //!
 //!     fn forget(&self, _: &Path) {}

@@ -9,19 +9,24 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use astli_fmt::Options;
+use astli_lint::Config;
 use astli_lsp::{Analysed, At, Place, Problem, Snapshot, Unit, Watched};
 use astli_package::{BENDER_MANIFEST, EXTENSIONS, MANIFEST, mark};
 use astli_resolve::LOCKFILE;
 use astli_text::Reader;
 
 use crate::analysis::{Analysis, Designs};
-use crate::config::FmtConfig;
-use crate::discovery::Plan;
+use crate::config::{FmtConfig, Levels, LintConfig};
+use crate::discovery::{Plan, Whose};
 use crate::error::{Error, Result};
+use crate::listing;
 use crate::run::Run;
 use crate::target::Target;
 use crate::term;
 use crate::units::{Load, Units};
+
+/// The levels `lint` reads each file at, by path.
+type Leveled = HashMap<PathBuf, Arc<Config>>;
 
 /// The driver's side of the server: what each design root's loads keep
 /// for the next.
@@ -46,10 +51,11 @@ struct Kept {
     /// The ticket a load needs at least to keep anything: one handed out
     /// after the root was last forgotten.
     floor: u64,
-    /// The plan of the root's last discovery, with the problems it found,
-    /// which a load that does not discover again reports too; `None` if it
-    /// failed, so that the next load discovers again and tells why.
-    plan: (u64, Option<(Plan, Vec<term::Problem>)>),
+    /// The plan of the root's last discovery, with the problems it found
+    /// and whether it read the package without its dependencies, which a
+    /// load that does not discover again reports too; `None` if it failed,
+    /// so that the next load discovers again and tells why.
+    plan: (u64, Option<(Plan, Vec<term::Problem>, bool)>),
     /// The units the root's loads lowered, which the next load takes
     /// where what they read is unchanged.
     units: (u64, Arc<Units>),
@@ -88,8 +94,8 @@ impl astli_lsp::Host for Host {
             .unwrap_or_default();
         let load = Load::new(before);
         let run = Run::loading(reader).abandoning(overtaken).keeping(&load);
-        let mut problems = Vec::new();
-        let analysed = self.analysed(root, &run, discover, ticket, &mut problems);
+        let (mut problems, mut levels) = (Vec::new(), HashMap::new());
+        let analysed = self.analysed(root, &run, discover, ticket, &mut problems, &mut levels);
         let finished = analysed.is_ok();
         let designs = match analysed {
             Ok(designs) => designs,
@@ -106,6 +112,7 @@ impl astli_lsp::Host for Host {
             }
         };
         problems.extend(run.problems());
+        let lacks_dependencies = run.lacks_dependencies();
         drop(run);
         let lowered = load.count();
         self.keep(root, ticket, load, finished);
@@ -114,6 +121,8 @@ impl astli_lsp::Host for Host {
             lowered,
             designs,
             problems: problems.iter().map(plain).collect(),
+            lacks_dependencies,
+            levels,
         })
     }
 
@@ -181,7 +190,9 @@ impl Host {
     }
 
     /// Each design `check` analyses of the design at `root`, adding what
-    /// its discovery found to `problems`.
+    /// its discovery found to `problems`, and setting `levels` to those
+    /// `lint` reads each file of the package at once the package is found,
+    /// so that a design that fails still has them.
     fn analysed(
         &self,
         root: &Path,
@@ -189,10 +200,14 @@ impl Host {
         discover: bool,
         ticket: u64,
         problems: &mut Vec<term::Problem>,
+        levels: &mut Leveled,
     ) -> Result<Vec<Analysed>> {
         let plan = self.plan(root, run, discover, ticket, problems)?;
+        *levels = leveled(root, run, &plan);
+        let levels = &*levels;
         let mut designs = Designs::of(&mut io::sink(), &plan, &[], false, &[], run)?;
-        let analyse = |_: &mut _, plan, analysis, _: &mut _, _| Ok(analysed(&plan, analysis));
+        let analyse =
+            |_: &mut _, plan, analysis, _: &mut _, _| analysed(run, &plan, analysis, levels);
         designs.each_kept(&mut io::sink(), plan, run, true, analyse)
     }
 
@@ -210,8 +225,12 @@ impl Host {
     ) -> Result<Plan> {
         if !discover {
             let roots = held(&self.roots);
-            if let Some((plan, found)) = roots.get(root).and_then(|it| it.plan.1.as_ref()) {
+            if let Some((plan, found, without)) = roots.get(root).and_then(|it| it.plan.1.as_ref())
+            {
                 problems.extend(found.iter().cloned());
+                if *without {
+                    run.read_without_dependencies();
+                }
                 return Ok(plan.clone());
             }
         }
@@ -219,7 +238,7 @@ impl Host {
         let found = plan.as_ref().ok().map(|plan| {
             let found = run.problems();
             problems.extend(found.iter().cloned());
-            (plan.clone(), found)
+            (plan.clone(), found, run.lacks_dependencies())
         });
         let dropped = self.kept(root, ticket, |kept| match kept.plan.0 > ticket {
             true => found,
@@ -233,8 +252,49 @@ impl Host {
     }
 }
 
-/// `analysis` of `plan`'s units, in the server's terms.
-fn analysed(plan: &Plan, analysis: Analysis) -> Analysed {
+/// The levels `lint` reads each of `plan`'s own files at, as `lint` in the
+/// directory of `root` reads them, files at the same levels sharing them;
+/// none if the configuration does not read, which is then the run's
+/// problem.
+fn leveled(root: &Path, run: &Run, plan: &Plan) -> Leveled {
+    let target = Target::new(root.to_path_buf());
+    let config = match LintConfig::load(run, &target, None, &Levels::default(), plan) {
+        Ok(config) => config,
+        Err(err) => {
+            if !matches!(err, Error::Silent) {
+                err.problem().report(run);
+            }
+            return HashMap::new();
+        }
+    };
+    // A package's files mostly share their levels, and there are thousands
+    // of them in a large one.
+    let mut distinct: Vec<Arc<Config>> = Vec::new();
+    (plan.own.iter())
+        .map(|path| {
+            let config = config.for_file(path);
+            let shared = match distinct.iter().find(|it| ***it == config) {
+                Some(shared) => shared.clone(),
+                None => {
+                    distinct.push(Arc::new(config));
+                    distinct[distinct.len() - 1].clone()
+                }
+            };
+            (path.clone(), shared)
+        })
+        .collect()
+}
+
+/// `analysis` of `plan`'s units, in the server's terms, with which of them
+/// `check` and `lint`'s design rules report, as those commands choose
+/// them, `levels` holding the files `lint` reads.
+///
+/// A name declared more than once is told as `check` tells it, unless the
+/// package was read without its dependencies, whose files would declare
+/// what it names; that it fails `check` is the command's to say.
+fn analysed(run: &Run, plan: &Plan, analysis: Analysis, levels: &Leveled) -> Result<Analysed> {
+    let names = analysis.top_names();
+    let tops = analysis.bodies();
     let Analysis {
         elaboration,
         files,
@@ -243,25 +303,54 @@ fn analysed(plan: &Plan, analysis: Analysis) -> Analysed {
         index,
         ..
     } = analysis;
-    let units = (plan.units.iter().zip(files).zip(origins).zip(parsed))
-        .map(|(((unit, file), origins), parsed)| Unit {
-            path: unit.path.clone(),
-            file,
-            origins,
-            parsed,
-        })
-        .collect();
-    Analysed {
-        elaboration,
-        index: index.expect("a load summarizes every unit"),
-        units,
+    let index = index.expect("a load summarizes every unit");
+    let reached = match names.is_empty() {
+        true => None,
+        false => Some((index.reachable(&names)).map_err(|err| Error::failed(err.to_string()))?),
+    };
+    let checked = plan.shown(reached.as_deref(), Whose::OnDisk);
+    if !run.lacks_dependencies() {
+        let told = reached.clone().unwrap_or_else(|| checked.clone());
+        let _ = listing::redeclared(run, &index, &told, &names);
     }
+    let marked = |shown: Vec<usize>| {
+        let mut marked = vec![false; plan.units.len()];
+        for unit in shown {
+            marked[unit] = true;
+        }
+        marked
+    };
+    let linted = marked(plan.shown(reached.as_deref(), Whose::Own));
+    let checked = marked(checked);
+    let units = (plan
+        .units
+        .iter()
+        .zip(files)
+        .zip(origins)
+        .zip(parsed)
+        .enumerate())
+    .map(|(at, (((unit, file), origins), parsed))| Unit {
+        path: unit.path.clone(),
+        file,
+        origins,
+        parsed,
+        checked: checked[at],
+        linted: linted[at] && levels.contains_key(&unit.path),
+    })
+    .collect();
+    Ok(Analysed {
+        elaboration,
+        index,
+        units,
+        tops,
+    })
 }
 
 /// `problem` as plain text, without the marks a terminal styles.
 fn plain(problem: &term::Problem) -> Problem {
     let plain = |said: &[String]| said.iter().map(|it| mark::plain(it)).collect();
-    let at = problem.place().map(|(path, place, label)| At {
+    let at = problem.place().map(|(code, path, place, label)| At {
+        code: code.to_string(),
         path: path.to_path_buf(),
         place: match place {
             term::Place::Name(at, chars) => Place::Name(*at, *chars),
@@ -290,9 +379,10 @@ mod tests {
     use std::collections::HashMap;
     use std::io;
     use std::path::{Path, PathBuf};
-    use std::sync::Barrier;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Barrier};
 
+    use astli_lint::Layer;
     use astli_lsp::{Host as _, Snapshot};
     use astli_testing::Fixture;
     use astli_text::{Disk, Reader};
@@ -399,6 +489,94 @@ mod tests {
         };
         let at = problem.at.as_ref().expect("a place in the manifest");
         assert_eq!(at.path, fixture.path().join("astli.toml"));
+    }
+
+    #[test]
+    fn a_load_says_what_check_and_lint_report_of_each_unit() {
+        let fixture = Fixture::new("cli-host-reported");
+        let manifest = "[package]\nname = 'reported'\n\n\
+                        [dependencies]\nip = { path = 'ip' }\n\n[top.top]\n\n\
+                        [lint.paths]\n'quiet.sv' = { allow = ['correctness'] }\n";
+        fixture.file("astli.toml", manifest);
+        fixture.file("ip/astli.toml", "[package]\nname = 'ip'\n");
+        fixture.file("ip/ip.sv", "module ip;\nendmodule\n");
+        let top = fixture.file(
+            "top.sv",
+            "module top;\n  ip u_ip ();\n  quiet u_quiet ();\nendmodule\n",
+        );
+        let quiet = fixture.file("quiet.sv", "module quiet;\nendmodule\n");
+        let unused = fixture.file("unused.sv", "module unused;\nendmodule\n");
+        let host = Host::default();
+        let root = host.design(&top);
+
+        let snapshot = host.load(&root, &Disk, true, &|| false).unwrap();
+        assert!(snapshot.problems.is_empty(), "{:?}", snapshot.problems);
+        assert!(!snapshot.lacks_dependencies);
+        let [design] = &snapshot.designs[..] else {
+            panic!("one design");
+        };
+        assert_eq!(design.tops.len(), 1);
+        // Each unit's path, whether `check` reports it, and whether `lint`
+        // does: the dependency's only `check`, since it is on disk, and the
+        // file no top reaches neither.
+        let mut reported: Vec<(String, bool, bool)> = (design.units.iter())
+            .map(|unit| {
+                let name = unit.path.strip_prefix(fixture.path()).unwrap();
+                let name = name.to_string_lossy().replace('\\', "/");
+                (name, unit.checked, unit.linted)
+            })
+            .collect();
+        reported.sort();
+        let reported: Vec<(&str, bool, bool)> = (reported.iter())
+            .map(|(name, c, l)| (name.as_str(), *c, *l))
+            .collect();
+        assert_eq!(
+            reported,
+            [
+                ("ip/ip.sv", true, false),
+                ("quiet.sv", true, true),
+                ("top.sv", true, true),
+                ("unused.sv", false, false),
+            ]
+        );
+        // The levels of each file of the package, those its pattern quiets
+        // apart from the rest, which share theirs.
+        let mut leveled: Vec<&PathBuf> = snapshot.levels.keys().collect();
+        leveled.sort();
+        assert_eq!(leveled, [&quiet, &top, &unused]);
+        let levels = |path: &Path| &snapshot.levels[path];
+        assert!(Arc::ptr_eq(levels(&top), levels(&unused)));
+        assert!(levels(&top).needs(Layer::Design));
+        assert_ne!(levels(&top), levels(&quiet));
+    }
+
+    #[test]
+    fn a_load_without_its_dependencies_says_so_and_tells_no_name_declared_twice() {
+        let fixture = Fixture::new("cli-host-without");
+        let git = "[dependencies]\nip = { git = 'https://example.com/ip.git', version = '1' }\n";
+        fixture.file("astli.toml", git);
+        let one = fixture.file("one.sv", "module twice;\nendmodule\n");
+        fixture.file("two.sv", "module twice;\nendmodule\n");
+        let host = Host::default();
+        let root = host.design(&one);
+        let declared_twice = |snapshot: &Snapshot| {
+            (snapshot.problems.iter())
+                .any(|it| it.at.as_ref().is_some_and(|at| at.code == "declared-twice"))
+        };
+
+        // Kept with the plan, the dependencies are still missing from a load
+        // that does not discover the package again.
+        for discover in [true, false] {
+            let snapshot = host.load(&root, &Disk, discover, &|| false).unwrap();
+            assert!(snapshot.lacks_dependencies);
+            assert!(!declared_twice(&snapshot), "{:?}", snapshot.problems);
+            assert_eq!(snapshot.units(), 2);
+        }
+
+        fixture.file("astli.toml", "");
+        let snapshot = host.load(&root, &Disk, true, &|| false).unwrap();
+        assert!(!snapshot.lacks_dependencies);
+        assert!(declared_twice(&snapshot), "{:?}", snapshot.problems);
     }
 
     /// The disk, holding the first read of a source until the test lets
