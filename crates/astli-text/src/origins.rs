@@ -267,6 +267,13 @@ impl Origins {
         &self.expansions[id.0 as usize].0
     }
 
+    /// Every expansion recorded, in the order recorded: a call written in
+    /// another's body or argument as much as one a file writes.
+    pub fn expansions(&self) -> impl Iterator<Item = (ExpansionId, &Expansion)> {
+        let ids = (0..self.expansions.len() as u32).map(ExpansionId);
+        ids.zip(self.expansions.iter().map(|(expansion, _)| expansion))
+    }
+
     /// Converts a zero-based byte offset into a 1-based line and character column position.
     pub fn line_col(&self, file: SourceId, offset: u32) -> LineCol {
         let buffer = self.buffer(file);

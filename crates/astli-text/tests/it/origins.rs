@@ -167,6 +167,11 @@ fn a_macro_that_expands_a_macro_reads_back_as_a_chain() {
         origins.reported_at(token),
         find(&origins, top, "`CHECK(x > 0)")
     );
+    // Both are listed, the inner one too, though no file writes its call.
+    let listed: Vec<_> = (origins.expansions())
+        .map(|(id, expansion)| (id, origins.slice(expansion.name)))
+        .collect();
+    assert_eq!(listed, [(outer, "`CHECK"), (inner, "`ASSERT")]);
 }
 
 #[test]
