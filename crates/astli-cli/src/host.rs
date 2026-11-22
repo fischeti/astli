@@ -300,6 +300,7 @@ fn analysed(run: &Run, plan: &Plan, analysis: Analysis, levels: &Leveled) -> Res
         files,
         origins,
         parsed,
+        recorded,
         index,
         ..
     } = analysis;
@@ -328,14 +329,17 @@ fn analysed(run: &Run, plan: &Plan, analysis: Analysis, levels: &Leveled) -> Res
         .zip(files)
         .zip(origins)
         .zip(parsed)
+        .zip(recorded)
         .enumerate())
-    .map(|(at, (((unit, file), origins), parsed))| Unit {
+    .map(|(at, ((((unit, file), origins), parsed), recorded))| Unit {
         path: unit.path.clone(),
         file,
         origins,
         parsed,
         checked: checked[at],
         linted: linted[at] && levels.contains_key(&unit.path),
+        calls: recorded.calls,
+        skipped: recorded.skipped,
     })
     .collect();
     Ok(Analysed {
@@ -410,7 +414,8 @@ mod tests {
         let fixture = Fixture::new("cli-host-load");
         fixture.file("astli.toml", "");
         let top = fixture.file("top.sv", "module top;\nendmodule\n");
-        let text = "module top;\nendmodule\nmodule in_buffer;\nendmodule\n";
+        let text = "`define W 1\nmodule top;\nendmodule\nmodule in_buffer;\n  \
+                    localparam int P = `W;\n`ifdef NOPE\n  logic skipped;\n`endif\nendmodule\n";
         let buffers = Buffers(HashMap::from([(top.clone(), text.to_string())]));
         let host = Host::default();
         let root = host.design(&top);
@@ -424,6 +429,16 @@ mod tests {
             let design = &snapshot.designs[0];
             assert_eq!(design.units[0].path, top);
             assert!(design.units[0].parsed.is_empty());
+            // What its expansion recorded is kept with the unit, the one
+            // kept from the first load too.
+            let unit = &design.units[0];
+            let origins = &unit.origins;
+            let calls: Vec<&str> = (unit.calls.iter())
+                .map(|&it| origins.slice(origins.expansion(it).name))
+                .collect();
+            assert_eq!(calls, ["`W"]);
+            let skipped: Vec<&str> = unit.skipped.iter().map(|&it| origins.slice(it)).collect();
+            assert_eq!(skipped, ["\n  logic skipped;\n"]);
             let design = design.elaboration.design();
             assert!(design.definition("in_buffer").is_some());
         }
