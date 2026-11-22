@@ -1,6 +1,6 @@
 //! What a build passes the preprocessor from outside the source.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -38,7 +38,7 @@ pub(crate) const PREDEFINED_MACROS: &str = "\
 
 /// Include directories and definitions, as a filelist or a command line gives
 /// them.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Build {
     includes: Includes,
     defines: Vec<(String, String)>,
@@ -69,7 +69,7 @@ impl Build {
     /// A package's include directories are what its dependents search, and
     /// this is how its own files find a header without one.
     pub fn include_files(mut self, files: impl IntoIterator<Item = PathBuf>) -> Build {
-        let mut by_suffix: HashMap<_, Vec<PathBuf>> = HashMap::new();
+        let mut by_suffix: BTreeMap<_, Vec<PathBuf>> = BTreeMap::new();
         for file in files {
             if let Some(name) = file.file_name() {
                 by_suffix.entry(name.to_os_string()).or_default().push(file);

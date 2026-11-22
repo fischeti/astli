@@ -54,7 +54,7 @@ impl Analysis {
     /// [`Index`], if `summarize`, and wherever an override or a top needs
     /// to know what each declares.
     pub(crate) fn new(
-        out: &mut Out,
+        out: &mut impl Write,
         plan: &mut Plan,
         chosen: &Chosen,
         flags: &Flags,
@@ -196,7 +196,7 @@ impl Designs {
     /// and no test is one design, which refuses at once a parameter none
     /// of them declares.
     pub(crate) fn of(
-        out: &mut Out,
+        out: &mut impl Write,
         plan: &Plan,
         asked: &[String],
         tests: bool,
@@ -224,14 +224,14 @@ impl Designs {
     /// it, but the last where the run `ends` with these designs, which is
     /// left to the process's exit, unless another package's run follows
     /// and would add its design to this one's.
-    pub(crate) fn each<T>(
+    pub(crate) fn each<T, W: Write>(
         &mut self,
-        out: &mut Out,
+        out: &mut W,
         plan: Plan,
         run: &Run,
         summarize: bool,
         ends: bool,
-        mut each: impl FnMut(&mut Out, Plan, &mut Analysis, &mut Flags) -> Result<T>,
+        mut each: impl FnMut(&mut W, Plan, &mut Analysis, &mut Flags) -> Result<T>,
     ) -> Result<Vec<T>> {
         if self.chosen.len() > 1 {
             run.tell_once();

@@ -10,6 +10,8 @@
 //! of those before it give, since its type may depend on them. A point is
 //! named for its values in declaration order, `tb_fifo[Depth=16,Mode=Bypass]`.
 
+use std::io::Write;
+
 use astli_index::Declares;
 use astli_package::mark;
 use astli_preproc::MacroTable;
@@ -21,7 +23,7 @@ use crate::cmd;
 use crate::discovery::Plan;
 use crate::error::{Error, Result};
 use crate::marks::{FailMark, Marks, SweepMark, SweepValues, marks};
-use crate::render::{Out, plural};
+use crate::render::plural;
 use crate::run::Run;
 use crate::session;
 use crate::term::{self, Place};
@@ -60,7 +62,7 @@ pub(crate) struct Marked {
 /// `astli_test` that marks nothing it can, each `astli_sweep` on what is
 /// no test, and each `astli_should_fail` on what is none or without its
 /// text, failing the run if there are any.
-pub(crate) fn marked(out: &mut Out, plan: &Plan, run: &Run) -> Result<Vec<Marked>> {
+pub(crate) fn marked(out: &mut impl Write, plan: &Plan, run: &Run) -> Result<Vec<Marked>> {
     let own: Vec<_> = (plan.units.iter())
         .filter(|unit| unit.reported)
         .map(|unit| unit.path.clone())

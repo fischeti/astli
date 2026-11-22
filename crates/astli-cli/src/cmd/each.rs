@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex, mpsc};
 
 use crate::error::{Error, Result};
-use crate::render::{Out, Report, have, plural};
+use crate::render::{Report, have, plural};
 use crate::run::Run;
 
 /// Output sinks for processing a single file.
@@ -104,8 +104,8 @@ pub fn tally(failed: usize, wrong: usize, total: usize) -> Error {
 /// and on the global pool otherwise, and writes what each says in the order given. With more than one file, each file's output
 /// follows a heading naming it, after `heading`'s text, unless `heading` is
 /// `None`.
-pub fn each<T: Send>(
-    out: &mut Out,
+pub fn each<T: Send, W: Write>(
+    out: &mut W,
     files: &[impl AsRef<Path> + Sync],
     run: &Run,
     heading: Option<&str>,
@@ -120,8 +120,8 @@ pub fn each<T: Send>(
 }
 
 /// Executes file processing sequentially in the current thread.
-fn sequential<T>(
-    out: &mut Out,
+fn sequential<T, W: Write>(
+    out: &mut W,
     run: &Run,
     files: &[impl AsRef<Path>],
     heading: Option<&str>,
@@ -149,7 +149,7 @@ fn sequential<T>(
 }
 
 /// Flushes stdout before emitting diagnostics to stderr to maintain proper message ordering.
-fn report<T>(out: &mut Out, said: &Report, outcome: &mut Outcome<T>) -> Result {
+fn report<T>(out: &mut impl Write, said: &Report, outcome: &mut Outcome<T>) -> Result {
     // Counted whether or not anything was said: a GitLab report keeps a
     // file's errors to write at the end.
     if said.errors > 0 {
@@ -169,8 +169,8 @@ fn report<T>(out: &mut Out, said: &Report, outcome: &mut Outcome<T>) -> Result {
 /// up only its own thread. A thread takes no further file while the files
 /// waiting to be written hold more than [`HELD`] bytes of output; the file
 /// all the others wait for is always one already taken.
-fn parallel<T: Send>(
-    out: &mut Out,
+fn parallel<T: Send, W: Write>(
+    out: &mut W,
     run: &Run,
     files: &[impl AsRef<Path> + Sync],
     heading: Option<&str>,
@@ -219,8 +219,8 @@ fn parallel<T: Send>(
 
 /// Writes each file's output as it arrives on `done`, in the order of
 /// `files`.
-fn write<T>(
-    out: &mut Out,
+fn write<T, W: Write>(
+    out: &mut W,
     run: &Run,
     files: &[impl AsRef<Path>],
     heading: Option<&str>,
@@ -324,14 +324,14 @@ impl Drop for Stop<'_> {
 }
 
 /// Emits header, output, and error status for an individual file in sequence.
-fn turn<T>(
-    out: &mut Out,
+fn turn<T, W: Write>(
+    out: &mut W,
     run: &Run,
     heading: Option<&str>,
     at: usize,
     file: &Path,
     outcome: &mut Outcome<T>,
-    write: impl FnOnce(&mut Out) -> Result<T>,
+    write: impl FnOnce(&mut W) -> Result<T>,
 ) -> Result {
     if let Some(prefix) = heading {
         if at > 0 {
