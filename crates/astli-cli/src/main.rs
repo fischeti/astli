@@ -27,6 +27,7 @@ mod sources;
 mod target;
 mod term;
 mod tops;
+mod units;
 mod verilator;
 
 use std::io::{ErrorKind, Write};

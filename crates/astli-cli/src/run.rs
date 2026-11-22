@@ -21,6 +21,7 @@ use crate::cli::RunArgs;
 use crate::discovery::Made;
 use crate::error::{Error, Result};
 use crate::term::{self, Problem};
+use crate::units::Load;
 
 /// A run of a command, made once in `main` and shared by reference with
 /// every thread of it; or a load of a design for a caller that is no
@@ -37,6 +38,9 @@ pub struct Run<'r> {
     /// Whether an edit has made a load stale, for a caller that loads
     /// again once it has; never, for a command.
     overtaken: Option<&'r (dyn Fn() -> bool + Sync)>,
+    /// What lowers each unit for a caller that loads the same design again,
+    /// keeping what an earlier load lowered; none for a command.
+    units: Option<&'r Load>,
     store: OnceLock<Store>,
     warned: Once,
     /// Whether the command runs once for each of several packages, as
@@ -111,6 +115,18 @@ impl<'r> Run<'r> {
         self
     }
 
+    /// Makes the load take each unit from `units` where what it read is
+    /// unchanged, and lower it through `units` otherwise.
+    pub fn keeping(mut self, units: &'r Load) -> Run<'r> {
+        self.units = Some(units);
+        self
+    }
+
+    /// What lowers each unit, if the load keeps units across loads.
+    pub fn units(&self) -> Option<&'r Load> {
+        self.units
+    }
+
     /// `Err` once an edit has made the load stale, for its work to return
     /// with `?`.
     pub fn current(&self) -> Result<()> {
@@ -126,6 +142,7 @@ impl<'r> Run<'r> {
             reader,
             kept,
             overtaken: None,
+            units: None,
             store: OnceLock::new(),
             warned: Once::new(),
             packages: AtomicBool::new(false),
