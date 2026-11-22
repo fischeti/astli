@@ -241,12 +241,12 @@ fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Sna
     Snapshot {
         root: root.to_path_buf(),
         lowered: units.len(),
-        designs: vec![Analysed {
+        designs: vec![Analysed::new(
             elaboration,
-            index: Index::new(summaries),
+            Index::new(summaries),
             units,
-            tops: Vec::new(),
-        }],
+            Vec::new(),
+        )],
         problems,
         lacks_dependencies: holds("unfetched"),
         levels: (texts.iter())
