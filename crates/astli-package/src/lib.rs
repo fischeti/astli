@@ -64,7 +64,7 @@ pub use package::{
     BENDER_MANIFEST, ListedBy, MANIFEST, Malformed, Manifest, Package, Root, RootTables,
     WorkspaceTable,
 };
-pub use patches::{LOCAL, PATCHES, Patches, local};
+pub use patches::{LOCAL, Patches, local};
 pub use requirement::{
     At, Requirement, Source, Submodules, Takes, bender_dependencies, bender_name, key,
 };
