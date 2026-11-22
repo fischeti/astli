@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 
 use astli_index::Index;
 use astli_lint::Config;
-use astli_sema::{BodyId, Design, Elaboration, FileId, Sites};
+use astli_sema::{BodyId, Built, Design, Elaboration, FileId, Sites};
 use astli_text::{Diagnostic, ExpansionId, LineCol, Origins, Severity, Span};
 
 /// A design root's design as one load found it, never changed once built.
@@ -63,6 +63,33 @@ pub struct Analysed {
     /// The body of each top the design is elaborated from, which what is
     /// built is walked down from; none where the manifest names no top.
     pub tops: Vec<BodyId>,
+    /// What the tops build, made when first asked for.
+    built: OnceLock<Built>,
+}
+
+impl Analysed {
+    pub fn new(
+        elaboration: Elaboration,
+        index: Index,
+        units: Vec<Unit>,
+        tops: Vec<BodyId>,
+    ) -> Self {
+        Analysed {
+            elaboration,
+            index,
+            units,
+            tops,
+            built: OnceLock::new(),
+        }
+    }
+
+    /// What the tops build, walked down from them the first time anything
+    /// asks, since that walks the whole design: diagnostics on the load's
+    /// thread, or a request. `None` where there are no tops.
+    pub fn built(&self) -> Option<&Built> {
+        (!self.tops.is_empty())
+            .then(|| (self.built).get_or_init(|| Built::new(&self.elaboration, &self.tops)))
+    }
 }
 
 /// A file compiled on its own, as its design holds it.

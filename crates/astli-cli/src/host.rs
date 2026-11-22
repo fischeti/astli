@@ -343,12 +343,7 @@ fn analysed(run: &Run, plan: &Plan, analysis: Analysis, levels: &Leveled) -> Res
         memo: Memo::default(),
     })
     .collect();
-    Ok(Analysed {
-        elaboration,
-        index,
-        units,
-        tops,
-    })
+    Ok(Analysed::new(elaboration, index, units, tops))
 }
 
 /// `problem` as plain text, without the marks a terminal styles.

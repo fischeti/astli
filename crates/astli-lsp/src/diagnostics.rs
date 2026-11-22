@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 use astli_diag::resolve_all;
 use astli_lint::{Config, Layer, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
-use astli_sema::{Built, check, check_built};
+use astli_sema::{check, check_built};
 use astli_text::{Diagnostic as Finding, LineCol, Lines, Origins, Reader, Severity, Span};
 use lsp_server::Notification;
 use lsp_types::{
@@ -197,11 +197,11 @@ fn of_design(
     if overtaken() {
         return None;
     }
-    let built = (!analysed.tops.is_empty()).then(|| Built::new(elaboration, &analysed.tops));
+    let built = analysed.built();
     // What only what the tops build gets wrong is found over the whole
     // design at once, and told in the file each finding is in.
     let mut of_built: HashMap<usize, Vec<Finding>> = HashMap::new();
-    if let Some(built) = &built
+    if let Some(built) = built
         && needed.iter().any(|unit| unit.checked)
     {
         if overtaken() {
@@ -223,7 +223,7 @@ fn of_design(
         // The built rules read what the tops build only where a file's
         // levels leave one of them on, as `lint` reads it.
         let built_rules = linted.iter().any(|it| it.needs(Layer::Built));
-        Linter::new(elaboration, built.as_ref().filter(|_| built_rules))
+        Linter::new(elaboration, built.filter(|_| built_rules))
     });
     (needed.par_iter())
         .map(|unit| {
@@ -233,7 +233,7 @@ fn of_design(
             let mut found = Vec::new();
             if unit.checked {
                 found.extend(unit.parsed.iter().cloned());
-                found.extend(check(elaboration, unit.file, built.as_ref()));
+                found.extend(check(elaboration, unit.file, built));
                 found.extend(
                     of_built
                         .get(&unit.file.index())
