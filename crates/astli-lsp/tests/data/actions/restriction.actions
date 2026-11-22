@@ -1,0 +1,55 @@
+restriction.sv 3:8-3:18 module-filename
+  nothing
+restriction.sv 4:16-4:17 port-name-suffix
+  nothing
+restriction.sv 5:16-5:17 port-name-suffix
+  nothing
+restriction.sv 6:16-6:17 port-name-suffix
+  nothing
+restriction.sv 7:16-7:17 port-name-suffix
+  nothing
+restriction.sv 8:16-8:17 port-name-suffix
+  nothing
+restriction.sv 8:16-8:17 undriven-signal
+  nothing
+restriction.sv 9:16-9:17 port-name-suffix
+  nothing
+restriction.sv 12:18-12:23 mixed-operator-parentheses
+  quickfix "Fix `mixed-operator-parentheses`"
+    @@ -12 +12 @@
+    -  assign x = a | b & c;
+    +  assign x = a | (b & c);
+restriction.sv 13:1-13:7 endif-comment
+  quickfix "Fix `endif-comment`"
+    @@ -13 +13 @@
+    -`endif
+    +`endif // FAST
+restriction.sv 14:3-14:11 legacy-generate-region
+  quickfix "Fix `legacy-generate-region`"
+    @@ -14 +13,0 @@
+    -  generate
+    @@ -18 +16,0 @@
+    -  endgenerate
+restriction.sv 16:18-16:24 comparison-parentheses
+  quickfix "Fix `comparison-parentheses`"
+    @@ -16 +16 @@
+    -      assign y = a == b && c || d;
+    +      assign y = (a == b) && c || d;
+restriction.sv 16:18-16:29 mixed-operator-parentheses
+  quickfix "Fix `mixed-operator-parentheses`"
+    @@ -16 +16 @@
+    -      assign y = a == b && c || d;
+    +      assign y = (a == b && c) || d;
+restriction.sv all
+  source.fixAll.astli "Fix all lint findings"
+    @@ -12,3 +12,2 @@
+    -  assign x = a | b & c;
+    -`endif
+    -  generate
+    +  assign x = a | (b & c);
+    +`endif // FAST
+    @@ -16 +15 @@
+    -      assign y = a == b && c || d;
+    +      assign y = (a == b) && c || d;
+    @@ -18 +16,0 @@
+    -  endgenerate

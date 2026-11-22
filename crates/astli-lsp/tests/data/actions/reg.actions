@@ -1,0 +1,16 @@
+reg.sv 3:8-3:15 module-filename
+  nothing
+reg.sv 6:3-6:6 forbid-reg
+  quickfix "Fix `forbid-reg`"
+    @@ -6 +6 @@
+    -  reg q;
+    +  logic q;
+reg.sv 6:7-6:8 unused-signal
+  nothing
+reg.sv 7:12-7:19 undeclared-name
+  nothing
+reg.sv all
+  source.fixAll.astli "Fix all lint findings"
+    @@ -6 +6 @@
+    -  reg q;
+    +  logic q;

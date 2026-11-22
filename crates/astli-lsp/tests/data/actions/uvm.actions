@@ -1,0 +1,12 @@
+uvm.sv 4:5-4:40 undefined-macro
+  nothing
+uvm.sv 4:40-4:41 uvm-macro-semicolon
+  quickfix "Fix `uvm-macro-semicolon`"
+    @@ -4 +4 @@
+    -    `uvm_info("test", "hello", UVM_LOW);
+    +    `uvm_info("test", "hello", UVM_LOW)
+uvm.sv all
+  source.fixAll.astli "Fix all lint findings"
+    @@ -4 +4 @@
+    -    `uvm_info("test", "hello", UVM_LOW);
+    +    `uvm_info("test", "hello", UVM_LOW)

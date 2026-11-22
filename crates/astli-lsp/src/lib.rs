@@ -70,6 +70,7 @@
 //! assert_eq!(stdio.serve(Arc::new(Files)), astli_lsp::Ended::Exited);
 //! ```
 
+mod actions;
 mod buffers;
 mod cursor;
 mod definition;
@@ -95,8 +96,8 @@ use astli_text::Reader;
 use crossbeam_channel::{Sender, after, never, select};
 use lsp_server::{Connection, ErrorCode, IoThreads, Message, Response};
 use lsp_types::{
-    FoldingRangeProvider, InitializeParams, InitializeResult, MessageType, ServerCapabilities,
-    ServerInfo, TextDocumentSyncKind, TextDocumentSyncOptions,
+    CodeActionKind, CodeActionOptions, FoldingRangeProvider, InitializeParams, InitializeResult,
+    MessageType, ServerCapabilities, ServerInfo, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 use position::Encoding;
@@ -299,10 +300,18 @@ fn initialized(encoding: Encoding, host: &dyn Host) -> InitializeResult {
         change: Some(TextDocumentSyncKind::Incremental),
         ..TextDocumentSyncOptions::default()
     };
+    let actions = CodeActionOptions {
+        code_action_kinds: Some(vec![
+            CodeActionKind::QuickFix,
+            CodeActionKind::new(actions::FIX_ALL),
+        ]),
+        ..CodeActionOptions::default()
+    };
     InitializeResult {
         capabilities: ServerCapabilities {
             position_encoding: Some(encoding.kind()),
             text_document_sync: Some(sync.into()),
+            code_action_provider: Some(actions.into()),
             definition_provider: Some(true.into()),
             document_formatting_provider: Some(true.into()),
             document_symbol_provider: Some(true.into()),

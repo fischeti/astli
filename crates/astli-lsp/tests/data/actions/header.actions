@@ -1,0 +1,12 @@
+header.sv all
+  nothing
+header.svh 1:1-1:4 forbid-reg
+  quickfix "Fix `forbid-reg`"
+    @@ -1 +1 @@
+    -reg shared;
+    +logic shared;
+header.svh all
+  source.fixAll.astli "Fix all lint findings"
+    @@ -1 +1 @@
+    -reg shared;
+    +logic shared;

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 
 use astli_fmt::Options;
 use astli_index::{Index, Summary};
-use astli_lint::Config;
+use astli_lint::{Config, Level};
 use astli_lsp::{Analysed, At, Ended, Host, Memo, Place, Problem, Snapshot, Unit, Watched};
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Session};
@@ -159,7 +159,8 @@ impl Host for Files {
 /// `placeless` adds a problem in no file; one holding `twice` adds a
 /// problem at the line of its file that holds it, as a name declared twice
 /// is placed. A unit whose text holds `unsound` has origins that hold none
-/// of its text, so that placing what is found in it panics.
+/// of its text, so that placing what is found in it panics. A file whose
+/// text holds `restriction` is linted with that group's rules warned too.
 fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Snapshot {
     let (mut hirs, mut summaries, mut lowered) = (Vec::new(), Vec::new(), Vec::new());
     for (name, text) in texts.iter().filter(|(name, _)| name.ends_with(".sv")) {
@@ -241,6 +242,9 @@ fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Sna
         });
     }
     let levels = Arc::new(Config::default());
+    let mut restricted = Config::default();
+    restricted.set("restriction", Level::Warn).expect("a group");
+    let restricted = Arc::new(restricted);
     Snapshot {
         root: root.to_path_buf(),
         lowered: units.len(),
@@ -253,7 +257,13 @@ fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Sna
         problems,
         lacks_dependencies: holds("unfetched"),
         levels: (texts.iter())
-            .map(|(name, _)| (clean(&root.join(name)), levels.clone()))
+            .map(|(name, text)| {
+                let levels = match text.contains("restriction") {
+                    true => restricted.clone(),
+                    false => levels.clone(),
+                };
+                (clean(&root.join(name)), levels)
+            })
             .collect(),
     }
 }
