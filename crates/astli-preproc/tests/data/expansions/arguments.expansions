@@ -1,0 +1,6 @@
+arguments.sv:6:3 `CHECK((a && (b || c)), , $fatal)
+  defined arguments.sv:3:1
+  wrote if (!((a && (b || c)))) $fatal("failed");
+arguments.sv:7:3 `CHECK( x == {y, z}, "x is not y and z" )
+  defined arguments.sv:3:1
+  wrote if (!(x == {y, z})) $error("x is not y and z");

@@ -246,6 +246,7 @@ dependencies = [
  "astli-syntax",
  "astli-testing",
  "astli-text",
+ "expect-test",
  "rustc-hash 2.1.3",
 ]
 

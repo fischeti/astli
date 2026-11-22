@@ -68,6 +68,9 @@ origins.path(file);                               // Option<&Path>: none for a b
 origins.spelled(span);                            // the span as written, its expansion dropped
 origins.reported_at(span);                        // the outermost call: where a message points
 origins.include_trace(file);                      // the includes that reached it, outward
+origins.trace(file);                              // &Expansion: the calls that placed it, innermost first
+origins.placed_through(file);                     // ExpansionId: the same, by id
+origins.expansion(id);                            // &Expansion: its name, call, and the `define it read
 
 Diagnostic::error(code, span, "message")          // also `warning`; a `Severity` orders by how much it matters
     .pointing("label under the caret")
@@ -148,6 +151,34 @@ starts from the table an expansion ends with. `all_regions` finds nested
 regions in the same pass as those around them, in the order they open, so a
 reader that needs a region's branches before the region around it walks the
 list backwards.
+
+## What an expansion recorded
+
+From a place in the text to what expansion made of it, for a reader such
+as a language server:
+
+```rust
+let expanded = session.expand(file);
+expanded.calls;                             // Vec<ExpansionId>: each call a file writes, in order
+expanded.call_at(origins, file, offset);    // Option<ExpansionId>: the call over that byte
+let wrote = expanded.written_by(origins, id);  // Vec<ExpandedToken>: what it wrote, nested calls too
+render(origins, &wrote);                    // as text
+origins.expansion(id).def;                  // Option<Span>: the `define it read; none for a built-in
+expanded.skipped;                           // Vec<Span>: each branch body not taken, as written
+```
+
+The listing is the expansion's rather than the origins', so a file
+expanded twice in one session finds each run's calls in its own result.
+Only a call a file writes is listed: one a body or an argument writes is
+placed by the call around it, and its tokens are among that call's. A call
+that writes nothing is still listed, which a token's trace cannot find. A
+call that builds an `` `include ``'s name is listed, and wrote nothing,
+since its tokens became the name. What
+a call wrote is filtered from the tokens rather than kept per call, since a
+reader asks about one call at a time. A header's spans are its inclusion's,
+so a header read twice has two sets of calls and skipped branches, and a
+reader that wants one per path chooses, say greying what every inclusion
+skipped.
 
 ## Diagnostics
 

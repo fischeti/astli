@@ -8,3 +8,4 @@ mod directive;
 mod expand;
 mod include;
 mod macros;
+mod snapshots;

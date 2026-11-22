@@ -1,0 +1,6 @@
+builtins.sv:4:18 `__FILE__
+  defined built in
+  wrote "builtins.sv"
+builtins.sv:4:29 `__LINE__
+  defined built in
+  wrote 3

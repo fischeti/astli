@@ -116,6 +116,16 @@ read an argument too. A token is placed with `Origins::through`, and so is a cal
 own span, which is how the chain of expansions is read back without a
 parent link.
 
+**What a call records.** A call that expands records an `Expansion`: its
+name, the whole call, and the `` `define `` directive it read, as placed.
+A built-in's name and call are its one token, and it has no directive. A
+call that does not expand, to an undefined macro, one reaching itself, or
+one whose arguments do not bind, records nothing: its tokens stand, and a
+diagnostic says why. `Expanded::calls` lists each call a file writes, the
+outermost ones, so a reader at an offset finds the call there, one that
+writes nothing included, and `Expanded::written_by` the tokens whose trace
+holds it.
+
 **` `` ` and `` `" `` make text in no file.** The result goes into a synthesised
 buffer (`Origins::add_synthesised`). A paste resolves against tokens already
 emitted, since either side may be a formal or a call, and is re-lexed. A
@@ -152,6 +162,9 @@ backstop.
 its includes are never followed, and an undefined macro inside it is no error.
 That is what makes include guards work. A region does not cross a file
 boundary, and a macro body's region is evaluated where the macro is used.
+The bodies of the branches not taken in a file's text are kept, as
+written, in `Expanded::skipped`, for an editor to grey out; one in a macro
+body is not, since each call decides it again.
 There, the name a branch tests is the one its tokens make once substituted,
 so `` `ifdef D``arg `` tests `DUNSET` when `arg` defaults to `UNSET`: how
 assertion and message headers make an argument optional.

@@ -113,6 +113,28 @@
 //! assert_eq!(origins.slice(call), "`W");
 //! ```
 //!
+//! The other way, from the text to what expansion made of it:
+//! [`Expanded::calls`] lists each call a file writes,
+//! [`Expanded::call_at`] finds the one over a byte, even if it writes
+//! nothing, and [`Expanded::written_by`] gives what it wrote.
+//! [`Expanded::skipped`] is each branch body not taken.
+//!
+//! ```
+//! use astli_preproc::{Session, render};
+//!
+//! let mut session = Session::new();
+//! let text = "`define MAX(a, b) ((a) > (b) ? (a) : (b))\nassign y = `MAX(p, 4);\n";
+//! let file = session.add("top.sv", text.into());
+//! let expanded = session.expand(file);
+//!
+//! let origins = session.origins();
+//! let offset = text.find("`MAX(p").unwrap() as u32 + 2;
+//! let call = expanded.call_at(origins, file, offset).unwrap();
+//! let wrote = render(origins, &expanded.written_by(origins, call));
+//! assert_eq!(wrote.trim(), "((p) > (4) ? (p) : (4))");
+//! assert_eq!(origins.slice(origins.expansion(call).def.unwrap()), text.lines().next().unwrap());
+//! ```
+//!
 //! # Diagnostics
 //!
 //! Expansion never fails. Each problem, such as an undefined macro or an

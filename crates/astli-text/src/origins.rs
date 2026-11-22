@@ -19,8 +19,15 @@ pub struct Expansion {
     pub name: Span,
     /// Span covering the complete macro invocation (e.g. `` `FOO(a, b) ``).
     pub call: Span,
-    /// Span of the macro definition body, or `None` for compiler built-in macros
-    /// (such as `` `__FILE__ `` or `` `__LINE__ ``).
+    /// Span of the whole `` `define `` directive the call read, from
+    /// `` `define `` to the end of its body, as written. A predefined macro's
+    /// or a `+define+`'s is in the buffer the session made for them.
+    ///
+    /// `None` for a built-in, `` `__FILE__ `` or `` `__LINE__ ``, which no
+    /// directive defines; its `name` and `call` are both the built-in's own
+    /// token. A call to an undefined macro, one that reaches itself, or one
+    /// whose arguments do not bind records no expansion at all: its tokens
+    /// stand as written.
     pub def: Option<Span>,
 }
 
@@ -275,8 +282,15 @@ impl Origins {
     /// Returns an iterator walking outward through the expansions that placed
     /// `file`'s tokens.
     pub fn trace(&self, file: SourceId) -> impl Iterator<Item = &Expansion> {
-        let expansion = |file| self.placed_by(file).map(|id| self.expansion(id));
-        std::iter::successors(expansion(file), move |inner| expansion(inner.call.src_id))
+        self.placed_through(file).map(|id| self.expansion(id))
+    }
+
+    /// The ids of [`trace`](Self::trace)'s expansions, innermost first, so
+    /// that a token can be asked whether one call placed it.
+    pub fn placed_through(&self, file: SourceId) -> impl Iterator<Item = ExpansionId> {
+        std::iter::successors(self.placed_by(file), |&inner| {
+            self.placed_by(self.expansion(inner).call.src_id)
+        })
     }
 
     /// Determines the primary source span to report in diagnostics for this token.

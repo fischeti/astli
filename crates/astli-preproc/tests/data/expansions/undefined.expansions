@@ -1,0 +1,5 @@
+undefined.sv:4:25 `SELF
+  defined undefined.sv:3:1
+  wrote `SELF
+undefined-macro undefined.sv:4:12
+recursive-macro undefined.sv:4:25

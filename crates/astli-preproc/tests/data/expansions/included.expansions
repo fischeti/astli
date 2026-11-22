@@ -1,0 +1,8 @@
+included.svh:7:8 (included at 4) `W
+  defined included.svh:6:1 (included at 4)
+  wrote 4
+included.svh:7:8 (included at 6) `W
+  defined included.svh:6:1 (included at 6)
+  wrote 4
+skipped included.svh:3:6 (included at 4) to 5:1: again;
+skipped included.svh:1:13 (included at 6) to 3:1: first;

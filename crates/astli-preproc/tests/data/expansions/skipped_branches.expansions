@@ -1,0 +1,4 @@
+skipped skipped_branches.sv:4:9 to 9:1: a; `ifdef B nested; `endif
+skipped skipped_branches.sv:11:6 to 13:1: c;
+skipped skipped_branches.sv:14:10 to 16:1: d;
+skipped skipped_branches.sv:18:6 to 20:1: e;

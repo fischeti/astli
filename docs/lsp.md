@@ -78,8 +78,8 @@ Three things make it more than a table of spans.
 - **A header** has no unit of its own. It is read through a unit that
   includes it, and a place in it is its path, whichever unit's origins found
   it.
-- **A macro call** means its expansion. The origins list a unit's expansions
-  by their call, so the call under a cursor is found, one that expands to
+- **A macro call** means its expansion. A unit's expansion lists the calls
+  its files write, so the call under a cursor is found, one that expands to
   nothing too, and with it the tokens it wrote and the `` `define `` it read.
 
 A value depends on the instance. A definition's body at its defaults always
