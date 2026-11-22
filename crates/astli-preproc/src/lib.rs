@@ -161,18 +161,18 @@
 //! that is how `` `uvm_info `` above got three. [`scan_seeded`] starts from a
 //! table, such as [`Expanded::macros`], to know better.
 //!
-//! [`regions`] finds each `` `ifdef `` .. `` `endif `` in a stretch of tokens,
-//! as a [`Region`] of [`Branch`]es, each with the condition it is taken
-//! under.
+//! [`all_regions`] finds each `` `ifdef `` .. `` `endif `` in a stretch of
+//! tokens, nested ones too, as a [`Region`] of [`Branch`]es, each with the
+//! condition it is taken under.
 //!
 //! ```
-//! use astli_preproc::{Session, Taken, regions};
+//! use astli_preproc::{Session, Taken, all_regions};
 //!
 //! let mut session = Session::new();
 //! let file = session.add("top.sv", "`ifdef SIM\na;\n`else\nb;\n`endif\n".into());
 //! let input = session.input(file);
 //!
-//! let found = regions(&input, input.span(0..input.len()));
+//! let found = all_regions(&input, input.span(0..input.len()));
 //! let [region] = found.as_slice() else { panic!() };
 //! assert!(region.closed && region.has_else());
 //! assert!(matches!(region.branches[0].taken, Taken::Defined(_)));
@@ -190,7 +190,7 @@ mod session;
 mod tokens;
 
 pub use build::{Build, COMMAND_LINE, PREDEFINED, Resolved};
-pub use conditional::{Branch, Region, Taken, all_regions, region, regions};
+pub use conditional::{Branch, Region, Taken, all_regions};
 pub use directive::{Directive, DirectiveType, Formal, IncludePath, MacroDef, Operands};
 pub use expand::{Expanded, ExpandedToken, render, spaced};
 pub use macros::{Arity, Entry, MacroRef, MacroTable};

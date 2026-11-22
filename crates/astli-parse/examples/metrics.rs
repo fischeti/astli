@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use astli_parse::SyntaxTree;
-use astli_preproc::{Input, Session, TokenSpan, regions};
+use astli_preproc::{Session, all_regions};
 use astli_syntax::{SyntaxKind::*, SyntaxNode};
 use astli_testing::corpus;
 use rowan::NodeOrToken;
@@ -106,24 +106,9 @@ fn measure(path: &Path, text: String) -> Tally {
     let mut session = Session::new();
     let file = session.add("", tree.source().to_owned());
     let input = session.input(file);
-    tally.regions = count(&input, input.span(0..input.len()));
+    tally.regions = all_regions(&input, input.span(0..input.len())).len();
 
     tally
-}
-
-/// The conditional regions in `span`, and those nested in their branches.
-fn count(input: &Input, span: TokenSpan) -> usize {
-    regions(input, span)
-        .iter()
-        .map(|region| {
-            let nested: usize = region
-                .branches
-                .iter()
-                .map(|branch| count(input, branch.body))
-                .sum();
-            1 + nested
-        })
-        .sum()
 }
 
 /// The resolved commit of each repository, as the last fetch wrote it.

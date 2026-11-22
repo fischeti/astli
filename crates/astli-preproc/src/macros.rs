@@ -47,7 +47,7 @@ impl MacroTable {
     }
 
     /// Applies a directive to the table if it modifies definitions (`` `define ``, `` `undef ``, or `` `undefineall ``).
-    pub fn apply(&mut self, input: &Input, directive: &Directive) {
+    pub(crate) fn apply(&mut self, input: &Input, directive: &Directive) {
         use DirectiveType::*;
         debug_assert_eq!(directive.tokens.src_id, input.src_id);
 
@@ -62,7 +62,7 @@ impl MacroTable {
     }
 
     /// Registers a new macro definition, updating arity tracking if redefinitions differ.
-    pub fn define(&mut self, input: &Input, def: &MacroDef) {
+    fn define(&mut self, input: &Input, def: &MacroDef) {
         let arity = match &def.formals {
             Some(formals) => Arity::Formals(formals.len()),
             None => Arity::Nullary,

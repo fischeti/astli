@@ -57,11 +57,6 @@ impl TokenSpan {
         }
     }
 
-    /// Creates an empty token span at token index `at`.
-    pub fn empty(file: SourceId, at: u32) -> TokenSpan {
-        TokenSpan::new(file, at, at)
-    }
-
     /// Returns a span in the same file narrowed to `range`.
     pub fn with(self, range: Range<u32>) -> TokenSpan {
         TokenSpan::new(self.src_id, range.start, range.end)

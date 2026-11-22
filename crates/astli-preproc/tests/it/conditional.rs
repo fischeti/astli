@@ -6,7 +6,7 @@
 
 use std::rc::Rc;
 
-use astli_preproc::{Input, Region, Session, Taken, all_regions, regions, render};
+use astli_preproc::{Input, Region, Session, Taken, all_regions, render};
 use astli_syntax::Token;
 use astli_text::SourceId;
 
@@ -36,7 +36,7 @@ impl Source {
 
     fn regions(&self) -> Vec<Region> {
         let input = self.input();
-        regions(&input, input.span(0..input.len()))
+        all_regions(&input, input.span(0..input.len()))
     }
 
     fn only(&self) -> Region {
@@ -107,16 +107,20 @@ fn a_region_without_an_else_names_no_alternative() {
 }
 
 #[test]
-fn regions_report_only_the_outermost() {
-    // A branch's own regions are found by asking again about that branch.
+fn regions_are_found_in_the_order_they_open() {
+    // A region nested in a branch follows the one around it.
     let source =
         Source::new("`ifdef A\n`ifdef B\ninner;\n`endif\n`endif\n`ifdef C\nnext;\n`endif\n");
     let found = source.regions();
-    assert_eq!(found.len(), 2);
-
-    let input = source.input();
-    let inner = regions(&input, found[0].branches[0].body);
-    assert_eq!(source.shape(&inner[0]), ["`ifdef B => inner;"]);
+    let shapes: Vec<Vec<String>> = found.iter().map(|region| source.shape(region)).collect();
+    assert_eq!(
+        shapes,
+        [
+            vec!["`ifdef A => `ifdef B inner; `endif".to_string()],
+            vec!["`ifdef B => inner;".to_string()],
+            vec!["`ifdef C => next;".to_string()],
+        ]
+    );
 }
 
 #[test]
@@ -189,36 +193,6 @@ fn a_definition_made_in_a_taken_branch_outlives_the_region() {
         expanded("`ifndef NOPE\n`define W 16\n`endif\nlogic [`W-1:0] q;\n"),
         "logic [16-1:0] q;"
     );
-}
-
-#[test]
-fn all_regions_are_the_outermost_and_then_each_branch_asked_again() {
-    fn again(input: &Input, span: astli_preproc::TokenSpan, out: &mut Vec<Region>) {
-        for region in regions(input, span) {
-            out.push(region.clone());
-            for branch in &region.branches {
-                again(input, branch.body, out);
-            }
-        }
-    }
-
-    for text in [
-        "`ifdef A\n`ifdef B\ninner;\n`endif\n`endif\n`ifdef C\nnext;\n`endif\n",
-        "`ifdef A\n`ifdef B\nb;\n`elsif C\nc;\n`else\n`ifndef D\nd;\n`endif\n`endif\n`else\ne;\n`endif\n",
-        // Unclosed, at each depth; and stray.
-        "`ifdef A\n`ifdef B\n`else\nb;\n",
-        "`ifdef A\n`ifdef B\nb;\n`endif\n`else\n",
-        "`endif\n`else\n`ifdef A\na;\n`endif\n`endif\n",
-        "`define M `ifdef X x `endif\n`ifdef A\n`M\n`endif\n",
-        "",
-    ] {
-        let source = Source::new(text);
-        let input = source.input();
-        let span = input.span(0..input.len());
-        let mut expected = Vec::new();
-        again(&input, span, &mut expected);
-        assert_eq!(all_regions(&input, span), expected, "in {text:?}");
-    }
 }
 
 #[test]
