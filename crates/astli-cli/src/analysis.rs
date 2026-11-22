@@ -13,7 +13,7 @@ use astli_index::{Index, Summary};
 use astli_parse::parse_expanded;
 use astli_preproc::Build;
 use astli_sema::{BodyId, Design, Elaboration, FileId, Hir, TopValue, lower};
-use astli_text::{Diagnostic, Origins, Reader};
+use astli_text::{Diagnostic, ExpansionId, Origins, Reader, Span};
 
 use crate::cmd::{self, Outcome};
 use crate::discovery::{Plan, kept_only};
@@ -36,6 +36,8 @@ pub(crate) struct Analysis {
     pub origins: Vec<Arc<Origins>>,
     /// What each unit's expansion and parser reported, in the order found.
     pub parsed: Vec<Vec<Diagnostic>>,
+    /// What each unit's expansion recorded of the text as written.
+    pub recorded: Vec<Recorded>,
     /// What each unit declares and uses, where the run asked for it.
     pub index: Option<Index>,
     /// What is elaborated from: each top chosen, or each point of one that
@@ -90,9 +92,11 @@ impl Analysis {
         let mut summaries = Vec::with_capacity(count);
         let mut parsed = Vec::with_capacity(count);
         let mut marked = Vec::with_capacity(count);
-        for (hir, origin, summary, found) in outcome.values {
+        let mut recorded = Vec::with_capacity(count);
+        for (hir, origin, summary, found, record) in outcome.values {
             hirs.push(hir);
             origins.push(origin);
+            recorded.push(record);
             match summary {
                 Some((summary, marks)) => {
                     summaries.push(summary);
@@ -104,11 +108,12 @@ impl Analysis {
         }
         let kept = plan.replace(&summaries)?;
         let index = summarize.then(|| Index::new(kept_only(summaries, &kept)));
-        let (hirs, origins, parsed, marked) = (
+        let (hirs, origins, parsed, marked, recorded) = (
             kept_only(hirs, &kept),
             kept_only(origins, &kept),
             kept_only(parsed, &kept),
             kept_only(marked, &kept),
+            kept_only(recorded, &kept),
         );
 
         let design = Arc::new(Design::new(hirs));
@@ -165,6 +170,7 @@ impl Analysis {
             files,
             origins,
             parsed,
+            recorded,
             index,
             tops: elaborated,
             unread,
@@ -304,14 +310,26 @@ impl Elaborated {
 }
 
 /// A file expanded, parsed and lowered: its HIR, what its spans resolve
-/// against, its summary and the marks on its declarations if asked for, and
-/// what the expansion and the parser reported.
+/// against, its summary and the marks on its declarations if asked for,
+/// what the expansion and the parser reported, and what the expansion
+/// recorded.
 pub(crate) type Lowered = (
     Arc<Hir>,
     Arc<Origins>,
     Option<(Summary, Vec<Marks>)>,
     Vec<Diagnostic>,
+    Recorded,
 );
+
+/// What a unit's expansion recorded of the text as written, which the
+/// commands do not read and a language server does from a cursor: each
+/// macro call its files write, and each branch body it did not take.
+/// Shared, as a unit the server keeps is handed to each load.
+#[derive(Clone)]
+pub(crate) struct Recorded {
+    pub calls: Arc<[ExpansionId]>,
+    pub skipped: Arc<[Span]>,
+}
 
 /// Expands, parses and lowers one file, read with what it includes through
 /// `reader`, keeping its summary and its marks if `summarize`.
@@ -327,7 +345,11 @@ fn lowered(path: &Path, build: &Build, summarize: bool, reader: &dyn Reader) -> 
         (summary, marks(opened.session.origins(), &parsed))
     });
     let origins = Arc::new(opened.session.into_origins());
-    Ok((Arc::new(hir), origins, summary, found))
+    let recorded = Recorded {
+        calls: expanded.calls.into(),
+        skipped: expanded.skipped.into(),
+    };
+    Ok((Arc::new(hir), origins, summary, found, recorded))
 }
 
 /// Writes what was rendered of each file, in order, once `out` is flushed,

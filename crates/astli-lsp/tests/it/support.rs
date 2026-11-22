@@ -171,24 +171,27 @@ fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Sna
         let parsed = parse_expanded(&session, &expanded.tokens);
         let mut found = expanded.diagnostics;
         found.extend(parsed.diagnostics.iter().cloned());
+        let recorded = (expanded.calls.into(), expanded.skipped.into());
         hirs.push(Arc::new(lower(&parsed)));
         summaries.push(Summary::new(session.origins(), file, &parsed));
         let origins = match text.contains("unsound") {
             true => Origins::new(),
             false => session.into_origins(),
         };
-        lowered.push((path, Arc::new(origins), found));
+        lowered.push((path, Arc::new(origins), found, recorded));
     }
     let elaboration = Elaboration::new(Arc::new(Design::new(hirs)));
     let files: Vec<FileId> = elaboration.design().files().map(|(file, _)| file).collect();
     let units: Vec<Unit> = (lowered.into_iter().zip(files))
-        .map(|((path, origins, parsed), file)| Unit {
+        .map(|((path, origins, parsed, (calls, skipped)), file)| Unit {
             path,
             file,
             origins,
             parsed,
             checked: true,
             linted: true,
+            calls,
+            skipped,
         })
         .collect();
     let holds = |what: &str| texts.iter().any(|(_, text)| text.contains(what));

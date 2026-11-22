@@ -10,7 +10,7 @@ use std::sync::Arc;
 use astli_index::Index;
 use astli_lint::Config;
 use astli_sema::{BodyId, Elaboration, FileId};
-use astli_text::{Diagnostic, LineCol, Origins, Severity};
+use astli_text::{Diagnostic, ExpansionId, LineCol, Origins, Severity, Span};
 
 /// A design root's design as one load found it, never changed once built.
 ///
@@ -82,6 +82,12 @@ pub struct Unit {
     /// a file of the root package with its levels in
     /// [`Snapshot::levels`], among those the tops reach if there are tops.
     pub linted: bool,
+    /// Each macro call its files write, its own or a header's, as its
+    /// expansion listed them: the outermost, in the order expanded. Shared,
+    /// as a unit kept is handed to each load.
+    pub calls: Arc<[ExpansionId]>,
+    /// The body of each branch its expansion did not take, as written.
+    pub skipped: Arc<[Span]>,
 }
 
 /// Something wrong with a load that is no finding of a unit, as plain text.
