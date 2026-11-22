@@ -199,10 +199,10 @@ one is for, and where the design it produced is written down.
 - **M10 — Discovery.** *Done.* Commands with no arguments read the package
   the current directory is in ([`packages.md`](packages.md#phases)).
 - **M12 — Language server.** `astli lsp` over the package the open file is
-  in: diagnostics, formatting, outline, definition, references, hover,
-  rename and completion, kept current as buffers change. In-buffer requests
-  read the raw tree, semantic ones the expanded tree
-  ([`preprocessor.md`](preprocessor.md)).
+  in, with no setup, for reading a design: diagnostics, formatting, outline,
+  definition, references, hover with a macro call's expansion, and inlay
+  hints, kept current as buffers change. In-buffer requests read the raw
+  tree, semantic ones a snapshot of the design ([`lsp.md`](lsp.md)).
 - **M13 — Package manager.** astli fetches and selects a design's
   dependencies itself, as bender does: dev sources, features and overrides,
   path and git dependencies with versions, a lockfile, a shared store, and

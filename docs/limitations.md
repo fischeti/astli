@@ -128,9 +128,9 @@ opentitan re-lexes about 12 MB of headers, some 50 ms of 0.66 s single-threaded;
 walking their `` `define ``s into each unit's table costs more, and a cache
 cannot skip that. `fmt` never follows includes. A shared store would hold each
 path's text, lines and tokens behind an `Arc`, with placement left per session.
-**Revisit when** an LSP needs one file store across units, or a UVM-heavy run
-shows lexing matters. **Where** `astli-text/src/origins.rs`,
-`astli-preproc/src/expand.rs`
+**Revisit when** a UVM-heavy run shows lexing matters, or the language
+server's rebuild after a header changes does ([L8](lsp.md#decisions)).
+**Where** `astli-text/src/origins.rs`, `astli-preproc/src/expand.rs`
 
 ## Parser
 
@@ -205,8 +205,8 @@ A chain of one operator is walked in a loop, but `a.b.c…`, `a[0][0]…`,
 `f()()…` and `a + b - c + …` recurse once per link. On the 2 MB a thread gets,
 a release build overflows somewhere past 1000 links, and on the 1 MB of the
 Windows main thread, which formats a single file, past about half that. Real
-code chains a handful. **Revisit when** a real file does, or the formatter runs
-where a crash costs more than one command, such as a language server.
+code chains a handful. A language server dies with it too, and its client
+starts it again ([L13](lsp.md#decisions)). **Revisit when** a real file does.
 **Where** `astli-fmt/src/rules/expr.rs`
 
 ### A generate block named before its `begin` is laid out as a statement
