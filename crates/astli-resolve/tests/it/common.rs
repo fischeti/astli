@@ -3,7 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use astli_resolve::Store;
+use astli_package::Package;
+use astli_resolve::{Located, Lock, Overrides, Store, resolve};
 
 /// A temporary directory holding repositories and a store.
 pub struct Fixture(astli_testing::Fixture);
@@ -39,6 +40,25 @@ impl Fixture {
     pub fn file(&self, name: &str, text: &str) -> PathBuf {
         self.0.file(name, text)
     }
+
+    /// A root at `root/` under the fixture that requires `repo` at `commit`
+    /// and nothing else.
+    pub fn requiring(&self, root: &str, repo: &Repo, commit: &str) -> Package {
+        let entry = format!("upstream = {{ git = '{}', rev = '{commit}' }}", repo.url());
+        let manifest = self.file(
+            &format!("{root}/astli.toml"),
+            &format!("[dependencies]\n{entry}\n"),
+        );
+        Package::read(&manifest).expect("a valid manifest")
+    }
+}
+
+/// What `root` requires, resolved and checked out into `store`, as a design
+/// that reads it is.
+pub fn checked_out(store: &Store, root: Package) -> Located {
+    let resolution = resolve(store, &[root], &Overrides::default(), &Lock::default())
+        .unwrap_or_else(|err| panic!("unresolved: {err}"));
+    (resolution.packages[0].checkout(store)).expect("checked out")
 }
 
 /// A repository the test writes to; its path is its URL.

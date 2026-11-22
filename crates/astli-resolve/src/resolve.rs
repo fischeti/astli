@@ -186,7 +186,7 @@ impl Resolved {
             } => (url, Some(subdir), *commit),
         };
         let named = Some((self.name.as_str(), self.version.as_ref()));
-        let checkout = (store.mirror(&self.name, url)?).checkout_as(commit, &self.takes, named)?;
+        let checkout = (store.mirror(&self.name, url)?).checkout(commit, &self.takes, named)?;
         let dir = match subdir {
             Some(subdir) => checkout.dir.join(subdir),
             None => checkout.dir,

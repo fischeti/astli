@@ -6,8 +6,9 @@ use std::path::Path;
 use std::sync::{Arc, Barrier};
 use std::time::Duration;
 
+use astli_package::Package;
 use astli_resolve::Store;
-use common::Fixture;
+use common::{Fixture, checked_out};
 
 fn hex(id: impl ToString) -> String {
     id.to_string()
@@ -161,13 +162,11 @@ fn a_checkout_is_a_commits_files_and_nothing_else() {
     let old = upstream.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
     let new = upstream.commit(&[("include/core/defs.svh", "`define W 4\n")]);
 
-    let mirror = fixture
-        .store()
-        .mirror("upstream", &upstream.url())
-        .expect("a mirror");
     let at = |commit: &str| {
-        let commit = mirror.rev(commit).expect("a commit");
-        mirror.checkout(commit).expect("checked out")
+        checked_out(
+            &fixture.store(),
+            fixture.requiring("root", &upstream, commit),
+        )
     };
     let old_out = at(&old);
     let new_out = at(&new);
@@ -179,7 +178,7 @@ fn a_checkout_is_a_commits_files_and_nothing_else() {
         std::fs::read_to_string(new_dir.join("src/core.sv")).expect("written"),
         "module core;\nendmodule\n"
     );
-    let files: Vec<_> = new_out.files.iter().cloned().collect();
+    let files: Vec<_> = (new_out.held.iter().flatten()).cloned().collect();
     assert_eq!(
         files,
         [
@@ -198,13 +197,10 @@ fn a_checkout_cannot_be_written_but_can_be_deleted() {
     let upstream = fixture.repo("upstream");
     let commit = upstream.commit(&[("src/core.sv", "module core;\nendmodule\n")]);
 
-    let mirror = fixture
-        .store()
-        .mirror("upstream", &upstream.url())
-        .expect("a mirror");
-    let checkout = mirror
-        .checkout(mirror.rev(&commit).expect("a commit"))
-        .expect("checked out");
+    let checkout = checked_out(
+        &fixture.store(),
+        fixture.requiring("root", &upstream, &commit),
+    );
     let file = checkout.dir.join("src/core.sv");
     let written = std::fs::write(&file, "edited");
     let added = std::fs::write(checkout.dir.join("src/generated.sv"), "");
@@ -245,27 +241,27 @@ fn runs_opening_mirrors_in_opposite_orders_both_finish() {
     let fixture = Fixture::new("crossed");
     let (a, b) = (fixture.repo("a"), fixture.repo("b"));
     let (in_a, in_b) = (a.commit(&[("a.sv", "")]), b.commit(&[("b.sv", "")]));
-    let (a, b) = (a.url(), b.url());
     // Each run opens one mirror and keeps it, as resolution keeps every
-    // mirror it reads, then, once both have, fetches and checks out the
+    // mirror it reads, then, once both have, resolves and checks out the
     // other.
     let both = Arc::new(Barrier::new(2));
-    let run = |store: Store, kept: String, other: String, commit: String, both: Arc<Barrier>| {
+    let run = |store: Store, kept: String, other: Package, both: Arc<Barrier>| {
         let _kept = store.mirror("kept", &kept).expect("a mirror");
         both.wait();
-        let mut other = store.mirror("other", &other).expect("a mirror");
-        other.fetch().expect("fetched");
-        let id = other.rev(&commit).expect("a commit");
-        other.checkout(id).expect("checked out");
+        checked_out(&store, other);
     };
 
     // Runs that waited for one lock while holding another would wait for
     // ever, so each runs on a thread of its own, and is given up on.
     let (done, finished) = std::sync::mpsc::channel();
-    for (kept, other, commit) in [(a.clone(), b.clone(), in_b), (b, a, in_a)] {
+    let runs = [
+        (a.url(), fixture.requiring("needs-b", &b, &in_b)),
+        (b.url(), fixture.requiring("needs-a", &a, &in_a)),
+    ];
+    for (kept, other) in runs {
         let (store, done, both) = (fixture.store(), done.clone(), both.clone());
         std::thread::spawn(move || {
-            run(store, kept, other, commit, both);
+            run(store, kept, other, both);
             let _ = done.send(());
         });
     }
@@ -281,12 +277,7 @@ fn cleaning_deletes_mirrors_checkouts_and_locks() {
     let upstream = fixture.repo("upstream");
     let commit = upstream.commit(&[("src/core.sv", "")]);
     let store = fixture.store();
-    {
-        let mirror = store.mirror("upstream", &upstream.url()).expect("a mirror");
-        mirror
-            .checkout(mirror.rev(&commit).expect("a commit"))
-            .expect("checked out");
-    }
+    checked_out(&store, fixture.requiring("root", &upstream, &commit));
 
     let cleaned = store.clean().expect("cleaned");
     let again = store.clean().expect("nothing to clean");

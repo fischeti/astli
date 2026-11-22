@@ -428,11 +428,10 @@ mirror.versions()?;                      // Vec<(Version, ObjectId)>: its vX.Y.Z
 mirror.rev("main");                      // Option<ObjectId>: a branch, a tag or a commit
 mirror.file(commit, "astli.toml")?;      // Option<Vec<u8>>: read without a checkout
 mirror.manifests(commit, &dir)?;         // (Option<String>, Option<String>): its astli.toml and Bender.yml in dir
-mirror.checkout(commit)?;                // Checkout: its dir, written once and read-only, and the files it holds
 let lock = Lock::read(&path)?;           // Option<Lock>: astli.lock, the commit each package resolved to
 let resolution = resolve(&store, &roots, &Overrides { pinned, patches }, &lock)?;  // Resolution: one version of each, for the root and then a workspace's members, preferring the lock
 resolution.packages[0];                  // Resolved: name, origin (with its commit, from a repository), version, what it requires directly, revs
-resolution.packages[0].checkout(&store)?;  // Located: where its files are, checked out on demand
+resolution.packages[0].checkout(&store)?;  // Located: where its files are, checked out on demand, written once and read-only
 resolution.reached(&package);            // BTreeSet<&str>: the packages its design holds, by name
 resolution.load(&store, &root, &package, note)?;  // Loaded: those dependencies, read and ordered, which are described and which on disk, each warning given to `note`
 Lock::of(&resolution);                   // the lock it makes, to write
