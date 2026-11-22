@@ -1,0 +1,37 @@
+instances.sv:16:3
+  sub: definition of u_named: definition sub at instances.sv:6:8, built as ["top.u_named", "top.u_default"]
+instances.sv:16:10
+  W: formal of u_named: parameter W at instances.sv:6:28
+instances.sv:16:17
+  Missing: formal of u_named: none
+instances.sv:16:29
+  u_named: declaration: instance u_named at instances.sv:16:29
+instances.sv:16:39
+  clk: use: variable clk at instances.sv:14:9
+  clk: formal of u_named: port clk at instances.sv:7:15
+instances.sv:16:45
+  a: formal of u_named: port a at instances.sv:8:23
+instances.sv:16:47
+  a: use: variable a at instances.sv:15:15
+instances.sv:18:9
+  4: positional of u_positional: parameter W at instances.sv:6:28
+instances.sv:18:15
+  7: positional of u_positional: none
+instances.sv:18:32
+  clk: use: variable clk at instances.sv:14:9
+  clk: positional of u_positional: port clk at instances.sv:7:15
+instances.sv:18:40
+  y: use: variable y at instances.sv:15:18
+  y: positional of u_positional: port y at instances.sv:9:24
+instances.sv:18:43
+  a: use: variable a at instances.sv:15:15
+  a: positional of u_positional: none
+instances.sv:20:3
+  sub: definition of u_default: definition sub at instances.sv:6:8, built as ["top.u_named", "top.u_default"]
+instances.sv:22:3
+  nowhere: definition of u_nowhere: none, built as []
+instances.sv:22:23
+  p: formal of u_nowhere: none
+instances.sv:22:29
+  a: use: variable a at instances.sv:15:15
+  a: positional of u_nowhere: none

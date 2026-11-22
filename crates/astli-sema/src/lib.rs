@@ -23,9 +23,11 @@
 //! ```
 //!
 //! A [`Design`] holds the HIRs of a design's files and resolves the names
-//! each uses. An [`Elaboration`] over it says what the design means once its
-//! parameters have values: the [`Value`] of each constant and the [`Ty`] of
-//! each declaration, computed when first asked.
+//! each uses. A file's [`Sites`], made from the design and the origins its
+//! spans resolve against, say what stands at each place it spells a name,
+//! the way in from a cursor. An [`Elaboration`] over it says what the
+//! design means once its parameters have values: the [`Value`] of each
+//! constant and the [`Ty`] of each declaration, computed when first asked.
 //!
 //! # Unknown is silent
 //!
@@ -57,6 +59,7 @@ mod elab;
 mod hir;
 mod lower;
 mod resolve;
+mod sites;
 mod types;
 mod typing;
 mod value;
@@ -80,5 +83,6 @@ pub use hir::{
 };
 pub use lower::lower;
 pub use resolve::{Names, Resolution, Searched};
+pub use sites::{Site, SiteKind, Sites};
 pub use types::{ArrayTy, ClassTy, DynamicTy, EnumTy, MemberTy, Packed, Shape, StructTy, Ty};
 pub use value::{Bit, Bits, Literal, Value, literal};

@@ -1,0 +1,15 @@
+bind.sv:13:8
+  dut: use: definition dut at bind.sv:7:8
+  dut: bind target: definition dut at bind.sv:7:8
+bind.sv:13:12
+  checker_m: definition of u_check: definition checker_m at bind.sv:4:8, built as ["top.u_dut.u_check"]
+bind.sv:13:22
+  u_check: declaration: instance u_check at bind.sv:13:22
+bind.sv:13:32
+  a: use: port a at bind.sv:7:25
+  a: formal of u_check: port a at bind.sv:4:31
+bind.sv:15:8
+  u_dut: use: instance u_dut at bind.sv:12:7
+  u_dut: bind target: none
+bind.sv:15:40
+  a: use: port a at bind.sv:7:25

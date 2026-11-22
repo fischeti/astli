@@ -1,0 +1,22 @@
+uses.sv:11:28
+  data: field
+uses.sv:15:3
+  beat_t: use: typedef beat_t at uses.sv:14:5
+uses.sv:15:10
+  beat: declaration: variable beat at uses.sv:15:10
+uses.sv:18:10
+  ready: use: variable ready at uses.sv:17:9
+uses.sv:18:18
+  beat: use: variable beat at uses.sv:15:10
+uses.sv:18:23
+  valid: member: valid at uses.sv:13:11: logic
+uses.sv:18:31
+  missing: use: undeclared
+uses.sv:20:23
+  clk: use: port clk at uses.sv:9:25
+uses.sv:20:33
+  data: member: data at uses.sv:11:28: logic [7:0]
+uses.sv:22:10
+  pkg: use: definition pkg at uses.sv:5:9
+uses.sv:22:15
+  Width: use: parameter Width at uses.sv:6:27

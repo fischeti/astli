@@ -1,0 +1,16 @@
+header.sv:6:3
+  state_t: use: typedef state_t at header.svh:6:3
+header.sv:8:23
+  next: use: subroutine next at header.svh:9:28
+header.sv:8:28
+  state: use: variable state at header.sv:6:11
+header.svh:6:3
+  state_t: declaration: typedef state_t at header.svh:6:3
+header.svh:9:33
+  state_t: use: typedef state_t at header.svh:6:3
+header.svh:9:41
+  now: declaration: port now at header.svh:9:41
+header.svh:11:10
+  now: use: port now at header.svh:9:41
+header.svh:11:17
+  Idle: use: enum member Idle at header.svh:4:3

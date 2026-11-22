@@ -287,6 +287,27 @@ expression, so `expr` is the one lookup: an implicit `.name` connects an
 `names.loose()` lists those.
 
 ```rust
+let sites = Sites::new(&design, file, &origins);  // one FileId's, its spans those of `origins`
+for site in sites.at(source, offset) { … } // each Site whose spelled span holds the offset
+sites.iter();                              // every Site of the file, in the order spelled
+```
+
+`Sites` is the way in from a cursor: every name a file's HIR holds, by
+the span `Origins::spelled` gives it, sorted and searched. A `SiteKind`
+is a `Use` with its `Resolution`, a `Declaration` with its `SymbolRef`, or
+a name that is no expression: an instance's `Definition`, the `Formal` a
+`.name` override or connection names and the one a `Positional` one is
+given to, an import's `Package` and `Imported` item, a `bind`'s `Target`,
+and a struct's `Member` where it is used and `Field` where it is
+declared. The place is the spelled one, so a name a macro wrote is found
+at the `` `define ``'s body or the call's argument, once per expansion,
+and a header's names are found by the header's `SourceId` in the unit's
+origins. A `Design` holds no origins, so `Sites` is made from the file's
+and kept by the caller beside them, rather than kept by the design as
+`Names` is; it answers with a `Span` of that store, which the caller
+turns into a path and a range before it outlives the design.
+
+```rust
 let found = astli_sema::check(&elaboration, file, None);  // Vec<Diagnostic>
 let origins = session.into_origins();                // what they render against
 
@@ -294,6 +315,7 @@ let built = Built::new(&elaboration, &tops);         // what the tops build
 let found = astli_sema::check(&elaboration, file, Some(&built));
 let found = astli_sema::check_built(&elaboration, &built);  // Vec<(FileId, Diagnostic)>
 built.frames();                                      // &[Frame]: each body built, then its blocks, each naming its parent
+built.bodies(&design, definition);                   // each Frame of a distinct body the tops build for it
 ```
 
 `check` resolves the file, compares each instance with its definition, and
@@ -311,7 +333,10 @@ does not convert or an operand no operator takes, what each `$fatal`,
 without a value; each is one pass over all of it, which `check --top`
 reports beside what `check` finds in each file. `Built` holds no check
 itself, so what a walk of the tree found is apart from what is reported
-of it, and the width lints read the same frames.
+of it, and the width lints read the same frames. A body has no parent,
+so the bodies a definition has under the tops are found from them:
+`bodies` gives each one once, with the path that first reaches it, for a
+value shown once per body ([L12](lsp.md#decisions)).
 
 ```rust
 let elaboration = Elaboration::new(Arc::new(design));  // queries over the design, which it owns
@@ -326,6 +351,8 @@ elaboration.conversions(frame, |conversion| …);  // each value a frame gives t
 elaboration.symbol_type(body, symbol_ref);    // Ty of a declaration the body sees
 elaboration.names(file);                      // &Names, the design's
 elaboration.reach(body, access.place?);       // Option<Range<u64>>: the bits a select names
+elaboration.member(body, expr);               // Option<MemberTy>: the struct member `a.b` names
+elaboration.body_at(file, scope);             // BodyId: the defaults what a scope holds is evaluated at
 
 let top = elaboration.top("soc_top")?;        // Option<BodyId>, a definition at its defaults
 let set = [("Depth", TopSetting::Literal("16".into()))];  // the text of a literal, as `-G` takes it
@@ -352,8 +379,8 @@ a bit, and carries the standard's operators. A `Ty` is structural: a
 struct, enum), and `ArrayTy` and `StructTy` are unpacked; its composite
 parts sit behind an `Arc`, so a `Ty` clones cheaply and crosses threads. A
 struct or enum knows its declaration: the typedef's `SymbolRef`, each
-member's span, an enum's members as symbols. Two of one shape declared
-apart are different types. A handle's `ClassTy` is its class's
+member's file and span, an enum's members as symbols. Two of one shape
+declared apart are different types. A handle's `ClassTy` is its class's
 `SymbolRef`, every specialization of a parameterized class the one class,
 and `Ty::Null` is `null`'s.
 

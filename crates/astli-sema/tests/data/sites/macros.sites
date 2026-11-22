@@ -1,0 +1,7 @@
+macros.sv:4:29
+  nothing
+macros.sv:4:38
+  source: use: variable source at macros.sv:8:9
+  source: use: variable source at macros.sv:8:9
+macros.sv:10:9
+  x: use: variable x at macros.sv:9:9

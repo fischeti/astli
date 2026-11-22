@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::design::{FileId, SymbolRef};
+use crate::design::{Design, FileId, SymbolRef};
 use crate::elab::{Blocks, BodyId, ChildKind, Elaboration};
 use crate::hir::*;
 
@@ -170,6 +170,25 @@ impl Built {
     /// scope is undecided, unless the walk entered another block of it.
     pub fn frames(&self) -> &[Frame] {
         &self.frames
+    }
+
+    /// The frames of the bodies the tops build for `definition` of
+    /// `design`, each a distinct body: instances whose parameters are equal
+    /// share one, and its frame's path is the first that reaches it.
+    /// Empty for a definition no top reaches, or one two files declare, of
+    /// which nothing is built for sure.
+    pub fn bodies<'a>(
+        &'a self,
+        design: &Design,
+        definition: SymbolRef,
+    ) -> impl Iterator<Item = &'a Frame> {
+        let scope = match design.symbol(definition).kind {
+            SymbolKind::Definition { scope, .. } => Some(scope),
+            _ => None,
+        };
+        (self.frames.iter()).filter(move |frame| {
+            frame.parent.is_none() && frame.file == definition.file && Some(frame.scope) == scope
+        })
     }
 
     /// The tops built for sure.

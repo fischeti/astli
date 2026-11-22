@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use astli_text::Span;
 
-use crate::design::SymbolRef;
+use crate::design::{FileId, SymbolRef};
 
 /// The type of a declaration or an expression.
 #[derive(Debug, Clone, PartialEq)]
@@ -118,6 +118,9 @@ pub struct StructTy {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MemberTy {
     pub name: Box<str>,
+    /// The file the member is declared in, whose session `span` resolves
+    /// against.
+    pub file: FileId,
     /// Where the member is declared.
     pub span: Span,
     pub ty: Ty,
