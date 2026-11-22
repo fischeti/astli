@@ -141,11 +141,11 @@ fn export(out: &mut Out, target: &Target, run: &Run, check: bool) -> Result {
         return Err(problem.into());
     }
 
-    // Every feature on, as the package's own runs read it, so that every
-    // file is ordered among the others.
+    // Every feature on, so that every file is ordered among the others,
+    // each feature's under its own target.
     let features = FeatureArgs {
-        features: Vec::new(),
         all_features: true,
+        ..FeatureArgs::default()
     };
     let mut plan = Plan::new(
         target,

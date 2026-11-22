@@ -2,7 +2,7 @@
 //! parameters are set to: those `--top` names, each a `[top.NAME]` of the
 //! root or else a module, or a point of a test, or without any, the root's
 //! default, or for `check` and `lint` every table and every point of each
-//! test, one run per set of defines.
+//! test, one run per set of defines and features.
 
 use std::collections::BTreeMap;
 
@@ -28,6 +28,9 @@ pub struct Top {
     /// What its table defines, each macro's body by name; `None` for one
     /// defined as `-D NAME` defines it.
     pub defines: BTreeMap<String, Option<String>>,
+    /// The package's own features its table builds it with, in place of
+    /// `default`; `None` where no table names any.
+    pub features: Option<Vec<String>>,
     /// Which of the points its test's sweeps give it stands for.
     pub points: Points,
 }
@@ -55,6 +58,11 @@ impl Top {
             top.module = table.module(base).to_string();
             top.params = table.params.clone().into_iter().collect();
             top.defines = table.defines.clone();
+            top.features = table.features.clone().map(|mut features| {
+                features.sort();
+                features.dedup();
+                features
+            });
         }
         top
     }
@@ -71,6 +79,7 @@ impl Top {
             module: module.to_string(),
             params: Vec::new(),
             defines: BTreeMap::new(),
+            features: None,
             points,
         }
     }
@@ -99,6 +108,11 @@ pub struct Chosen {
     pub tops: Vec<Top>,
     /// What the tables chosen define, each once, as `-D` takes it.
     pub defines: Vec<String>,
+    /// Whether every top's table names its features, which then replace
+    /// the package's defaults.
+    pub replaced: bool,
+    /// The features the tables chosen name, each once.
+    pub features: Vec<String>,
 }
 
 impl Chosen {
@@ -187,9 +201,19 @@ impl Chosen {
     }
 
     /// `tops`, built together: each defines its macros for every file, so
-    /// one macro defined two ways is an error.
+    /// one macro defined two ways is an error, and enables its features
+    /// for every file, so the design has every top's, and the defaults
+    /// unless each top's table names its own.
     pub fn joined(tops: Vec<Top>) -> Result<Chosen> {
-        let mut chosen = Chosen::default();
+        let mut chosen = Chosen {
+            replaced: !tops.is_empty() && tops.iter().all(|top| top.features.is_some()),
+            ..Chosen::default()
+        };
+        for feature in tops.iter().flat_map(|top| top.features.iter().flatten()) {
+            if !chosen.features.contains(feature) {
+                chosen.features.push(feature.clone());
+            }
+        }
         let mut defined: Vec<(&str, &str, &str)> = Vec::new();
         for top in &tops {
             for (macro_name, body) in &top.defines {
@@ -418,16 +442,17 @@ fn filtered(_: &str, name: &str, value: &str) -> String {
     )
 }
 
-/// `tops` as one run for each set of defines they give, in the order of
-/// the first top of each: those that define the same are built together,
-/// as a filelist of them would be, and those that define one macro two
-/// ways are built apart.
+/// `tops` as one run for each set of defines and features they give, in
+/// the order of the first top of each: those that define and enable the
+/// same are built together, as a filelist of them would be, and the rest
+/// apart, since one macro defined two ways, or two features that are
+/// alternatives, cannot be built together.
 fn grouped(tops: Vec<Top>) -> Vec<Chosen> {
     let mut groups: Vec<Vec<Top>> = Vec::new();
     for top in tops {
         match groups
             .iter_mut()
-            .find(|group| group[0].defines == top.defines)
+            .find(|group| group[0].defines == top.defines && group[0].features == top.features)
         {
             Some(group) => group.push(top),
             None => groups.push(vec![top]),

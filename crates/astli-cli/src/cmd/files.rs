@@ -79,6 +79,7 @@ impl RunWith<Ctx<'_>> for Files {
             Emit::Tops => Chosen::default(),
             _ => Chosen::of(&plan, &self.top)?,
         };
+        plan = plan.for_tops(&chosen, run)?;
         plan.define(&chosen);
         let tops: Vec<String> = (chosen.tops.iter()).map(|top| top.module.clone()).collect();
         settle::described(run, &plan.described, plan.in_workspace());

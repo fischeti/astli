@@ -8,7 +8,7 @@ In hardware design, different build targets often require different source confi
 
 Much like Cargo features in Rust, an `astli` feature allows you to conditionally activate additional source files, include directories, optional dependencies, or downstream dependency features.
 
-Features only add: enabling one adds files to the build and never removes any, so any combination of features is a well-defined design.
+Features only add: enabling one adds files to the build and never removes any. Two features that declare the same module are alternatives, such as a behavioural memory model and the wrapper of an SRAM macro, and a design that enables both is an error naming both declarations.
 
 A feature's `sources` claim its files wherever they are below the package root, as `dev` does: a file a feature names is the feature's, inside `[package] sources` or outside it, and is in the design only while the feature is on. A pattern that matches no file is an error, even while the feature is off.
 
@@ -23,15 +23,39 @@ vip = { sources = ["hw/vip/**"], include-dirs = ["hw/vip/include"], dependencies
 
 ### Controlling features on the command line
 
-When working inside a package directly, `astli` enables **all** declared features by default. You can fine-tune this on the command line:
+When working inside a package directly, `astli` enables its `default` features, as a package depending on it would get them. You can fine-tune this on the command line:
 
 ```sh
-# Disable all features declared in this package
+# Disable the default features
 astli files --no-features
 
 # Disable defaults and explicitly enable only the 'vip' feature
 astli files --no-features --features vip
+
+# Enable every feature, alternatives together
+astli files --all-features
 ```
+
+### Choosing between alternatives
+
+A [`[top.NAME]`](reference/manifest.md#topname) table can name the features its top is built with, in place of `default`. Keep the alternatives in one package and give each a table:
+
+```toml
+[features]
+default = ["behav"]
+behav = { sources = ["hw/models/**"] }
+asic = { sources = ["hw/macros/**"], dependencies = ["tech_cells/asic"] }
+
+[top.tb_soc]                 # the default features: the behavioural models
+
+[top.soc_asic]
+top = "soc"
+features = ["asic"]          # the macros' wrappers, and not the models
+```
+
+`astli check` and `astli lint` without `--top` check every table, each design with its own features, so a mistake only one alternative holds is still found. `astli files --top soc_asic` writes the filelist of the ASIC design. A package depending on this one gets `behav`, and asks for the other with `default-features = false, features = ["asic"]`.
+
+`astli fmt` and lint's per-file rules read every feature's files, whichever a design enables.
 
 ### Configuring dependency features
 

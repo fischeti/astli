@@ -173,7 +173,7 @@ fn a_feature_brings_in_an_optional_dependency_and_dev_dependencies_are_the_roots
     let fixture = Fixture::new("optional-dependency");
     fixture.file(
         "root/astli.toml",
-        "[features]\nasic = { dependencies = ['tech'] }\n\
+        "[features]\ndefault = ['asic']\nasic = { dependencies = ['tech'] }\n\
          [dependencies]\ntech = { path = '../tech' }\n\
          [dev-dependencies]\nverif = { path = '../verif' }\n",
     );

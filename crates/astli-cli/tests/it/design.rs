@@ -660,8 +660,13 @@ fn files_lists_each_package_together_after_its_dependencies() {
 fn features_select_the_packages_files() {
     let fixture = Fixture::new("discover-features");
     package(&fixture);
-    fixture.file("astli.toml", "[features]\nvip = { sources = [\"vip\"] }\n");
+    fixture.file(
+        "astli.toml",
+        "[features]\ndefault = [\"vip\"]\nvip = { sources = [\"vip\"] }\n\
+         fpga = { sources = [\"fpga\"] }\n",
+    );
     fixture.file("vip/core_vip.sv", "module core_vip;\nendmodule\n");
+    fixture.file("fpga/core_fpga.sv", "module core_fpga;\nendmodule\n");
     let files = |args: &[&str]| -> Vec<String> {
         let output = driver(&fixture).args([&["files", "--emit", "files"], args].concat());
         assert!(output.status.success(), "{}", stderr(&output));
@@ -672,10 +677,11 @@ fn features_select_the_packages_files() {
             .collect()
     };
 
-    // The package's own runs enable all its features.
+    // The package's own runs enable its defaults, as a dependent's do.
     assert_eq!(files(&[]), ["core.sv", "tb_core.sv", "core_vip.sv"]);
     assert_eq!(files(&["--no-features"]), ["core.sv", "tb_core.sv"]);
-    assert_eq!(files(&["--no-features", "--features", "vip"]).len(), 3);
+    assert_eq!(files(&["--no-features", "--features", "fpga"]).len(), 3);
+    assert_eq!(files(&["--all-features"]).len(), 4);
 
     let unknown = driver(&fixture).args(["files", "--features", "nope"]);
     let named = driver(&fixture).args(["files", "--no-features", "rtl/core.sv"]);
@@ -688,6 +694,69 @@ fn features_select_the_packages_files() {
         stderr(&named).contains("not from files named"),
         "{}",
         stderr(&named)
+    );
+}
+
+#[test]
+fn a_top_table_chooses_between_features_declaring_one_name() {
+    let fixture = Fixture::new("discover-alternatives");
+    fixture.file(
+        "astli.toml",
+        "[features]\ndefault = [\"behav\"]\n\
+         behav = { sources = [\"behav\"] }\nasic = { sources = [\"asic\"] }\n\
+         [top.tb_chip]\n\
+         [top.chip_asic]\ntop = \"chip\"\nfeatures = [\"asic\"]\n",
+    );
+    fixture.file(
+        "rtl/chip.sv",
+        "module chip;\n  sram u_sram ();\nendmodule\n",
+    );
+    fixture.file(
+        "tb/tb_chip.sv",
+        "module tb_chip;\n  chip u_chip ();\nendmodule\n",
+    );
+    fixture.file("behav/sram.sv", "module sram;\nendmodule\n");
+    fixture.file(
+        "asic/sram.sv",
+        "module sram;\n  macro u_macro ();\nendmodule\n",
+    );
+    fixture.file("asic/macro.sv", "module macro;\nendmodule\n");
+    let files = |top: &str| -> Vec<String> {
+        let output = driver(&fixture).args(["files", "--emit", "files", "--top", top]);
+        assert!(output.status.success(), "{}", stderr(&output));
+        let listed = stdout(&output);
+        // Each file by its directory and name, which tell the features apart.
+        let short = |line: &str| {
+            let parts: Vec<_> = Path::new(line).iter().collect();
+            let [.., dir, name] = parts[..] else {
+                panic!("{line} is a path");
+            };
+            format!("{}/{}", dir.to_string_lossy(), name.to_string_lossy())
+        };
+        listed.lines().map(short).collect()
+    };
+
+    let check = driver(&fixture).args(["check"]);
+    let both = driver(&fixture).args(["check", "--all-features"]);
+    let lint = driver(&fixture).args(["lint"]);
+
+    // Each table is a design of its own, the one with the defaults and the
+    // other with what its table names in their place.
+    assert_eq!(
+        files("tb_chip"),
+        ["behav/sram.sv", "rtl/chip.sv", "tb/tb_chip.sv"]
+    );
+    assert_eq!(
+        files("chip_asic"),
+        ["asic/macro.sv", "asic/sram.sv", "rtl/chip.sv"]
+    );
+    assert!(check.status.success(), "{}", stderr(&check));
+    assert!(lint.status.success(), "{}", stderr(&lint));
+    assert!(!both.status.success());
+    assert!(
+        stderr(&both).contains("`sram` is declared 2 times"),
+        "{}",
+        stderr(&both)
     );
 }
 

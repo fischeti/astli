@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use astli_index::Summary;
 use astli_package::{
-    Declared, Dependencies, Dependency, Files, Package, Patches, Root, Walk, mark,
+    Base, Declared, Dependencies, Dependency, Files, Package, Patches, Root, Selection, Walk, mark,
 };
 use astli_preproc::Build;
 use astli_resolve::Loaded;
@@ -88,6 +88,24 @@ pub struct Plan {
     in_workspace: bool,
     /// The dependencies read as the root describes them, by name.
     pub described: Vec<String>,
+    /// The files left out as [`Plan::unread`], which another selection of
+    /// the package leaves out too.
+    unread: Vec<PathBuf>,
+    /// What [`Plan::for_tops`] makes another plan from, when discovered.
+    again: Option<Again>,
+}
+
+/// What a discovered plan was made from, but for the features it selects:
+/// what another selection of the same package is made from.
+#[derive(Clone)]
+struct Again {
+    here: target::Here,
+    features: FeatureArgs,
+    selection: Selection,
+    /// What the flags add to every package's build: its defines and its
+    /// include directories.
+    defines: Vec<String>,
+    incdirs: Vec<PathBuf>,
 }
 
 /// A file compiled on its own.
@@ -155,8 +173,59 @@ impl Plan {
                 mark::code("--no-features")
             ))),
             true => Ok(Plan::listed(sources::resolve(run, sources, build)?)),
-            false => Plan::discovered(target, features, build, run),
+            false => {
+                let again = Again {
+                    here: target.here_of(run, package(target)?)?,
+                    features: features.clone(),
+                    selection: features.selection(),
+                    defines: build.defines().collect(),
+                    incdirs: build.incdirs().collect(),
+                };
+                Plan::discovered(again, run)
+            }
         }
+    }
+
+    /// The plan of every one of the package's own features, alternatives
+    /// together, for what reads each file as written; files named are read
+    /// as they are.
+    pub fn every_feature(self, run: &Run) -> Result<Plan> {
+        let selection = Selection {
+            base: Base::All,
+            features: Vec::new(),
+        };
+        self.selecting(selection, run)
+    }
+
+    /// The plan for the tops `chosen`, which enables the features their
+    /// tables name: this one, if it enables them already, or else the
+    /// package discovered again with them. Files named are built as they
+    /// are.
+    pub fn for_tops(self, chosen: &Chosen, run: &Run) -> Result<Plan> {
+        let Some(again) = &self.again else {
+            return Ok(self);
+        };
+        let selection = (again.features).for_tops(!chosen.replaced, &chosen.features);
+        self.selecting(selection, run)
+    }
+
+    /// The plan of the package as `selection` selects its features: this
+    /// one, if it enables the same of the package's own already.
+    fn selecting(self, selection: Selection, run: &Run) -> Result<Plan> {
+        let (Some(again), Some((root, _))) = (&self.again, &self.packages) else {
+            return Ok(self);
+        };
+        let package = &root.package;
+        if selection.own(package) == again.selection.own(package) {
+            return Ok(self);
+        }
+        let again = Again {
+            selection,
+            ..again.clone()
+        };
+        let mut plan = Plan::discovered(again, run)?;
+        plan.unread(&self.unread);
+        Ok(plan)
     }
 
     /// Builds a package's files with what the tables of `tops` define, in
@@ -319,6 +388,7 @@ impl Plan {
         if paths.is_empty() {
             return;
         }
+        self.unread.extend(paths.iter().cloned());
         self.own.retain(|path| !paths.contains(path));
         let kept: Vec<bool> = (self.units.iter())
             .map(|unit| !paths.contains(&unit.path))
@@ -347,13 +417,8 @@ impl Plan {
         plan
     }
 
-    fn discovered(
-        target: &Target,
-        features: &FeatureArgs,
-        flags: &BuildArgs,
-        run: &Run,
-    ) -> Result<Plan> {
-        let here = target.here_of(run, package(target)?)?;
+    fn discovered(again: Again, run: &Run) -> Result<Plan> {
+        let here = again.here.clone();
         let Loaded {
             mut dependencies,
             described,
@@ -365,17 +430,17 @@ impl Plan {
             in_workspace,
         } = here;
         let walk = Walk {
-            enabled: dependencies.select(&package.package, &features.selection())?,
+            enabled: dependencies.select(&package.package, &again.selection)?,
             held: None,
             patched: workspace.patches.0.values().cloned().collect(),
         };
         // As a filelist names them: the flags' after the tables', so that a
         // flag wins.
-        let flagged: Vec<String> = flags.defines().collect();
+        let flagged = again.defines.clone();
         let defines = flagged.clone();
         let mut bare = Vec::new();
         let mut with_flags = |build: Build| {
-            let build = flags.incdirs().fold(build, Build::include_dir);
+            let build = (again.incdirs.iter().cloned()).fold(build, Build::include_dir);
             bare.push(build.clone());
             defined(build, &defines)
         };
@@ -429,7 +494,7 @@ impl Plan {
             }));
         }
         // As a filelist names them: the flags' after what the packages need.
-        incdirs.extend(flags.incdirs());
+        incdirs.extend(again.incdirs.iter().cloned());
         let mut seen = HashSet::new();
         incdirs.retain(|dir| seen.insert(dir.clone()));
         let mut plan = Plan::with(builds, units, own, incdirs);
@@ -442,6 +507,7 @@ impl Plan {
         plan.shared = Some(workspace.root);
         plan.in_workspace = in_workspace;
         plan.described = described;
+        plan.again = Some(again);
         Ok(plan)
     }
 
@@ -466,6 +532,8 @@ impl Plan {
             shared: None,
             in_workspace: false,
             described: Vec::new(),
+            unread: Vec::new(),
+            again: None,
         }
     }
 }

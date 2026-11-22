@@ -7,7 +7,7 @@
 
 use std::path::PathBuf;
 
-use astli_package::Simulator;
+use astli_package::{Base, Selection, Simulator};
 use astli_text::clean;
 use usage_rs::{Args, Cli, Subcommands, ValueEnum};
 
@@ -135,28 +135,48 @@ impl Sources {
 }
 
 /// Feature selection flags for package-mode execution.
-#[derive(Args, Default)]
+#[derive(Args, Default, Clone)]
 pub struct FeatureArgs {
-    /// Enable a package feature (can be repeated)
+    /// Enable a package feature, besides the default ones or those a [top.NAME] table names (can be repeated)
     #[usage(long, value_name = "FEATURE")]
     pub features: Vec<String>,
-    /// Enable all package features by default; pass `--no-features` to disable them unless explicitly selected
-    #[usage(long, negate = "--no-features", default = "true")]
+    /// Disable the package's default features
+    #[usage(long, conflicts("--all-features"))]
+    pub no_features: bool,
+    /// Enable every package feature, whatever a [top.NAME] table names
+    #[usage(long)]
     pub all_features: bool,
 }
 
 impl FeatureArgs {
-    /// What the flags select.
-    pub fn selection(&self) -> astli_package::Selection {
-        astli_package::Selection {
-            no_features: !self.all_features,
+    /// What the flags select, for a top whose table names no features.
+    pub fn selection(&self) -> Selection {
+        let base = match (self.all_features, self.no_features) {
+            (true, _) => Base::All,
+            (false, true) => Base::None,
+            (false, false) => Base::Default,
+        };
+        Selection {
+            base,
             features: self.features.clone(),
         }
     }
 
+    /// What the flags select for tops whose tables name `named` in place
+    /// of the defaults, and whose tables leave the defaults on if
+    /// `default`: what those tops are built with together.
+    pub fn for_tops(&self, default: bool, named: &[String]) -> Selection {
+        let mut selection = self.selection();
+        if !default && selection.base == Base::Default {
+            selection.base = Base::None;
+        }
+        selection.features.extend(named.iter().cloned());
+        selection
+    }
+
     /// Whether the flags select anything other than the default.
     pub fn given(&self) -> bool {
-        !self.all_features || !self.features.is_empty()
+        self.no_features || self.all_features || !self.features.is_empty()
     }
 
     /// The flags, as a command that repeats the run gives them.
@@ -165,8 +185,11 @@ impl FeatureArgs {
         for feature in &self.features {
             args.extend(["--features".to_string(), feature.clone()]);
         }
-        if !self.all_features {
+        if self.no_features {
             args.push("--no-features".to_string());
+        }
+        if self.all_features {
+            args.push("--all-features".to_string());
         }
         args
     }

@@ -112,7 +112,7 @@ A test passes when its simulation exits with status 0: it reaches `$finish` with
 
 Each run starts in a directory of its own, `run/<seed>/` in the point's build directory, so what one writes, waveforms included, never overwrites another's. It is given `+astli_root=<path>`, the root of the test's package, to open its memory images and stimuli by, and a seed, `+verilator+seed+N`, which comes from the point's name unless `--seed` gives one, so a rerun is the same run. What follows `--` on the command line is passed to every run after these, as `astli run` passes it, and the same for every run. Its output is always kept in `output.log` there, and `astli clean` deletes it with the builds.
 
-A failure shows its output and where its log is, and the command that repeats it: with its seed and `--trace`, and every flag of the run that changes what is built or how it runs, `--release`, `--sim`, `-I`, `-D`, `-G`, `--features` and `--no-features`, and what followed `--`, quoted so that it can be pasted into a shell:
+A failure shows its output and where its log is, and the command that repeats it: with its seed and `--trace`, and every flag of the run that changes what is built or how it runs, `--release`, `--sim`, `-I`, `-D`, `-G`, `--features`, `--no-features` and `--all-features`, and what followed `--`, quoted so that it can be pasted into a shell:
 
 ```text
       Passed tb_ok in 0.2s

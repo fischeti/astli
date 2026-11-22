@@ -95,10 +95,11 @@ Configures elaboration roots, target-specific preprocessor defines, and paramete
 | `top` | `NAME` | The root module, interface, or program to elaborate from. |
 | `defines` | `{}` | Preprocessor macros defined for every file in the hierarchy, by name. A string or an integer is the macro's body; `true` defines it without one, as `-D NAME` does. |
 | `params` | `{}` | Parameters of the top module, by name. An integer is a number and a string is a SystemVerilog string. A parameter a test sweeps is set by each of its points, and naming it here is an error. |
+| `features` | `default` | The package's own [features](../features.md) the top is built with, in place of `default`. `--features` on the command line adds to them. |
 
 - **Top resolution**: Passing `--top NAME` selects the `[top.NAME]` table if defined, or falls back to resolving a module named `NAME`. `--top 'tb_fifo[Depth=16]'` selects a point of a [test](../testing.md#sweeping-parameters), under the test's table.
-- **Default tops**: If `--top` is omitted, `check` and `lint` elaborate from every table, and with `--tests` from every point of each test too; with `--top` and `--tests`, from the tops named and every point: tops with the same `defines` together, and the others apart, each under its own, and a finding several of them meet is reported once. `files`, `build`, `run` and `elab`, which describe one design, use `default-top` if specified in `[package]`, or the table if only one `[top.NAME]` exists, and otherwise ask for `--top`.
-- **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If tops named together by `--top` define one macro two ways, it is an error.
+- **Default tops**: If `--top` is omitted, `check` and `lint` elaborate from every table, and with `--tests` from every point of each test too; with `--top` and `--tests`, from the tops named and every point: tops with the same `defines` and `features` together, and the others apart, each under its own, and a finding several of them meet is reported once. `files`, `build`, `run` and `elab`, which describe one design, use `default-top` if specified in `[package]`, or the table if only one `[top.NAME]` exists, and otherwise ask for `--top`.
+- **Macro precedence**: Command-line `-D` flags override macros defined in manifest tables. If tops named together by `--top` define one macro two ways, it is an error. Their `features` are joined, with the defaults unless every table names its own.
 - **Parameters**: `check`, `lint` and `build` elaborate each top with its own `params`, so two tables can build the same module in different configurations, even in one run. `-G NAME=VALUE` on the command line sets a parameter of every top that declares it, over the tables, and fails only if none does. `astli files` writes no parameters, since a filelist has no form for them that every tool reads.
 - **Root-only**: Only `[top]` tables in the root manifest are evaluated; dependency tops are private to those dependencies.
 
@@ -139,7 +140,7 @@ Configures the `dev` profile, which `astli build` uses by default, and the `rele
 
 Defines optional or target-specific compilation configurations.
 
-The special `default` key lists features automatically enabled when another package imports this project without specifying features. Every other key defines a feature table:
+The special `default` key lists the features enabled when another package depends on this one without saying otherwise, and when a command runs in the package itself, unless a `[top.NAME]` table names its own. Every other key defines a feature table:
 
 | Key | Description |
 | :--- | :--- |

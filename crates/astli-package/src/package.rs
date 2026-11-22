@@ -382,6 +382,20 @@ impl Root {
                 false => test,
             },
         };
+        for (name, top) in &tables.tops {
+            let unknown = (top.features.iter().flatten())
+                .find(|feature| !package.manifest.features.contains_key(*feature));
+            if let Some(feature) = unknown {
+                return Err(Error::Manifest(
+                    path.to_path_buf(),
+                    format!(
+                        "{}: {} is not a feature of the package",
+                        mark::code(format!("top.{name}.features")),
+                        mark::name(feature)
+                    ),
+                ));
+            }
+        }
         // Checked now, as the package's own patterns are.
         for (name, description) in &tables.described {
             let key = format!("described.{name}.exclude");
