@@ -1,0 +1,26 @@
+[package]
+name = "astli-lsp"
+description = "The SystemVerilog language server's loop, its buffers and positions, for the astli driver"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+include = ["src/**/*"]
+
+[lints]
+workspace = true
+
+[dependencies]
+astli-text.workspace = true
+crossbeam-channel.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+expect-test.workspace = true

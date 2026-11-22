@@ -206,6 +206,7 @@ cargo run -- parse top.sv --quiet
 | `crates/astli-lint` | Syntactic and semantic lint rules |
 | `crates/astli-package` | Package discovery and `astli.toml` manifest parser |
 | `crates/astli-resolve` | Dependency resolution, version solver, and lockfile generation |
+| `crates/astli-lsp` | The language server's loop, behind `astli lsp` |
 | `crates/astli` | Top-level library re-exporting the library crates |
 | `crates/astli-cli` | The main command-line executable (`astli`) |
 | `docs/` | Internal architecture and planning documents |

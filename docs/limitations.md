@@ -829,3 +829,22 @@ changing leaves the build fresh. Such a path is also relative to the build
 directory, where the C++ compiler and linker run. **Revisit when** the
 manifest names C and C++ sources, include directories and libraries of its
 own (#313). **Where** `astli-cli/src/cmd/build.rs` (`named`)
+
+## Language server
+
+### A buffer is found by its path as spelled, not by the file
+
+An open buffer is held under its path made absolute and cleaned of `.` and
+`..`, and a read prefers it only under that spelling. A file reached through
+a symbolic link, or by a path that differs only in case on a filesystem that
+ignores case, reads from the disk while the client edits it. **Revisit when**
+a design reads one file through two such paths. **Where**
+`astli-lsp/src/buffers.rs` (`key`)
+
+### A lone `\r` does not end a line
+
+The protocol ends a line at `\n`, `\r\n` or `\r`; astli's line table, and so
+every position the server reads or writes, ends one at `\n` alone, as a
+diagnostic's line does. A file whose lines end in `\r` alone is one line to
+the server, and its positions disagree with the client's. **Revisit when** a
+real design ends its lines so. **Where** `astli-text/src/lines.rs`

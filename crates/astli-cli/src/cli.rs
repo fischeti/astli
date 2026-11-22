@@ -25,6 +25,7 @@ use crate::cmd::fmt::Fmt;
 use crate::cmd::init::Init;
 use crate::cmd::lex::Lex;
 use crate::cmd::lint::Lint;
+use crate::cmd::lsp::Lsp;
 use crate::cmd::parse::Parse;
 use crate::cmd::patch::Patch;
 use crate::cmd::path::Path;
@@ -98,6 +99,8 @@ pub enum Commands {
     #[usage(help_heading = "Dependencies", display_order = 21)]
     Bender(Bender),
     #[usage(display_order = 22)]
+    Lsp(Lsp),
+    #[usage(display_order = 23)]
     Completion(Completion),
     #[usage(hide)]
     Lex(Lex),

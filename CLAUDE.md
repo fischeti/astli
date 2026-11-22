@@ -45,9 +45,11 @@ formatter.
   HIR a tree lowers to, and what it means. `astli-lint` — lint rules over one
   file's tree, or a file of an elaborated design. `astli-package` — finding a package's root and reading its
   `astli.toml`. `astli-resolve` — fetching dependencies into the shared
-  cache, and choosing their versions. `astli` — the umbrella, re-exporting
-  each library crate as a module but `astli-package` and `astli-resolve`,
-  which serve the driver and promise others no API. `astli-cli` — the
+  cache, and choosing their versions. `astli-lsp` — the language server's
+  loop behind `astli lsp`: the protocol, the client's buffers, positions.
+  `astli` — the umbrella, re-exporting each library crate as a module but
+  `astli-package`, `astli-resolve` and `astli-lsp`, which serve the driver
+  and promise others no API. `astli-cli` — the
   driver, a binary named `astli`, one subcommand per stage. `astli-testing` —
   what the tests and examples share: the corpus walker, the snapshot loop,
   a temporary directory. A dev-dependency only, never published.
@@ -110,8 +112,8 @@ exception: prior art belongs in a design document.
 - Published on crates.io at 0.x, versioned three ways (D18 in
   `docs/plan.md`): the libraries the umbrella re-exports share one version,
   measured by their API; `astli-cli` has its own, measured by what its users
-  see; `astli-package` and `astli-resolve` each have their own and promise
-  no API. A breaking change is fine, and goes in the next minor version. Do
+  see; `astli-package`, `astli-resolve` and `astli-lsp` each have their own
+  and promise no API. A breaking change is fine, and goes in the next minor version. Do
   not add deprecation shims, compatibility aliases, or migration paths.
 - A `!` (`feat(fmt)!:` and so on) marks a break of the command: a flag or
   output that changes, a manifest or lock that no longer reads, a lint rule
