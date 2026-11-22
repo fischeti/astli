@@ -10,7 +10,9 @@
 //! included, in a `.types`; `tree/*.sv` elaborated from the
 //! definition called `top`, its instance tree in a `.tree`; `check_top/*.sv`
 //! checked as built from `top`, each error in a `.check`; `top/*.sv`, a top
-//! built as each of its `//>` lines asks, what it gives in a `.top`.
+//! built as each of its `//>` lines asks, what it gives in a `.top`;
+//! `sites/*.sv`, with the `.svh` beside it that it may include, what stands
+//! at each offset a `// ^` line marks in either, in a `.sites`.
 //!
 //! A case must parse whole, so that sema is tested on the tree it is for,
 //! except one named `unparsed*.sv`, for what the parser keeps as written;
@@ -32,15 +34,15 @@ use std::path::Path;
 use std::sync::Arc;
 
 use astli_parse::{Parsed, parse_expanded};
-use astli_preproc::Session;
+use astli_preproc::{Build, Session};
 use astli_sema::{
     BodyId, Built, Design, Driver, Elaboration, ExprId, ExprKind, Hir, Member, Resolution, ScopeId,
-    StmtKind, SymbolKind, SymbolRef, TopError, TopSetting, TopValue, accesses, check, check_built,
-    lower,
+    SiteKind, Sites, StmtKind, SymbolKind, SymbolRef, TopError, TopSetting, TopValue, accesses,
+    check, check_built, lower,
 };
 use astli_syntax::SyntaxKind::VERBATIM;
 use astli_testing::snapshots;
-use astli_text::Span;
+use astli_text::{Origins, Span};
 
 #[test]
 fn snapshots_lower() {
@@ -146,6 +148,153 @@ fn snapshots_top() {
         }
         out
     });
+}
+
+#[test]
+fn snapshots_sites() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/sites");
+    snapshots::check_with(&root, "sites", &["svh"], |name, text| {
+        let mut session = Session::new().building(Build::new().include_dir(&root));
+        let file = session.add(name, text);
+        let expanded = session.expand(file);
+        let parsed = parse_expanded(&session, &expanded.tokens);
+        assert!(
+            expanded.diagnostics.is_empty() && parsed.diagnostics.is_empty(),
+            "{name}: {:?}",
+            (expanded.diagnostics.iter().chain(&parsed.diagnostics)).collect::<Vec<_>>()
+        );
+        sited(session.origins(), &parsed)
+    });
+}
+
+/// What stands at each offset the case's `// ^` lines mark, in it and in
+/// the header it includes: each `^` marks the column below which it stands
+/// in the line above, the nearest that is no such line. A definition an
+/// instance names says the path to each body it has as built from `top`.
+fn sited(origins: &Origins, parsed: &Parsed) -> String {
+    let elaboration = elaborated(parsed);
+    let design = elaboration.design();
+    let (file, hir) = design.files().next().unwrap();
+    let sites = Sites::new(design, file, origins);
+    let top = elaboration.top("top").expect("a case has a `top`");
+    let built = Built::new(&elaboration, &[top]);
+    let place = |span: Span| {
+        let span = origins.spelled(span);
+        let path = origins.path(span.src_id).unwrap().file_name().unwrap();
+        let at = origins.line_col(span.src_id, span.start);
+        format!("{}:{at}", path.display())
+    };
+    let symbol = |at: Option<SymbolRef>| match at {
+        Some(at) => {
+            let symbol = design.symbol(at);
+            let (kind, name) = (kind(&symbol.kind), &symbol.name.text);
+            format!("{kind} {name} at {}", place(symbol.name.span))
+        }
+        None => "none".to_string(),
+    };
+    let resolution = |found: Resolution| match found {
+        Resolution::Declared(at) => symbol(Some(at)),
+        Resolution::Implicit(first) => format!("implicit net at {}", place(hir[first].span)),
+        Resolution::Unknown => "unknown".to_string(),
+        Resolution::Undeclared(_) => "undeclared".to_string(),
+    };
+    let said = |kind: SiteKind| match kind {
+        SiteKind::Use(_, found) => format!("use: {}", resolution(found)),
+        SiteKind::Declaration(at) => format!("declaration: {}", symbol(Some(at))),
+        SiteKind::Definition {
+            instance,
+            definition,
+        } => {
+            let bodies: Vec<&str> = (definition.into_iter())
+                .flat_map(|it| built.bodies(design, it))
+                .map(|frame| &*frame.path)
+                .collect();
+            let (instance, definition) = (&hir[instance].name.text, symbol(definition));
+            format!("definition of {instance}: {definition}, built as {bodies:?}")
+        }
+        SiteKind::Formal { instance, formal } => {
+            format!("formal of {}: {}", hir[instance].name.text, symbol(formal))
+        }
+        SiteKind::Positional { instance, formal } => {
+            format!(
+                "positional of {}: {}",
+                hir[instance].name.text,
+                symbol(formal)
+            )
+        }
+        SiteKind::Package(at) => format!("package: {}", symbol(at)),
+        SiteKind::Imported(found) => format!("imported: {}", resolution(found)),
+        SiteKind::Target(_, at) => format!("bind target: {}", symbol(at)),
+        SiteKind::Member { expr, scope } => {
+            let body = elaboration.body_at(file, scope);
+            match elaboration.member(body, expr) {
+                Some(it) => format!("member: {} at {}: {}", it.name, place(it.span), it.ty),
+                None => "member: none".to_string(),
+            }
+        }
+        SiteKind::Field => "field".to_string(),
+    };
+
+    let mut out = String::new();
+    let files = (origins.files())
+        .filter(|&it| (origins.path(it)).is_some_and(|path| path.extension().is_some()));
+    for src in files {
+        let mut above = None;
+        let mut start = 0;
+        for line in origins.text(src).split_inclusive('\n') {
+            let marks = line.trim_start().strip_prefix("//").is_some_and(|rest| {
+                rest.contains('^') && rest.trim_end().chars().all(|c| c == ' ' || c == '^')
+            });
+            let line_start = start;
+            start += line.len();
+            if !marks {
+                above = Some(line_start);
+                continue;
+            }
+            let code = above.expect("a mark has a line above it");
+            for (column, _) in line.char_indices().filter(|(_, c)| *c == '^') {
+                let offset = (code + column) as u32;
+                writeln!(out, "{}", place(Span::point(src, offset))).unwrap();
+                let found: Vec<_> = sites.at(src, offset).collect();
+                if found.is_empty() {
+                    writeln!(out, "  nothing").unwrap();
+                }
+                for site in found {
+                    let text = origins.slice(site.span);
+                    writeln!(out, "  {text}: {}", said(site.kind)).unwrap();
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A symbol's kind, as a snapshot says it.
+fn kind(kind: &SymbolKind) -> &'static str {
+    match kind {
+        SymbolKind::Definition { .. } => "definition",
+        SymbolKind::Class(_) => "class",
+        SymbolKind::Constraint(_) => "constraint",
+        SymbolKind::Port(_) => "port",
+        SymbolKind::Parameter(_) => "parameter",
+        SymbolKind::Net(_) => "net",
+        SymbolKind::Variable(_) => "variable",
+        SymbolKind::Genvar(_) => "genvar",
+        SymbolKind::Typedef(_) | SymbolKind::Forward => "typedef",
+        SymbolKind::EnumMember { .. } => "enum member",
+        SymbolKind::Subroutine { .. } => "subroutine",
+        SymbolKind::Property { .. } => "property",
+        SymbolKind::Let { .. } => "let",
+        SymbolKind::Modport(_) => "modport",
+        SymbolKind::Clocking(_) => "clocking",
+        SymbolKind::Covergroup(_) => "covergroup",
+        SymbolKind::Coverpoint(_) => "cover point",
+        SymbolKind::Iterator => "iterator",
+        SymbolKind::Instance(_) => "instance",
+        SymbolKind::Block(_) => "block",
+        SymbolKind::Label(_) => "label",
+        SymbolKind::Other(_) => "other",
+    }
 }
 
 /// Parameters of a top by name, each with a value read for it.
@@ -260,30 +409,7 @@ fn resolved(session: &Session, parsed: &Parsed) -> String {
         let what = match resolution {
             Resolution::Declared(symbol) => {
                 let symbol = design.symbol(symbol);
-                let kind = match &symbol.kind {
-                    SymbolKind::Definition { .. } => "definition",
-                    SymbolKind::Class(_) => "class",
-                    SymbolKind::Constraint(_) => "constraint",
-                    SymbolKind::Port(_) => "port",
-                    SymbolKind::Parameter(_) => "parameter",
-                    SymbolKind::Net(_) => "net",
-                    SymbolKind::Variable(_) => "variable",
-                    SymbolKind::Genvar(_) => "genvar",
-                    SymbolKind::Typedef(_) | SymbolKind::Forward => "typedef",
-                    SymbolKind::EnumMember { .. } => "enum member",
-                    SymbolKind::Subroutine { .. } => "subroutine",
-                    SymbolKind::Property { .. } => "property",
-                    SymbolKind::Let { .. } => "let",
-                    SymbolKind::Modport(_) => "modport",
-                    SymbolKind::Clocking(_) => "clocking",
-                    SymbolKind::Covergroup(_) => "covergroup",
-                    SymbolKind::Coverpoint(_) => "cover point",
-                    SymbolKind::Iterator => "iterator",
-                    SymbolKind::Instance(_) => "instance",
-                    SymbolKind::Block(_) => "block",
-                    SymbolKind::Label(_) => "label",
-                    SymbolKind::Other(_) => "other",
-                };
+                let kind = kind(&symbol.kind);
                 format!("{kind} {} at {}", symbol.name.text, at(symbol.name.span))
             }
             Resolution::Implicit(first) => format!("implicit net at {}", at(hir[first].span)),

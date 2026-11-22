@@ -474,7 +474,37 @@ impl Elaboration {
         bind::overrides(&self.design, at)
     }
 
+    /// The member of a struct or union that `expr`, an `a.b` written in
+    /// `body`, names, as the type of `a` there has it; `None` where `a` is
+    /// no struct or union sema knows, or has no member `b`.
+    pub fn member(&self, body: BodyId, expr: ExprId) -> Option<MemberTy> {
+        let hir = &self.design[self.scope(body).0];
+        let ExprKind::Member { base, name } = &hir[expr].kind else {
+            return None;
+        };
+        let ty = match self.expr_type(body, *base) {
+            Ty::Struct(ty)
+            | Ty::Packed(Packed {
+                shape: Shape::Struct(ty),
+                ..
+            }) => ty,
+            _ => return None,
+        };
+        (ty.members.iter())
+            .find(|member| member.name == name.text)
+            .cloned()
+    }
+
     // -------------------------------------------------------------- bodies
+
+    /// The body at its defaults that what `scope` of `file` holds is
+    /// evaluated in: the innermost definition's or package's around it, or
+    /// the file's top level.
+    pub fn body_at(&self, file: FileId, scope: ScopeId) -> BodyId {
+        let hir = &self.design[file];
+        let around = hir.enclosing(scope, ScopeKind::Definition);
+        self.default_body(file, around.unwrap_or(hir.root()))
+    }
 
     /// The file and the scope `body` gives values to.
     pub fn scope(&self, body: BodyId) -> (FileId, ScopeId) {
@@ -880,6 +910,7 @@ impl Elaboration {
         let members: Vec<MemberTy> = (fields.iter())
             .map(|field| MemberTy {
                 name: field.name.text.clone(),
+                file: cx.file,
                 span: field.name.span,
                 ty: self.resolve_type(cx, &field.ty),
             })

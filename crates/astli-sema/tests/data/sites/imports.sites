@@ -1,0 +1,12 @@
+imports.sv:8:10
+  pkg: package: definition pkg at imports.sv:3:9
+imports.sv:8:15
+  byte_t: imported: typedef byte_t at imports.sv:4:23
+imports.sv:10:15
+  missing: imported: undeclared
+imports.sv:12:10
+  pkg: package: definition pkg at imports.sv:3:9
+imports.sv:14:10
+  elsewhere: package: none
+imports.sv:16:3
+  byte_t: use: typedef byte_t at imports.sv:4:23

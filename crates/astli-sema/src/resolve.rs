@@ -73,6 +73,9 @@ pub struct Names {
     /// Where each name used above its declaration is written, and the
     /// declaration.
     early: Vec<(Span, SymbolId)>,
+    /// Each `a.b` left unresolved, a struct's member or a method of a value,
+    /// and the scope it stands in, whose body its type is found in.
+    members: Vec<(ExprId, ScopeId)>,
 }
 
 impl Names {
@@ -99,6 +102,11 @@ impl Names {
     /// What the `.*` written at `at` connects to each port left to it.
     pub fn wildcard(&self, at: Span) -> &[(SymbolRef, Resolution)] {
         self.wildcards.get(&at).map_or(&[], Vec::as_slice)
+    }
+
+    /// Each `a.b` that names no symbol, and the scope it stands in.
+    pub(crate) fn members(&self) -> &[(ExprId, ScopeId)] {
+        &self.members
     }
 }
 
@@ -213,6 +221,7 @@ impl<'d> Resolver<'d> {
                 loose: Vec::new(),
                 wildcards: FxHashMap::default(),
                 early: Vec::new(),
+                members: Vec::new(),
             },
         }
     }
@@ -888,8 +897,9 @@ impl<'d> Resolver<'d> {
             }
             ExprKind::Member { base, name } => {
                 self.expr_at(scope, *base, Place::Head);
-                if let Some(found) = self.hierarchical(*base, &name.text) {
-                    self.names.exprs[expr.index()] = Some(found);
+                match self.hierarchical(*base, &name.text) {
+                    Some(found) => self.names.exprs[expr.index()] = Some(found),
+                    None => self.names.members.push((expr, scope)),
                 }
             }
             ExprKind::Scoped { base, name } => self.scoped(scope, expr, *base, name),

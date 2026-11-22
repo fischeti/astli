@@ -101,7 +101,21 @@ impl Cases {
 /// Holds every `.sv` under `root` to the `.<extension>` beside it, which is
 /// what `render` makes of the case's name and text.
 pub fn check(root: &Path, extension: &str, render: impl Fn(&str, String) -> String) {
-    cases(root, &[extension]).run(&format!("not a case or a case's `.{extension}`"), |case| {
+    check_with(root, extension, &[], render);
+}
+
+/// [`check`], where a case may also have a file of each of `beside`'s
+/// extensions beside it, such as a header it includes.
+pub fn check_with(
+    root: &Path,
+    extension: &str,
+    beside: &[&str],
+    render: impl Fn(&str, String) -> String,
+) {
+    let allowed: Vec<&str> = std::iter::once(extension)
+        .chain(beside.iter().copied())
+        .collect();
+    cases(root, &allowed).run(&format!("not a case or a case's `.{extension}`"), |case| {
         let actual = render(&case.name, case.text());
         expect_file![case.path.with_extension(extension)].assert_eq(&actual);
     });
