@@ -82,6 +82,7 @@ Defines basic package identity and file discovery boundaries.
 | `include-dirs` | `["include"]` | Header search directories exported to downstream packages depending on this one. |
 | `exclude` | `[]` | Glob patterns of files to ignore (applied in addition to `.gitignore`). |
 | `dev` | `[]` | Glob patterns of internal files (such as testbenches) compiled only when working directly in this package, never by downstream dependents. They name files anywhere below the root, under `sources` or not; a pattern that matches no file is an error. |
+| `dev-features` | `[]` | [Features](../features.md#features-for-your-own-tests) enabled only when working directly in this package, never by dependents: one of its own by name, or a dependency's as `dep/feature`. `--no-features` leaves them on. |
 | `default-top` | *(optional)* | Default top module or `[top.NAME]` table that `files`, `build`, `run` and `elab` elaborate from when `--top` is omitted. `check` and `lint` check every table instead. |
 
 See [Packages](../packages.md) for details.

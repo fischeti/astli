@@ -57,6 +57,21 @@ features = ["asic"]          # the macros' wrappers, and not the models
 
 `astli fmt` and lint's per-file rules read every feature's files, whichever a design enables.
 
+### Features for your own tests
+
+Your testbenches may need what a dependent should only get by asking: test drivers you ship for other blocks' testbenches, or a library's VIP. Name them in `dev-features`, which only runs in your own package enable, whatever `--no-features` or a table selects:
+
+```toml
+[package]
+dev = ["test/**"]
+dev-features = ["test", "axi/vip"]   # your own feature, and a dependency's
+
+[features]
+test = { sources = ["src/mem_test.sv"] }   # still a dependent's to ask for
+```
+
+A package depending on yours never enables them.
+
 ### Configuring dependency features
 
 When you declare a dependency in `[dependencies]`, it automatically activates that dependency's `default` features. You can request additional features or turn off defaults:

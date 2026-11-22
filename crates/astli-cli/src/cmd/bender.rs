@@ -502,15 +502,19 @@ impl<'a> Targets<'a> {
     }
 
     /// The target under which `feature` builds: none for a default one,
-    /// since bender has no defaults and so builds them always.
+    /// since bender has no defaults and so builds them always, and its own
+    /// or `dev`'s for one of `dev-features`, which the package's own builds
+    /// enable.
     fn of_feature(&self, feature: &str) -> Option<String> {
-        (!self
-            .package
-            .manifest
-            .default_features
-            .iter()
-            .any(|it| it == feature))
-        .then(|| feature.to_string())
+        let manifest = &self.package.manifest;
+        if manifest.default_features.iter().any(|it| it == feature) {
+            return None;
+        }
+        let dev = (manifest.dev_features.iter()).any(|(it, of)| it == feature && of.is_none());
+        Some(match dev {
+            true => format!("any({feature}, {})", self.dev),
+            false => feature.to_string(),
+        })
     }
 
     /// The target under which any of `features` builds, or none if one of
@@ -571,6 +575,18 @@ impl<'a> Targets<'a> {
                     None => quoted(enabled),
                 });
             }
+        }
+        // One the requirement passes always needs no target.
+        let dev = (self.package.manifest.dev_features.iter())
+            .filter(|(it, _)| it == dependency)
+            .filter_map(|(_, enabled)| enabled.as_ref())
+            .filter(|enabled| !requirement.features.contains(enabled));
+        for enabled in dev {
+            passed.push(format!(
+                "{{ target: {}, pass: {} }}",
+                quoted(self.dev),
+                quoted(enabled)
+            ));
         }
         let mut seen = BTreeSet::new();
         passed.retain(|it| seen.insert(it.clone()));

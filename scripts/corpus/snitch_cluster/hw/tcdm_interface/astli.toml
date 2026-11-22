@@ -1,6 +1,8 @@
 [package]
 name = "tcdm_interface"
 dev = ["test/**"]
+# Its own testbenches use its test drivers.
+dev-features = ["test"]
 
 [dependencies]
 axi = { git = "https://github.com/colluca/axi.git", rev = "multicast" }

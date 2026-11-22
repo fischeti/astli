@@ -1335,21 +1335,32 @@ impl DependencyProvider for Provider<'_> {
                             None,
                         )?;
                     }
-                    for feature in root.manifest.features.values() {
-                        for (name, also) in &feature.dependencies {
-                            let requirement = &root.manifest.dependencies[name];
-                            let also = also.as_deref();
-                            self.require(
-                                state,
-                                &mut own,
-                                &asker,
-                                None,
-                                &base,
-                                name,
-                                requirement,
-                                also,
-                            )?;
-                        }
+                    // A dependency's feature its own runs enable, of either
+                    // table.
+                    let dev = (root.manifest.dev_features.iter())
+                        .filter(|(_, also)| also.is_some())
+                        .map(|(name, also)| {
+                            let requirement = (root.manifest.dependencies.get(name))
+                                .or_else(|| root.manifest.dev_dependencies.get(name))
+                                .expect("a dev feature's dependency is listed");
+                            (name, requirement, also.as_deref())
+                        });
+                    let brought = (root.manifest.features.values())
+                        .flat_map(|feature| &feature.dependencies)
+                        .map(|(name, also)| {
+                            (name, &root.manifest.dependencies[name], also.as_deref())
+                        });
+                    for (name, requirement, also) in brought.chain(dev) {
+                        self.require(
+                            state,
+                            &mut own,
+                            &asker,
+                            None,
+                            &base,
+                            name,
+                            requirement,
+                            also,
+                        )?;
                     }
                     for (node, range) in own {
                         if let (Node::Package(name), Some(asked)) = (&node, constraints.get(&node))
