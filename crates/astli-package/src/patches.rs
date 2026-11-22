@@ -14,7 +14,7 @@ use crate::{Error, mark};
 pub const LOCAL: &str = ".astli";
 
 /// The file in [`LOCAL`] that holds the patches.
-pub const PATCHES: &str = "patch.toml";
+pub(crate) const PATCHES: &str = "patch.toml";
 
 /// Each patched dependency's directory, by name, absolute.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
