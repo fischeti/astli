@@ -1,0 +1,20 @@
+uses.sv 9:10
+  9:10-9:18 -> uses.sv 4:9-4:17 `uses_pkg`
+uses.sv 9:20
+  9:20-9:25 -> uses.sv 5:18-5:23 `Width`
+uses.sv 9:31
+  9:31-9:36 -> uses.sv 9:31-9:36 `count`
+uses.sv 11:23
+  11:23-11:26 -> uses.sv 8:26-8:29 `clk`
+uses.sv 11:37
+  11:37-11:42 -> uses.sv 9:31-9:36 `count`
+uses.sv 14:16
+  14:16-14:20 -> uses.sv 13:10-13:14 `flag`
+uses.sv 14:23
+  nothing
+uses.sv 17:21
+  17:20-17:23 -> uses.sv 14:10-14:13 `sum`
+uses.sv 17:27
+  17:26-17:31 -> uses.sv 9:31-9:36 `count`
+uses.sv 25:12
+  nothing

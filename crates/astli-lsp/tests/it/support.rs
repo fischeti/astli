@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use astli_fmt::Options;
 use astli_index::{Index, Summary};
 use astli_lint::Config;
-use astli_lsp::{Analysed, At, Ended, Host, Place, Problem, Snapshot, Unit, Watched};
+use astli_lsp::{Analysed, At, Ended, Host, Memo, Place, Problem, Snapshot, Unit, Watched};
 use astli_parse::parse_expanded;
 use astli_preproc::{Build, Session};
 use astli_sema::{Design, Elaboration, FileId, lower};
@@ -192,6 +192,7 @@ fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Sna
             linted: true,
             calls,
             skipped,
+            memo: Memo::default(),
         })
         .collect();
     let holds = |what: &str| texts.iter().any(|(_, text)| text.contains(what));

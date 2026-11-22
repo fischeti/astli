@@ -266,6 +266,7 @@ impl Server {
                 self.shut_down = true;
                 self.answer(id, Ok(()));
             }
+            "textDocument/definition" => self.definition(id, params),
             "textDocument/documentSymbol" => {
                 self.reply(id, &method, params, Server::document_symbols);
             }

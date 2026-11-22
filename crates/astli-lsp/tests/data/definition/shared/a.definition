@@ -1,0 +1,7 @@
+a.sv 8:3
+  8:3-8:11 -> shared/b.sv 5:8-5:16 `shared_b`
+a.svh 1:16
+  1:16-1:21 -> shared/a.sv 4:16-4:21 `Width`
+  1:16-1:21 -> shared/b.sv 2:16-2:21 `Width`
+a.svh 1:27
+  1:27-1:33 -> shared/a.svh 1:27-1:33 `word_t`

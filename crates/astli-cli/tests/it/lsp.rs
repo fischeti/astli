@@ -287,6 +287,44 @@ fn a_package_loads_on_one_thread() {
 }
 
 #[test]
+fn a_definition_a_macro_and_an_include_lead_to_the_files_that_hold_them() {
+    let fixture = Fixture::new("lsp-definition");
+    fixture.file(
+        "astli.toml",
+        "[package]\nname = 'defs'\ninclude-dirs = ['include']\n",
+    );
+    let header = fixture.file("include/defs.svh", "`define ONE 1'b1\n");
+    let top =
+        "`include \"defs.svh\"\nmodule top;\n  leaf u_leaf ();\n  wire w = `ONE;\nendmodule\n";
+    let top = fixture.file("top.sv", top);
+    let leaf = fixture.file("leaf.sv", "module leaf;\nendmodule\n");
+    let mut server = Server::start(&fixture, &["lsp"], json!({}));
+    server.open(&top);
+    server.loaded(&top);
+    let mut ask = |line: u64, character: u64| {
+        let id = server.next;
+        server.next += 1;
+        let position = json!({ "line": line, "character": character });
+        let params = json!({ "textDocument": { "uri": uri(&top) }, "position": position });
+        server.send(&[json!({ "jsonrpc": "2.0", "id": id,
+                              "method": "textDocument/definition", "params": params })]);
+        let answer = server.next(|it| it["id"] == id && it.get("method").is_none());
+        let found = answer["result"].as_array().expect("locations").clone();
+        let found: Vec<(String, (u64, u64))> = (found.iter())
+            .map(|it| (it["uri"].as_str().unwrap().to_string(), start(it)))
+            .collect();
+        found
+    };
+    // The instance's definition goes to the file that declares it, the
+    // macro call to the name its `define defines, and the `include to the
+    // header it read.
+    assert_eq!(ask(2, 3), [(uri(&leaf), (0, 7))]);
+    assert_eq!(ask(3, 12), [(uri(&header), (0, 8))]);
+    assert_eq!(ask(0, 2), [(uri(&header), (0, 0))]);
+    server.finish();
+}
+
+#[test]
 fn what_check_and_lint_find_is_published_for_an_open_file() {
     let fixture = Fixture::new("lsp-diagnostics");
     fixture.file("astli.toml", "");

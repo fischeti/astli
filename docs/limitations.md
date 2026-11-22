@@ -945,6 +945,39 @@ problem at the file it names, as a name declared twice is. **Where**
 `astli-cli/src/host.rs` (`analysed`), beside `listing::foreign_binds` and
 `Listing::misfound`
 
+### A macro call in another call's argument is not found from a cursor
+
+A unit's expansion lists the calls its files write outside any other call,
+and the lookup finds the call under the cursor among them. A call written
+in another call's argument, as the inner one of `` `MIN(`MIN(a, b), c) ``,
+is placed by the call around it, so its name leads nowhere: definition does
+not reach its `` `define ``. The names its arguments give are found where
+they are spelled, as any other. **Revisit when** a reader asks for one:
+the origins hold every expansion, and the one whose call is spelled at the
+cursor could be found among them. **Where** `astli-lsp/src/cursor.rs`
+(`Cursor::here`)
+
+### A `` `define ``'s name goes nowhere
+
+A declaration under the cursor answers definition with itself, but a
+macro's name in its `` `define `` answers nothing: the lookup finds a
+macro by its calls, and a `define` is no name the HIR holds. **Revisit
+when** references are built, which needs every call of a macro from its
+`` `define `` anyway: the calls whose expansion read that directive are
+what both would answer. **Where** `astli-lsp/src/definition.rs`
+(`targets`)
+
+### A place in another file edited since the load is placed in the text the load read
+
+Definition answers only where the text its snapshot read of the cursor's
+file is the buffer's ([L26](lsp.md#decisions)), but a place it leads to in
+another open file is counted in the text the snapshot read of that file,
+which an edit since may have moved. That edit has made the design due, so
+the answer is right again once it loads. **Revisit when** it misleads: the
+places in an open file whose text differs could be left out, or mapped
+through the edits since. **Where** `astli-lsp/src/cursor.rs`
+(`Cursor::location`)
+
 ### A lone `\r` does not end a line
 
 The protocol ends a line at `\n`, `\r\n` or `\r`; astli's line table, and so

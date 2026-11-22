@@ -95,6 +95,14 @@ impl Buffers {
         self.0.get(&key(path))
     }
 
+    /// The URI each open file was opened with, by path, for work off the
+    /// loop that names an open file as the client knows it.
+    pub fn uris(&self) -> HashMap<PathBuf, Uri> {
+        (self.0.iter())
+            .map(|(path, buffer)| (path.clone(), buffer.uri.clone()))
+            .collect()
+    }
+
     /// The text of every buffer as it is now, for a load that reads them
     /// while the loop goes on taking edits.
     pub fn texts(&self) -> Texts {
