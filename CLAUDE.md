@@ -67,6 +67,9 @@ formatter.
   real `bender` build, or with `--files` what `files` selects.
   `scripts/check-mutants.py` scores `check` on the benchmarks with
   realistic mistakes injected, against what `slang` rejects.
+  `scripts/lsp-rebuild.py` times `astli lsp` loading a design, and loading
+  it again after an edit to a unit and to a header, and what it keeps
+  resident.
 - `scripts/codspeed/` — the performance benchmarks, whole `astli` runs over
   the EDA benchmark designs: `main.yml`, which CodSpeed measures on every
   push to `main`, and `pr.yml`, the few of them it measures on a pull
