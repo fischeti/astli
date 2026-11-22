@@ -71,6 +71,7 @@
 //! ```
 
 mod buffers;
+mod diagnostics;
 mod folding;
 mod formatting;
 mod position;

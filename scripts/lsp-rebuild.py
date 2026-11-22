@@ -11,7 +11,8 @@ Each run starts a server, opens the unit and waits for its design to load,
 then edits the unit `--edits` times, opens the header and edits it as often,
 each edit appending a comment and waiting for the load after it. A load's
 time is what the server logs it took, which leaves out the wait for edits to
-settle; the units lowered are what it logs too.
+settle; the units lowered are what it logs too, and so is how long finding
+the open files' diagnostics took after it, the last column.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ import time
 from pathlib import Path
 
 LOADED = re.compile(r"^loaded .*: (\d+) units, (\d+) lowered, in (\d+) ms$")
+CHECKED = re.compile(r"^checked .*: \d+ units, in (\d+) ms$")
 
 
 class Server:
@@ -76,13 +78,17 @@ class Server:
     def notify(self, method: str, params: dict | None) -> None:
         self.send({"method": method, "params": params})
 
-    def loaded(self) -> tuple[int, int, int]:
-        """The next load's units, units lowered and milliseconds."""
+    def loaded(self) -> tuple[int, int, int, int]:
+        """The next load's units, units lowered and milliseconds, and the
+        milliseconds finding the open files' diagnostics took after it."""
         while True:
             said = self.logged.get(timeout=300)
             if match := LOADED.match(said):
                 units, lowered, took = (int(it) for it in match.groups())
-                return units, lowered, took
+                # Logged right after the load, when it checked a unit.
+                said = self.logged.get(timeout=300)
+                checked = CHECKED.match(said)
+                return units, lowered, took, int(checked[1]) if checked else 0
             if "panicked" in said:
                 sys.exit(f"the server says: {said}")
 
@@ -127,7 +133,7 @@ def main() -> int:
     args = parser.parse_args()
     binary, root = args.binary.resolve(), args.root.resolve()
 
-    steps: dict[str, list[tuple[int, int, int]]] = {}
+    steps: dict[str, list[tuple[int, int, int, int]]] = {}
     rss: dict[str, list[int]] = {}
     for _ in range(args.runs):
         server = Server(binary, root)
@@ -152,15 +158,19 @@ def main() -> int:
         rss.setdefault("after the edits", []).append(server.rss())
         server.stop()
 
-    print(f"{'step':<14} {'units':>6} {'lowered':>8} {'ms':>6} {'range':>12}")
+    print(
+        f"{'step':<14} {'units':>6} {'lowered':>8} {'ms':>6} {'range':>12} {'checked':>8}"
+    )
     for step, loads in steps.items():
         units = statistics.median(it[0] for it in loads)
         lowered = sorted({it[1] for it in loads})
         took = [it[2] for it in loads]
         span = f"{min(took)}-{max(took)}"
         said = "/".join(map(str, lowered))
+        checked = statistics.median(it[3] for it in loads)
         print(
             f"{step:<14} {units:>6.0f} {said:>8} {statistics.median(took):>6.0f} {span:>12}"
+            f" {checked:>8.0f}"
         )
     for when, sizes in rss.items():
         print(

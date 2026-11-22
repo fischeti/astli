@@ -1,19 +1,22 @@
 //! A client, and the host the server it starts asks: one that reads a few
 //! files of a design back through the reader it is given and tells the test
-//! what it read, and lays a file out as the test says, or analyses the
-//! files it read as a design.
+//! what it read, lowers them into a design if the test asks, and lays a
+//! file out as the test says.
 
 use std::collections::HashMap;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use astli_fmt::Options;
-use astli_lsp::{Analysed, Ended, Host, Snapshot, Unit, Watched};
-use astli_preproc::Session;
-use astli_sema::{Design, Elaboration};
-use astli_text::Reader;
+use astli_index::{Index, Summary};
+use astli_lint::Config;
+use astli_lsp::{Analysed, At, Ended, Host, Place, Problem, Snapshot, Unit, Watched};
+use astli_parse::parse_expanded;
+use astli_preproc::{Build, Session};
+use astli_sema::{Design, Elaboration, FileId, lower};
+use astli_text::{Origins, Reader, Severity, clean};
 use crossbeam_channel::{Receiver, Sender};
 use lsp_server::{Connection, Message, Notification, Request, RequestId, Response, ResponseError};
 use serde_json::{Value, json};
@@ -52,10 +55,11 @@ pub type Layout = Box<dyn Fn(&Path) -> Result<Option<Options>, String> + Send + 
 /// releases it. When one holds `scoped`, the load waits for jobs it spawns
 /// on the pool, as the driver's does.
 ///
-/// With `analyse`, the snapshot holds one design, each file it read a unit.
+/// With `designs`, each `.sv` it read is a unit of one design, lowered as
+/// [`designed`] lowers it; without, its snapshots hold no design.
 struct Files {
     names: Vec<String>,
-    analyse: bool,
+    designs: bool,
     layout: Layout,
     loads: Sender<Load>,
     held: Sender<()>,
@@ -102,9 +106,16 @@ impl Host for Files {
         if holds("scoped") {
             scoped();
         }
-        let designs = match self.analyse {
-            true => vec![analysed(root, &texts)],
-            false => Vec::new(),
+        let snapshot = match self.designs {
+            true => designed(root, &texts, reader),
+            false => Snapshot {
+                root: root.to_path_buf(),
+                designs: Vec::new(),
+                problems: Vec::new(),
+                lowered: 0,
+                lacks_dependencies: false,
+                levels: HashMap::new(),
+            },
         };
         let load = Load {
             root: root.to_path_buf(),
@@ -123,14 +134,7 @@ impl Host for Files {
             }
             return None;
         }
-        Some(Snapshot {
-            root: root.to_path_buf(),
-            designs,
-            problems: Vec::new(),
-            lowered: 0,
-            lacks_dependencies: false,
-            levels: HashMap::new(),
-        })
+        Some(snapshot)
     }
 
     fn forget(&self, root: &Path) {
@@ -145,52 +149,106 @@ impl Host for Files {
     }
 }
 
-/// The design of the files `texts` names in `root`, each a unit of its own.
-fn analysed(root: &Path, texts: &[(String, String)]) -> Analysed {
-    let mut lowered = Vec::new();
-    let (mut summaries, mut origins) = (Vec::new(), Vec::new());
-    for (name, text) in texts {
-        let mut session = Session::new();
-        let file = session.add(clean(&root.join(name)), text.clone());
+/// `texts`, the files a load of the design at `root` read, by name, as one
+/// design: each `.sv` a unit, which searches `root` for what it includes
+/// through `reader`, every unit reported, and every file read linted at
+/// the default levels.
+///
+/// A text holding `unfetched` makes the design one read without its
+/// dependencies, which a problem at its manifest says; one holding
+/// `placeless` adds a problem in no file; one holding `twice` adds a
+/// problem at the line of its file that holds it, as a name declared twice
+/// is placed. A unit whose text holds `unsound` has origins that hold none
+/// of its text, so that placing what is found in it panics.
+fn designed(root: &Path, texts: &[(String, String)], reader: &dyn Reader) -> Snapshot {
+    let (mut hirs, mut summaries, mut lowered) = (Vec::new(), Vec::new(), Vec::new());
+    for (name, text) in texts.iter().filter(|(name, _)| name.ends_with(".sv")) {
+        let path = clean(&root.join(name));
+        let build = Build::new().include_dir(root);
+        let mut session = Session::reading(reader).building(build);
+        let file = session.add(&path, text.clone());
         let expanded = session.expand(file);
-        let parsed = astli_parse::parse_expanded(&session, &expanded.tokens);
-        lowered.push(Arc::new(astli_sema::lower(&parsed)));
-        summaries.push(astli_index::Summary::new(session.origins(), file, &parsed));
-        origins.push(Arc::new(session.into_origins()));
+        let parsed = parse_expanded(&session, &expanded.tokens);
+        let mut found = expanded.diagnostics;
+        found.extend(parsed.diagnostics.iter().cloned());
+        hirs.push(Arc::new(lower(&parsed)));
+        summaries.push(Summary::new(session.origins(), file, &parsed));
+        let origins = match text.contains("unsound") {
+            true => Origins::new(),
+            false => session.into_origins(),
+        };
+        lowered.push((path, Arc::new(origins), found));
     }
-    let elaboration = Elaboration::new(Arc::new(Design::new(lowered)));
-    let files = elaboration.design().files().map(|(file, _)| file);
-    let units = (texts.iter().zip(files).zip(origins))
-        .map(|(((name, _), file), origins)| Unit {
-            path: clean(&root.join(name)),
+    let elaboration = Elaboration::new(Arc::new(Design::new(hirs)));
+    let files: Vec<FileId> = elaboration.design().files().map(|(file, _)| file).collect();
+    let units: Vec<Unit> = (lowered.into_iter().zip(files))
+        .map(|((path, origins, parsed), file)| Unit {
+            path,
             file,
             origins,
-            parsed: Vec::new(),
-            checked: false,
-            linted: false,
+            parsed,
+            checked: true,
+            linted: true,
         })
         .collect();
-    Analysed {
-        index: astli_index::Index::new(summaries),
-        elaboration,
-        units,
-        tops: Vec::new(),
+    let holds = |what: &str| texts.iter().any(|(_, text)| text.contains(what));
+    let mut problems = Vec::new();
+    if holds("unfetched") {
+        problems.push(Problem {
+            severity: Severity::Error,
+            message: "`ip` is not fetched".to_string(),
+            notes: vec!["the package is read without its dependencies".to_string()],
+            help: vec!["`astli fetch` fetches it".to_string()],
+            at: Some(At {
+                code: "unfetched".to_string(),
+                path: root.join("astli.toml"),
+                place: Place::Line(1),
+                label: Some("required here".to_string()),
+            }),
+        });
     }
-}
-
-/// `path` without its `.` and `..`, as the driver names a file.
-fn clean(path: &Path) -> PathBuf {
-    let mut cleaned = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                cleaned.pop();
-            }
-            component => cleaned.push(component),
-        }
+    for (name, text) in texts {
+        let Some(line) = text.lines().position(|it| it.contains("twice")) else {
+            continue;
+        };
+        problems.push(Problem {
+            severity: Severity::Error,
+            message: "a name declared twice".to_string(),
+            notes: Vec::new(),
+            help: Vec::new(),
+            at: Some(At {
+                code: "declared-twice".to_string(),
+                path: clean(&root.join(name)),
+                place: Place::Line(line + 1),
+                label: None,
+            }),
+        });
     }
-    cleaned
+    if holds("placeless") {
+        problems.push(Problem {
+            severity: Severity::Warning,
+            message: "a problem in no file".to_string(),
+            notes: Vec::new(),
+            help: Vec::new(),
+            at: None,
+        });
+    }
+    let levels = Arc::new(Config::default());
+    Snapshot {
+        root: root.to_path_buf(),
+        lowered: units.len(),
+        designs: vec![Analysed {
+            elaboration,
+            index: Index::new(summaries),
+            units,
+            tops: Vec::new(),
+        }],
+        problems,
+        lacks_dependencies: holds("unfetched"),
+        levels: (texts.iter())
+            .map(|(name, _)| (clean(&root.join(name)), levels.clone()))
+            .collect(),
+    }
 }
 
 /// Spawns two jobs on the pool and waits on a channel for both, as the
@@ -228,6 +286,32 @@ pub struct Client {
     /// Each request the server sent, by method and params, each answered
     /// with `null`.
     pub asked: Vec<(String, Value)>,
+    /// What the server published, in order, but what a test took with
+    /// [`Client::published`].
+    pub published: Vec<Published>,
+}
+
+/// What a server published for a file.
+#[derive(Debug, Clone)]
+pub struct Published {
+    pub uri: String,
+    pub version: Option<i64>,
+    pub diagnostics: Vec<Value>,
+}
+
+impl Published {
+    /// The codes of its diagnostics, in order.
+    pub fn codes(&self) -> Vec<&str> {
+        (self.diagnostics.iter())
+            .map(|it| it["code"].as_str().unwrap_or_default())
+            .collect()
+    }
+
+    /// The diagnostic with `code`, which it has.
+    pub fn with(&self, code: &str) -> &Value {
+        let found = self.diagnostics.iter().find(|it| it["code"] == code);
+        found.unwrap_or_else(|| panic!("no `{code}` in {:#?}", self.diagnostics))
+    }
 }
 
 impl Client {
@@ -239,12 +323,12 @@ impl Client {
         Client::initialize_with(names, false, layout, capabilities)
     }
 
-    /// Starts a server whose host reads `names` of a design and analyses
-    /// them, and completes the handshake in UTF-8 if `utf8`, or else in
-    /// UTF-16.
-    pub fn analysing(names: &[&str], utf8: bool) -> Client {
+    /// Starts a server whose host lowers the `.sv` files of `names` into a
+    /// design, as [`designed`] does, and sends `initialize` with
+    /// `capabilities`.
+    pub fn designing(names: &[&str], capabilities: Value) -> Client {
         let layout: Layout = Box::new(|_| Ok(Some(Options::default())));
-        Client::initialize_with(names, true, layout, offered(utf8)).0
+        Client::initialize_with(names, true, layout, capabilities).0
     }
 
     /// Starts a server whose host reads no file of a design and lays each
@@ -256,7 +340,7 @@ impl Client {
 
     fn initialize_with(
         names: &[&str],
-        analyse: bool,
+        designs: bool,
         layout: Layout,
         capabilities: Value,
     ) -> (Client, Value) {
@@ -267,7 +351,7 @@ impl Client {
         let (forgetting, forgot) = crossbeam_channel::unbounded();
         let host = Files {
             names: names.iter().map(|it| it.to_string()).collect(),
-            analyse,
+            designs,
             layout,
             loads: sender,
             held: holding,
@@ -286,6 +370,7 @@ impl Client {
             logs: Vec::new(),
             shown: Vec::new(),
             asked: Vec::new(),
+            published: Vec::new(),
         };
         let params = json!({ "processId": null, "rootUri": null, "capabilities": capabilities });
         let result = client.request("initialize", params).expect("initialized");
@@ -326,13 +411,23 @@ impl Client {
     }
 
     /// Takes the next message from the server: a response, handed back, or
-    /// a log, a message shown or a request, kept.
+    /// a log, a message shown, a publish or a request, kept.
     fn receive(&mut self) -> Option<Response> {
         let message = (self.connection.receiver)
             .recv_timeout(PATIENCE)
             .expect("a message from the server");
         match message {
             Message::Response(response) => return Some(response),
+            Message::Notification(notification)
+                if notification.method == "textDocument/publishDiagnostics" =>
+            {
+                let params = notification.params;
+                self.published.push(Published {
+                    uri: params["uri"].as_str().expect("a uri").to_string(),
+                    version: params["version"].as_i64(),
+                    diagnostics: params["diagnostics"].as_array().expect("a list").clone(),
+                });
+            }
             Message::Notification(notification) => {
                 let message = notification.params["message"].as_str().expect("a message");
                 let kept = match notification.method.as_str() {
@@ -361,6 +456,36 @@ impl Client {
                 panic!("an answer to nothing asked: {response:?}");
             }
         }
+    }
+
+    /// Waits for the server to publish for `uri` what `said` takes, and
+    /// takes it and every publish for `uri` before it.
+    pub fn published(&mut self, uri: &str, said: impl Fn(&Published) -> bool) -> Published {
+        loop {
+            let found = (self.published.iter()).position(|it| it.uri == uri && said(it));
+            if let Some(at) = found {
+                let taken = self.published.remove(at);
+                let mut index = 0;
+                self.published.retain(|it| {
+                    index += 1;
+                    index > at || it.uri != uri
+                });
+                return taken;
+            }
+            if let Some(response) = self.receive() {
+                panic!("an answer to nothing asked: {response:?}");
+            }
+        }
+    }
+
+    /// The last publish for `uri` the server sent before it answers a
+    /// request sent now, taking every publish for `uri` so far.
+    pub fn latest(&mut self, uri: &str) -> Option<Published> {
+        let _ = self.request("astli/unknown", Value::Null);
+        let last = (self.published.iter()).rposition(|it| it.uri == uri);
+        let last = last.map(|at| self.published[at].clone());
+        self.published.retain(|it| it.uri != uri);
+        last
     }
 
     /// Waits for the next load the host starts.
@@ -421,6 +546,14 @@ impl Client {
     pub fn replace(&self, uri: &str, text: &str) {
         let document = json!({ "uri": uri, "version": 2 });
         let params = json!({ "textDocument": document, "contentChanges": [{ "text": text }] });
+        self.notify("textDocument/didChange", params);
+    }
+
+    /// Applies `changes`, a list of the protocol's change events, to `uri`,
+    /// which they make `version`.
+    pub fn change(&self, uri: &str, version: i32, changes: Value) {
+        let document = json!({ "uri": uri, "version": version });
+        let params = json!({ "textDocument": document, "contentChanges": changes });
         self.notify("textDocument/didChange", params);
     }
 

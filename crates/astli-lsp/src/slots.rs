@@ -7,6 +7,10 @@
 //! edit bumps the generation of every design that reads the file, at once,
 //! so that a load running sees it at its next unit and stops; another is
 //! made once the edits settle.
+//!
+//! Once its snapshot is made, a load finds on its own thread what the design
+//! says of the files open when it started, and places its problems, so that
+//! the loop only swaps them in.
 
 use std::collections::HashSet;
 use std::io;
@@ -20,8 +24,9 @@ use astli_text::Reader;
 use crossbeam_channel::Sender;
 
 use crate::buffers::{Buffers, Texts, key};
+use crate::diagnostics::{self, ByPath, Found, Shape};
 use crate::tasks::panic_message;
-use crate::{Host, Snapshot};
+use crate::{Host, Problem, Snapshot};
 
 /// How long a design waits after an edit to what it reads before it is
 /// loaded again: a little longer than the pause between keys of someone
@@ -60,6 +65,11 @@ pub struct Slot {
     running: Option<(u64, Read)>,
     /// How long the load of `current` took.
     pub took: Duration,
+    /// The problems of that load that have a place, by their file.
+    pub problems: ByPath,
+    /// Those that have none, which the user was told of when a load first
+    /// found them.
+    pub placeless: Vec<Problem>,
 }
 
 /// A load, done: what it made, or the panic it ended in.
@@ -67,7 +77,7 @@ pub struct Loaded {
     pub root: PathBuf,
     started: u64,
     discover: bool,
-    outcome: std::thread::Result<Option<Snapshot>>,
+    outcome: std::thread::Result<Option<(Snapshot, Found)>>,
     texts: Texts,
     read: Read,
     took: Duration,
@@ -84,6 +94,8 @@ impl Slot {
             due: None,
             running: None,
             took: Duration::ZERO,
+            problems: ByPath::new(),
+            placeless: Vec::new(),
         }
     }
 
@@ -112,8 +124,9 @@ impl Slot {
     }
 
     /// Loads the design at `root` on a thread of its own, reading `texts`
-    /// before the disk, and sends what it made on `loads`, or the panic it
-    /// ended in.
+    /// before the disk, then finds what it says of the files `open` and
+    /// places its problems as `shape` says, and sends what it made on
+    /// `loads`, or the panic it ended in.
     ///
     /// Not on the pool: a load waits for the units it spreads over the
     /// pool, and a pool thread that waited would hold one they need, or
@@ -122,6 +135,8 @@ impl Slot {
         &mut self,
         root: &Path,
         texts: Texts,
+        open: Vec<PathBuf>,
+        shape: Shape,
         host: &Arc<dyn Host>,
         loads: &Sender<Loaded>,
     ) {
@@ -140,8 +155,14 @@ impl Slot {
                 read: &read,
             };
             let overtaken = || generation.load(Ordering::SeqCst) != started;
+            // What the load took, which the log says, apart from what
+            // finding the diagnostics took.
+            let mut took = None;
             let outcome = catch_unwind(AssertUnwindSafe(|| {
-                host.load(&root, &reader, discover, &overtaken)
+                let snapshot = host.load(&root, &reader, discover, &overtaken)?;
+                took = Some(begun.elapsed());
+                let found = diagnostics::found(&snapshot, &open, &texts, shape, &overtaken)?;
+                Some((snapshot, found))
             }));
             let _ = loads.send(Loaded {
                 root,
@@ -150,26 +171,31 @@ impl Slot {
                 outcome,
                 texts,
                 read,
-                took: begun.elapsed(),
+                took: took.unwrap_or_else(|| begun.elapsed()),
             });
         });
         spawned.expect("a thread to load on");
     }
 
     /// Takes the snapshot `loaded` made as the design's current one, unless
-    /// an edit overtook it, and hands it back; `Err` with what a load that
-    /// panicked said. What is replaced is dropped off the loop. A load not
-    /// taken may have discovered the package for none that is, so the next
-    /// discovers again.
+    /// an edit overtook it, and hands it back with what the load found;
+    /// `Err` with what a load that panicked said. What is replaced is
+    /// dropped off the loop. A load not taken may have discovered the
+    /// package for none that is, so the next discovers again.
     ///
     /// A buffer `buffers` holds otherwise than the load read it was edited
     /// before the load reached it, which overtakes nothing: the snapshot is
     /// still taken, as the nearest there is, and the design loaded again.
+    /// What the design says of that file is dropped from what is handed
+    /// back, since it places what it finds in text the buffer no longer
+    /// holds, and so are the load's problems placed there, in place of
+    /// which the file keeps those the last load placed, as each change
+    /// since clipped them.
     pub fn swap(
         &mut self,
         loaded: Loaded,
         buffers: &Buffers,
-    ) -> Result<Option<Arc<Snapshot>>, String> {
+    ) -> Result<Option<(Arc<Snapshot>, Found)>, String> {
         let Loaded {
             started,
             discover,
@@ -183,8 +209,8 @@ impl Slot {
             self.running = None;
         }
         let current = self.generation.load(Ordering::SeqCst) == started;
-        let snapshot = match outcome {
-            Ok(Some(snapshot)) if current => snapshot,
+        let (snapshot, mut found) = match outcome {
+            Ok(Some(made)) if current => made,
             Ok(overtaken) => {
                 self.discover |= discover;
                 drop_later((overtaken, texts));
@@ -202,6 +228,26 @@ impl Slot {
                 (Some(was), Some(is)) => !Arc::ptr_eq(was, &is.text),
                 (was, is) => was.is_some() != is.is_some(),
             });
+        // Whether what the load placed in the file at `path` is placed in
+        // its text as it is now: the buffer's, or, for a file open neither
+        // then nor now, the disk's.
+        let current = |path: &Path| match (texts.get(path), buffers.get(path)) {
+            (Some(was), Some(is)) => Arc::ptr_eq(was, &is.text),
+            (None, None) => true,
+            _ => false,
+        };
+        (found.design).retain(|path, _| current(path));
+        let moved: Vec<PathBuf> = (found.problems.keys())
+            .chain(self.problems.keys())
+            .filter(|path| !current(path))
+            .cloned()
+            .collect();
+        for path in moved {
+            match self.problems.get(&path) {
+                Some(had) => found.problems.insert(path, had.clone()),
+                None => found.problems.remove(&path),
+            };
+        }
         let snapshot = Arc::new(snapshot);
         let replaced = self.current.replace(snapshot.clone());
         self.read = read;
@@ -210,7 +256,7 @@ impl Slot {
             self.stale(Instant::now());
         }
         drop_later((replaced, texts));
-        Ok(Some(snapshot))
+        Ok(Some((snapshot, found)))
     }
 }
 

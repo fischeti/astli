@@ -1,4 +1,4 @@
-//! Workspace symbols, asked of designs the support host analyses from small
+//! Workspace symbols, asked of designs the support host lowers from small
 //! sources once each has loaded.
 //!
 //! A symbol is written as its name, its kind, the file's name and its
@@ -51,7 +51,7 @@ fn written(symbols: &[WorkspaceSymbol]) -> Vec<String> {
 /// A server whose designs read `a.sv`, with `uri` opened holding `text`
 /// and loaded.
 fn opened(uri: &str, text: &str) -> Client {
-    let mut client = Client::analysing(&["a.sv"], false);
+    let mut client = Client::designing(&["a.sv"], json!({}));
     client.open(uri, text);
     client.logged(loaded);
     client
@@ -118,7 +118,7 @@ fn a_dependency_s_declaration_is_listed() {
     // The dependency is read from the disk, as a file not open is.
     let fixture = Fixture::new("lsp-workspace-symbols-dependency");
     fixture.file("dep/b.sv", "module dep_b; endmodule\n");
-    let mut client = Client::analysing(&["a.sv", "../dep/b.sv"], false);
+    let mut client = Client::designing(&["a.sv", "../dep/b.sv"], json!({}));
     let opened = fixture.path().join("top/a.sv");
     let uri = lsp_types::Uri::from_file_path(&opened).unwrap().to_string();
     client.open(&uri, "module top_a; dep_b u_b(); endmodule\n");
@@ -137,7 +137,7 @@ fn a_dependency_s_declaration_is_listed() {
 fn a_declaration_two_designs_hold_is_answered_once() {
     // Each design reads `../shared.sv`, as two packages that depend on one
     // do; opened, it is a design of its own too, which reads neither.
-    let mut client = Client::analysing(&["a.sv", "../shared.sv"], false);
+    let mut client = Client::designing(&["a.sv", "../shared.sv"], json!({}));
     client.open(&uri("shared.sv"), "module shared; endmodule\n");
     client.open(&uri("one/a.sv"), "module one; endmodule\n");
     client.open(&uri("two/a.sv"), "module two; endmodule\n");
@@ -172,7 +172,7 @@ fn a_range_counts_utf16_code_units() {
 
 #[test]
 fn with_no_design_loaded_the_answer_is_empty() {
-    let mut client = Client::analysing(&["a.sv"], false);
+    let mut client = Client::designing(&["a.sv"], json!({}));
     assert!(ask(&mut client, "").is_empty());
     client.finish();
 }

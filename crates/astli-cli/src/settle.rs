@@ -5,6 +5,7 @@
 //! run that loads what it can, the package without them.
 
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use astli_package::{Dependencies, MANIFEST, mark};
 use astli_resolve::{Loaded, Lock, Note, Overrides, Resolution, resolve};
@@ -12,7 +13,7 @@ use astli_resolve::{Loaded, Lock, Note, Overrides, Resolution, resolve};
 use crate::error::{Error, Result};
 use crate::run::{Resolving, Run};
 use crate::target::Here;
-use crate::term::{self, status};
+use crate::term::{self, Place, status};
 
 /// Which of a resolution's warnings a run tells.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -206,16 +207,27 @@ pub fn dependencies(run: &Run, here: &Here, locked: bool) -> Result<Loaded> {
 /// a dependency it cannot settle or read: why is a problem it keeps, and
 /// the package is read without any dependency, as if it required none. An
 /// error that names one dependency still loses the rest, since a
-/// resolution that fails holds none of them.
+/// resolution that fails holds none of them. A problem that is in no file
+/// is placed in the manifest, where its dependencies are, so that an editor
+/// shows it beside what explains the rest.
 pub fn loaded(run: &Run, here: Here) -> Result<(Here, Loaded)> {
     let err = match dependencies(run, &here, run.args.locked) {
         Ok(loaded) => return Ok((here, loaded)),
         Err(err) if run.loads_what_it_can() => err,
         Err(err) => return Err(err),
     };
-    (err.problem())
-        .note("the package is read without its dependencies")
-        .report(run);
+    let mut problem = err.problem();
+    if let (None, Some(manifest)) = (problem.place(), &here.package.package.manifest_path) {
+        let line = dependencies_line(run, manifest);
+        problem = problem.at("unread-dependencies", manifest, Place::Line(line));
+    }
+    // Only a run that never fetches loads what it can, so the command that
+    // does is named.
+    let problem = (problem.note("the package is read without its dependencies")).help(format!(
+        "{} settles and fetches them",
+        mark::code("astli fetch")
+    ));
+    problem.report(run);
     run.read_without_dependencies();
     let mut here = here;
     let manifest = &mut here.package.package.manifest;
@@ -231,6 +243,19 @@ pub fn loaded(run: &Run, here: Here) -> Result<(Here, Loaded)> {
         on_disk: BTreeSet::new(),
     };
     Ok((here, loaded))
+}
+
+/// The line of the manifest at `path` its dependencies start on, counted
+/// from one: the first that opens a table of them or names them, or else
+/// the first. Read through `run`'s reader, which prefers an editor's
+/// buffer to the disk, as what the line is placed in does.
+fn dependencies_line(run: &Run, path: &Path) -> usize {
+    let text = run.reader().read(path).unwrap_or_default();
+    let starts = |line: &str| {
+        let line = line.trim_start();
+        line.starts_with("[dependencies") || line.starts_with("dependencies:")
+    };
+    text.lines().position(starts).map_or(1, |at| at + 1)
 }
 
 /// What a run says of `note`.
