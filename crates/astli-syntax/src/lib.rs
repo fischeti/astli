@@ -5,7 +5,7 @@
 //! `astli-parse`. What is here is what every later stage shares:
 //!
 //! - [`SyntaxKind`]: one enum for every token kind and every node kind.
-//! - [`tokenize`] / [`Lexer`]: source text to [`Token`]s.
+//! - [`tokenize`]: source text to [`Token`]s.
 //! - [`SyntaxNode`], [`SyntaxToken`], [`SyntaxElement`]: the [`rowan`] tree,
 //!   bound to [`SyntaxKind`] through [`SystemVerilog`].
 //! - [`ast`]: a typed view per node kind, such as
@@ -103,9 +103,8 @@ mod kind;
 mod lexer;
 mod tree;
 
-pub use keyword::KeywordVersion;
 pub use kind::SyntaxKind;
-pub use lexer::{Lexer, Token, name_text, tokenize};
+pub use lexer::{Token, name_text, tokenize};
 pub use tree::{
     SyntaxElement, SyntaxNode, SyntaxToken, SystemVerilog, child_token, first_significant,
     last_significant, significant_child_tokens, significant_range, significant_tokens,

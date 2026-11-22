@@ -12,7 +12,7 @@ use crate::{SyntaxKind, SyntaxKind::*};
 /// Each version reserves what the one before it does, and more, except that
 /// `1364-2001-noconfig` leaves out the keywords of configurations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub enum KeywordVersion {
+pub(crate) enum KeywordVersion {
     /// `"1364-1995"`.
     V1364_1995,
     /// `"1364-2001"`.
@@ -37,7 +37,7 @@ pub enum KeywordVersion {
 impl KeywordVersion {
     /// The version a `` `begin_keywords `` specifier names, without its quotes;
     /// `None` for one the standard does not define.
-    pub fn from_specifier(specifier: &str) -> Option<KeywordVersion> {
+    pub(crate) fn from_specifier(specifier: &str) -> Option<KeywordVersion> {
         Some(match specifier {
             "1364-1995" => KeywordVersion::V1364_1995,
             "1364-2001" => KeywordVersion::V1364_2001,
