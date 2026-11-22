@@ -80,7 +80,7 @@ impl Resolved<'_> {
 }
 
 /// Resolves a single diagnostic against the provided source [`Origins`] database.
-pub fn resolve<'a>(origins: &Origins, diagnostic: &'a Diagnostic) -> Resolved<'a> {
+fn resolve<'a>(origins: &Origins, diagnostic: &'a Diagnostic) -> Resolved<'a> {
     let at = origins.reported_at(diagnostic.at);
     Resolved {
         diagnostic,

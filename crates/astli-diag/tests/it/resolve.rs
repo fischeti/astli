@@ -1,6 +1,6 @@
 //! Unit tests for diagnostic location resolution.
 
-use astli_diag::{resolve, resolve_all};
+use astli_diag::{Resolved, resolve_all};
 use astli_text::{Code, Diagnostic, Expansion, Origins, SourceId, Span};
 
 const CODE: Code = Code("test");
@@ -9,6 +9,12 @@ fn find(origins: &Origins, file: SourceId, needle: &str) -> Span {
     let text = origins.text(file);
     let start = text.find(needle).unwrap_or_else(|| panic!("no {needle:?}"));
     Span::new(file, start as u32, (start + needle.len()) as u32)
+}
+
+/// What `diag` alone resolves to.
+fn resolve<'a>(origins: &Origins, diag: &'a Diagnostic) -> Resolved<'a> {
+    let mut resolved = resolve_all(origins, std::slice::from_ref(diag));
+    resolved.pop().expect("a diagnostic resolves to one")
 }
 
 /// The file at `path`, holding `text`, opened by the `` `include `` at `from`.

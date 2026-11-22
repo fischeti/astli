@@ -1,6 +1,6 @@
 //! Integration tests for terminal diagnostic formatting.
 
-use astli_diag::{Sources, Style, resolve, write};
+use astli_diag::{Sources, Style, resolve_all, write};
 use astli_preproc::Session;
 
 /// Expands `source` and renders every diagnostic it produced.
@@ -15,8 +15,7 @@ fn render(source: &str) -> String {
 
     let mut sources = Sources::new(session.origins());
     let mut out = Vec::new();
-    for diagnostic in &expanded.diagnostics {
-        let resolved = resolve(session.origins(), diagnostic);
+    for resolved in resolve_all(session.origins(), &expanded.diagnostics) {
         write(&mut out, &mut sources, &resolved, Style::plain()).unwrap();
     }
     String::from_utf8(out).expect("the renderer writes utf-8")
