@@ -114,6 +114,16 @@ impl Run {
         self
     }
 
+    /// As if run from a hook or `rebase --exec` in the repository `repo`,
+    /// with what `git` sets for one naming it.
+    pub(crate) fn hook_in(mut self, repo: &Path) -> Run {
+        (self.command)
+            .env("GIT_DIR", repo.join(".git"))
+            .env("GIT_WORK_TREE", repo)
+            .env("GIT_INDEX_FILE", repo.join(".git/index"));
+        self
+    }
+
     pub(crate) fn stdin(mut self, text: &str) -> Run {
         self.stdin = Some(text.to_string());
         self
@@ -268,15 +278,7 @@ pub(crate) fn adder_in(fixture: &Fixture, dir: &str) {
 
 /// Runs `git` in `dir`, the user's and the system's configuration left out.
 pub(crate) fn git(dir: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .env("GIT_CONFIG_GLOBAL", dir.join("../gitconfig"))
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_AUTHOR_NAME", "astli")
-        .env("GIT_AUTHOR_EMAIL", "astli@example.com")
-        .env("GIT_COMMITTER_NAME", "astli")
-        .env("GIT_COMMITTER_EMAIL", "astli@example.com")
+    let output = (astli_testing::git(dir, &dir.join("../gitconfig")).args(args))
         .output()
         .expect("git runs");
     assert!(output.status.success(), "{}", stderr(&output));
