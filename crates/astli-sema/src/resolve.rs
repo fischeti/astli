@@ -92,7 +92,7 @@ impl Names {
 
     /// The names used above their declaration where nothing declares them
     /// before: where each is written, and the declaration below it.
-    pub fn early(&self) -> &[(Span, SymbolId)] {
+    pub(crate) fn early(&self) -> &[(Span, SymbolId)] {
         &self.early
     }
 
