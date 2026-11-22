@@ -1,0 +1,53 @@
+members.sv:7:18 addr
+    member `addr`: `logic [31:0]`
+
+    ```systemverilog
+    // Where to.
+    logic [31:0] addr
+    ```
+
+members.sv:18:10 bus_pkg
+    package `bus_pkg`
+
+    ```systemverilog
+    // A struct's member, used or declared, an import's package and item, and
+    // a `bind`'s target say what they refer to. The comment opening a file is
+    // above the first declaration, unless a blank line is between them.
+    package bus_pkg;
+    ```
+
+members.sv:18:19 req_t
+    typedef `req_t`, 33 bits
+
+    ```systemverilog
+    typedef struct packed {
+      // Where to.
+      logic [31:0] addr;
+    //             ^
+
+      logic        write; // Or read.
+    } req_t
+    ```
+
+members.sv:22:22 addr
+    member `addr`: `logic [31:0]`
+
+    ```systemverilog
+    // Where to.
+    logic [31:0] addr
+    ```
+
+members.sv:24:14 write
+    member `write`: `logic`
+
+    ```systemverilog
+    logic write // Or read.
+    ```
+
+members.sv:28:6 bus
+    module `bus`
+
+    ```systemverilog
+    module bus;
+    ```
+

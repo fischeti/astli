@@ -1,0 +1,57 @@
+values.sv:6:29 W
+    parameter `W`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int W = 1
+    ```
+
+    value `1` at `same`'s defaults and in every `same` the tops build
+
+values.sv:10:28 W
+    parameter `W`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int W = 1
+    ```
+
+    value `1` at `two`'s defaults; as the tops build it:
+
+    - `1` in `top.u_two_a`
+    - `3` in `top.u_two_b`
+
+values.sv:13:18 Double
+    local parameter `Double`: `bit signed [31:0]`
+
+    ```systemverilog
+    localparam int Double = 2 * W
+    ```
+
+    value `2` at `two`'s defaults; as the tops build it:
+
+    - `2` in `top.u_two_a`
+    - `6` in `top.u_two_b`
+
+values.sv:17:29 W
+    parameter `W`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int W = 1
+    ```
+
+    value `1` at `many`'s defaults; as the tops build it:
+
+    - `2` in `top.u_many_2`
+    - `3` in `top.u_many_3`
+    - `4` in `top.u_many_4`
+    - `5` in `top.u_many_5`
+    - and 2 more
+
+values.sv:21:32 W
+    parameter `W`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int W = 1
+    ```
+
+    value `1` at `unbuilt`'s defaults, and the tops build no `unbuilt`
+

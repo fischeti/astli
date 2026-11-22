@@ -91,6 +91,11 @@ impl Analysed {
         (!self.tops.is_empty())
             .then(|| (self.built).get_or_init(|| Built::new(&self.elaboration, &self.tops)))
     }
+
+    /// The unit of `file`.
+    pub fn unit(&self, file: FileId) -> Option<&Unit> {
+        self.units.iter().find(|unit| unit.file == file)
+    }
 }
 
 /// A file compiled on its own, as its design holds it.

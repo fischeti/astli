@@ -1,0 +1,121 @@
+parameters.sv:7:26 WordBytes
+    local parameter `WordBytes`: `bit [31:0]`
+
+    ```systemverilog
+    // Bytes in a word.
+    parameter int unsigned WordBytes = 4
+    ```
+
+    value `4`
+
+parameters.sv:12:17 Depth
+    parameter `Depth`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int Depth = 8
+    ```
+
+    value `8` at `fifo`'s defaults
+
+parameters.sv:15:18 data_t
+    type parameter `data_t`
+
+    ```systemverilog
+    parameter type data_t = logic [7:0]
+    ```
+
+    value `logic [7:0]` at `fifo`'s defaults
+
+parameters.sv:18:18 AddrWidth
+    local parameter `AddrWidth`: `bit signed [31:0]`
+
+    ```systemverilog
+    localparam int AddrWidth = $clog2(Depth)
+    ```
+
+    value `3` at `fifo`'s defaults
+
+parameters.sv:25:10 AddrWidth
+    local parameter `AddrWidth`: `bit signed [31:0]`
+
+    ```systemverilog
+    localparam int AddrWidth = $clog2(Depth)
+    ```
+
+    value `3` at `fifo`'s defaults
+
+parameters.sv:27:10 config_pkg
+    package `config_pkg`
+
+    ```systemverilog
+    package config_pkg;
+    ```
+
+parameters.sv:27:22 WordBytes
+    local parameter `WordBytes`: `bit [31:0]`
+
+    ```systemverilog
+    // Bytes in a word.
+    parameter int unsigned WordBytes = 4
+    ```
+
+    value `4`
+
+parameters.sv:30:17 Full
+    enum member `Full`: `fill_e`, 2 bits
+
+    ```systemverilog
+    Full = 2'(Depth / 4)
+    ```
+
+    value `2'd2` at `fifo`'s defaults
+
+parameters.sv:37:17 Negative
+    local parameter `Negative`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int Negative = -1
+    ```
+
+    value `-1`
+
+parameters.sv:39:18 Small
+    local parameter `Small`: `bit signed [7:0]`
+
+    ```systemverilog
+    //              ^
+    parameter byte Small = -2
+    ```
+
+    value `-2`
+
+parameters.sv:41:30 Large
+    local parameter `Large`: `bit [63:0]`
+
+    ```systemverilog
+    //               ^
+    parameter longint unsigned Large = 64'd1 << 40
+    ```
+
+    value `1099511627776`
+
+parameters.sv:43:21 Unset
+    local parameter `Unset`: `logic signed [31:0]`
+
+    ```systemverilog
+    //                           ^
+    parameter integer Unset = 'x
+    ```
+
+    value `32'sbx`
+
+parameters.sv:45:25 Mask
+    local parameter `Mask`: `logic [7:0]`
+
+    ```systemverilog
+    //                  ^
+    parameter logic [7:0] Mask = 8'hF0
+    ```
+
+    value `8'd240`
+

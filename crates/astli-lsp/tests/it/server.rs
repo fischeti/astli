@@ -41,6 +41,7 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
             "documentFormattingProvider": true,
             "documentSymbolProvider": true,
             "foldingRangeProvider": true,
+            "hoverProvider": true,
             "positionEncoding": "utf-8",
             "textDocumentSync": {
               "change": 2,
@@ -105,7 +106,7 @@ fn a_request_before_initialize_is_refused() {
 fn requests_the_server_does_not_know_are_answered_as_unknown() {
     let mut client = Client::start(&[], false);
     assert_eq!(
-        code(client.request("textDocument/hover", json!({}))),
+        code(client.request("textDocument/references", json!({}))),
         -32601
     );
     assert_eq!(code(client.request("astli/unknown", Value::Null)), -32601);

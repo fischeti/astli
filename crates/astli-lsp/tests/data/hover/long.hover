@@ -1,0 +1,22 @@
+long.sv:33:3 bus
+    instance `u_bus` of module `bus`
+
+    ```systemverilog
+    // …
+    // Line 7 of what the bus does.
+    // Line 8 of what the bus does.
+    // Line 9 of what the bus does.
+    // Line 10 of what the bus does.
+    // Line 11 of what the bus does.
+    // Line 12 of what the bus does.
+    module bus (
+      input logic p0,
+      input logic p1,
+      input logic p2,
+      input logic p3,
+      input logic p4,
+      input logic p5,
+      input logic p6,
+    …
+    ```
+

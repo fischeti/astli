@@ -8,6 +8,7 @@ mod buffers;
 mod definition;
 mod diagnostics;
 mod formatting;
+mod hover;
 mod server;
 mod snapshots;
 mod support;

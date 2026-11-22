@@ -1,0 +1,83 @@
+macros.sv:10:14 target
+    nothing
+
+macros.sv:10:38 source
+    variable `source`: `logic`
+
+    ```systemverilog
+    logic source
+    ```
+
+macros.sv:24:10 `WIDTH
+    macro `WIDTH`
+
+    ```systemverilog
+    `define WIDTH 8
+    ```
+
+    expands here to
+
+    ```systemverilog
+    8
+    ```
+
+macros.sv:26:3 `READ
+    macro `READ`
+
+    ```systemverilog
+    // Reads the source into a target.
+    `define READ(target) assign target = source;
+    ```
+
+    expands here to
+
+    ```systemverilog
+    assign x = source;
+    ```
+
+macros.sv:26:9 x
+    variable `x`: `logic`
+
+    ```systemverilog
+    logic x
+    ```
+
+macros.sv:29:3 `FLOP
+    macro `FLOP`
+
+    ```systemverilog
+    `define FLOP(q, d) \
+      always_ff @(posedge clk) begin \
+        q <= d; \
+      end
+    ```
+
+    expands here to
+
+    ```systemverilog
+    always_ff @(posedge clk) begin
+      y <= x;
+    end
+    ```
+
+macros.sv:31:25 `__LINE__
+    built-in macro `__LINE__`: the line it is written on
+
+    expands here to `31`
+
+macros.sv:33:10 shared
+    variable `shared`: `logic`
+
+    ```systemverilog
+    // Shared by every unit that includes it.
+    logic shared
+    ```
+
+macros.svh:4:7 shared
+    variable `shared`: `logic`
+
+    ```systemverilog
+    // Shared by every unit that includes it.
+    logic shared
+    ```
+

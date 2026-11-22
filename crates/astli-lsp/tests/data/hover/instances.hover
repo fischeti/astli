@@ -1,0 +1,160 @@
+instances.sv:17:3 adder
+    instance `u_inner` of module `adder`
+
+    ```systemverilog
+    // Adds two words.
+    module adder #(parameter int W = 8, parameter int Lanes = 1) (
+      input  logic [W-1:0] a,
+      input  logic [W-1:0] b,
+      output logic [W:0]   sum // One wider.
+    );
+    ```
+
+    overrides `W = 4` at `wrap`'s defaults; as the tops build it:
+
+    - `W = 8` in `top.u_wrap`
+    - `W = 4` in `top.u_wrap_default`
+
+instances.sv:17:22 u_inner
+    instance `u_inner` of module `adder`
+
+    ```systemverilog
+    // Adds two words.
+    module adder #(parameter int W = 8, parameter int Lanes = 1) (
+      input  logic [W-1:0] a,
+      input  logic [W-1:0] b,
+      output logic [W:0]   sum // One wider.
+    );
+    ```
+
+    overrides `W = 4` at `wrap`'s defaults; as the tops build it:
+
+    - `W = 8` in `top.u_wrap`
+    - `W = 4` in `top.u_wrap_default`
+
+instances.sv:24:3 adder
+    instance `u_named` of module `adder`
+
+    ```systemverilog
+    // Adds two words.
+    module adder #(parameter int W = 8, parameter int Lanes = 1) (
+      input  logic [W-1:0] a,
+      input  logic [W-1:0] b,
+      output logic [W:0]   sum // One wider.
+    );
+    ```
+
+    overrides `W = 16, Lanes = 2`
+
+instances.sv:24:12 W
+    parameter `W`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int W = 8
+    ```
+
+    value `8` at `adder`'s defaults; as the tops build it:
+
+    - `16` in `top.u_named`
+    - `8` in `top.u_default`
+    - `4` in `top.u_wrap_default.u_inner`
+
+instances.sv:24:30 u_named
+    instance `u_named` of module `adder`
+
+    ```systemverilog
+    // Adds two words.
+    module adder #(parameter int W = 8, parameter int Lanes = 1) (
+      input  logic [W-1:0] a,
+      input  logic [W-1:0] b,
+      output logic [W:0]   sum // One wider.
+    );
+    ```
+
+    overrides `W = 16, Lanes = 2`
+
+instances.sv:24:40 a
+    variable `a`: `logic [15:0]`
+
+    ```systemverilog
+    logic [15:0] a
+    ```
+
+    ---
+
+    input port `a`: `logic [7:0]`
+
+    ```systemverilog
+    input  logic [W-1:0] a
+    ```
+
+instances.sv:24:44 b
+    input port `b`: `logic [7:0]`
+
+    ```systemverilog
+    input  logic [W-1:0] b
+    ```
+
+instances.sv:26:11 16
+    parameter `W`: `bit signed [31:0]`
+
+    ```systemverilog
+    parameter int W = 8
+    ```
+
+    value `8` at `adder`'s defaults; as the tops build it:
+
+    - `16` in `top.u_named`
+    - `8` in `top.u_default`
+    - `4` in `top.u_wrap_default.u_inner`
+
+instances.sv:26:29 a
+    variable `a`: `logic [15:0]`
+
+    ```systemverilog
+    logic [15:0] a
+    ```
+
+    ---
+
+    input port `a`: `logic [7:0]`
+
+    ```systemverilog
+    input  logic [W-1:0] a
+    ```
+
+instances.sv:28:9 u_default
+    instance `u_default` of module `adder`
+
+    ```systemverilog
+    // Adds two words.
+    module adder #(parameter int W = 8, parameter int Lanes = 1) (
+      input  logic [W-1:0] a,
+      input  logic [W-1:0] b,
+      output logic [W:0]   sum // One wider.
+    );
+    ```
+
+instances.sv:32:3 and
+    nothing
+
+instances.sv:32:7 u_gate
+    instance `u_gate` of `and`
+
+    ```systemverilog
+    and u_gate
+    ```
+
+instances.sv:35:3 nowhere
+    nothing
+
+instances.sv:35:11 u_nowhere
+    instance `u_nowhere` of `nowhere`
+
+    ```systemverilog
+    nowhere u_nowhere
+    ```
+
+instances.sv:35:23 p
+    nothing
+
