@@ -53,6 +53,69 @@ without knowing which mode made the tree: in raw mode it is the token's range
 in the file. `unparsed` is asked for rather than among the diagnostics,
 because a tool that only reads names, like the index, has no use for it.
 
+## Text and spans
+
+`astli-text` is what every crate locates things with, and depends on
+nothing:
+
+```rust
+let mut origins = Origins::new();                 // every buffer, and how includes and macros connect them
+let file = origins.add_file("top.sv", text);      // SourceId: a buffer as placed
+let span = Span::new(file, start, end);           // a byte range in one buffer
+origins.slice(span);                              // &str
+origins.line_col(file, span.start);               // LineCol: 1-based, counted in characters
+origins.path(file);                               // Option<&Path>: none for a buffer astli made, a command-line define
+origins.spelled(span);                            // the span as written, its expansion dropped
+origins.reported_at(span);                        // the outermost call: where a message points
+origins.include_trace(file);                      // the includes that reached it, outward
+
+Diagnostic::error(code, span, "message")          // also `warning`; a `Severity` orders by how much it matters
+    .pointing("label under the caret")
+    .label(other, "a second place")
+    .note("…").help("…")
+    .fix(span, "replacement");                    // an Edit, which `apply` writes into the text
+Disk.read(&path)?;                                // Reader: how a file is read, swapped for an editor's buffers
+clean(&path);                                     // `.` and `..` taken out without asking the file system
+```
+
+A span is a buffer and bytes, never a line, so it is a `Copy` and compares
+cheaply. A line is looked up when a message needs one, in a table built
+when the buffer is added ([D10](plan.md#4-decisions)). A buffer seen
+through an expansion has an id of its own, so one span says both where its
+bytes are written and which call placed them ([D9](plan.md#4-decisions)).
+A caller rarely fills an `Origins` itself: a session and a tree each hand
+one out.
+
+## Tokens and trees
+
+`astli-syntax` defines the tree and never builds one from source; that is
+`astli-parse`'s.
+
+```rust
+tokenize(text);                     // Vec<Token>: a kind and a byte range each, trivia included, ending in EOF
+SyntaxKind::MODULE_KW.is_keyword(); // one enum for every token kind and every node kind
+token.kind.is_trivia();             // whitespace, comments, an encrypted envelope
+name_text(r"\cpu3 ");              // "cpu3": a name as the language compares it
+
+node.kind();                        // SyntaxNode, SyntaxToken: rowan's, bound to SyntaxKind
+significant_tokens(&node);          // its tokens, trivia left out; `significant_child_tokens` its own
+first_significant(&node);           // also `last_significant`, and `significant_range` between them
+child_token(&node, &[IDENT]);       // the first child token of one of the kinds
+
+ast::ModuleDecl::cast(node);        // a typed view, its kind checked
+module.name(); module.items();      // an accessor per part, in the order `astli.ungram` gives
+```
+
+A token holds no text, so the lexer allocates nothing per token; a tree's
+tokens hold theirs. A typed view is a node whose kind is checked and nothing
+more: each accessor walks the children when it is called, and `None` is a
+part the source leaves out or the parser did not reach. The views are
+generated from `astli.ungram` ([D16](plan.md#4-decisions)); an accessor is
+written by hand only where two parts are of one kind and their place alone
+tells them apart. A node's
+first and last significant tokens are found from its ends, not by walking
+what is between them, since every crate asks for a node's range.
+
 ## The raw scan
 
 What a file writes, before anything is expanded, as the preprocessor reads
@@ -102,10 +165,13 @@ one.through;             // the calls it came through, innermost first
 one.included_from;       // the includes that reached the file
 Place::of(origins, span);  // any other span, named as `place` is
 write(&mut out, &mut Sources::new(origins), one, Style::plain())?;  // with the source under it
+colour(Severity::Error);  // the colour a report of a severity is drawn in; `EXPLAINING` a note's
 ```
 
 That is all of it: resolving, and the rendering a language server or a
-tool calling astli shows a person. The formats `astli --diag` writes for a
+tool calling astli shows a person. The colours are exported so that what
+the driver writes besides a report, a status line or a problem that has no
+place, matches the reports beside it. The formats `astli --diag` writes for a
 program, `short`, `github`, `json` and `gitlab`, are the command's, in the
 driver: what they write is what the command promises, versioned with it
 ([D18](plan.md#4-decisions)), and a tool that wants a format of its own
