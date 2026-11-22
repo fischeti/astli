@@ -21,8 +21,8 @@ use std::ptr;
 use astli_parse::SyntaxTree;
 use astli_preproc::{Session, render};
 use astli_sema::{
-    BodyId, FileId, MemberTy, Packed, Parameter, ParameterKind, Resolution, ScopeId, ScopeKind,
-    Shape, Site, SiteKind, SymbolKind, SymbolRef, Ty,
+    BodyId, Design, FileId, MemberTy, Packed, Parameter, ParameterKind, Resolution, ScopeId,
+    ScopeKind, Shape, Site, SiteKind, SymbolKind, SymbolRef, Ty,
 };
 use astli_syntax::{
     SyntaxKind, SyntaxKind::*, SyntaxNode, SyntaxToken, first_significant, last_significant,
@@ -245,7 +245,7 @@ impl<'a> Hover<'a> {
             _ => None,
         };
         if let Some(is_type) = is_type {
-            let around = self.around(at.file, symbol.scope);
+            let around = around(self.analysed.elaboration.design(), at.file, symbol.scope);
             let value = |body| match is_type {
                 true => value::shown(&elaboration.type_of(body, at.symbol)),
                 false => {
@@ -299,7 +299,7 @@ impl<'a> Hover<'a> {
         let overrides = elaboration.overrides(at);
         if definition.is_some() && !overrides.is_empty() {
             let holder = elaboration.body_at(at.file, symbol.scope);
-            let around = self.around(at.file, symbol.scope);
+            let around = around(self.analysed.elaboration.design(), at.file, symbol.scope);
             let given = |body| {
                 let Some((definition, built)) = elaboration.child(body, at) else {
                     return "unknown".to_string();
@@ -372,28 +372,6 @@ impl<'a> Hover<'a> {
                 }
                 out
             }
-        }
-    }
-
-    /// The definition around `scope` of `file`, whose bodies a value
-    /// declared there depends on: `None` at a file's top level, in a
-    /// package, which has one body, and in a definition without
-    /// parameters, whose bodies all give it the same.
-    fn around(&self, file: FileId, scope: ScopeId) -> Option<SymbolRef> {
-        let design = self.analysed.elaboration.design();
-        let hir = &design[file];
-        let definition = hir.enclosing(scope, ScopeKind::Definition)?;
-        let at = SymbolRef {
-            file,
-            symbol: hir[definition].owner?,
-        };
-        match &design.symbol(at).kind {
-            SymbolKind::Definition {
-                keyword: PACKAGE_KW,
-                ..
-            } => None,
-            SymbolKind::Definition { parameters, .. } if parameters.is_empty() => None,
-            _ => Some(at),
         }
     }
 
@@ -485,6 +463,27 @@ impl<'a> Hover<'a> {
             SyntaxTree::parse(path, origins.text(src).to_string())
         });
         Some((tree.source(), tree))
+    }
+}
+
+/// The definition around `scope` of `file`, whose bodies a value declared
+/// there depends on: `None` at a file's top level, in a package, which has
+/// one body, and in a definition without parameters, whose bodies all give
+/// it the same.
+pub fn around(design: &Design, file: FileId, scope: ScopeId) -> Option<SymbolRef> {
+    let hir = &design[file];
+    let definition = hir.enclosing(scope, ScopeKind::Definition)?;
+    let at = SymbolRef {
+        file,
+        symbol: hir[definition].owner?,
+    };
+    match &design.symbol(at).kind {
+        SymbolKind::Definition {
+            keyword: PACKAGE_KW,
+            ..
+        } => None,
+        SymbolKind::Definition { parameters, .. } if parameters.is_empty() => None,
+        _ => Some(at),
     }
 }
 
@@ -794,7 +793,7 @@ fn fenced(out: &mut String, code: &str) {
 }
 
 mod expansion;
-mod value;
+pub mod value;
 
 #[cfg(test)]
 mod tests;

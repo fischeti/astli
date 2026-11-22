@@ -23,6 +23,7 @@ use serde_json::Value;
 
 use crate::buffers::{self, Buffers};
 use crate::diagnostics::{ByPath, Published, Told};
+use crate::inlay;
 use crate::position::Encoding;
 use crate::slots::{Loaded, Slot, drop_later};
 use crate::tasks::{Cancel, Done, Outcome, Tasks, panic_message};
@@ -68,6 +69,8 @@ pub struct Server {
     watches: bool,
     /// What it watches.
     watched: Watched,
+    /// The kinds of inlay hint it answers.
+    pub hints: Vec<inlay::Kind>,
     /// Whether the client has sent `shutdown`, after which every request is
     /// refused and `exit` ends the server cleanly.
     shut_down: bool,
@@ -99,6 +102,7 @@ impl Server {
             client: ClientCapabilities::default(),
             watches,
             watched,
+            hints: inlay::answered(),
             shut_down: false,
         }
     }
@@ -277,6 +281,7 @@ impl Server {
             "textDocument/documentHighlight" => self.highlights(id, params),
             "textDocument/semanticTokens/full" => self.semantic_tokens(id, params),
             "textDocument/semanticTokens/range" => self.semantic_tokens_range(id, params),
+            "textDocument/inlayHint" => self.inlay_hints(id, params),
             "textDocument/documentSymbol" => {
                 self.reply(id, &method, params, Server::document_symbols);
             }

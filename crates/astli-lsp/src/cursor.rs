@@ -43,9 +43,7 @@ pub struct Here<'a> {
     pub unit: &'a Unit,
     /// The file in the unit's origins: its own text, or one inclusion of a
     /// header.
-    #[expect(dead_code, reason = "no request yet reads more than the sites")]
     pub source: SourceId,
-    #[expect(dead_code, reason = "no request yet reads more than the sites")]
     pub offset: u32,
     /// Each name spelled there, as [`Sites::at`](astli_sema::Sites::at)
     /// finds it: several where a macro wrote it more than once, or where
@@ -67,14 +65,20 @@ impl Server {
     /// they name no open file, or one whose design has not loaded.
     pub fn cursor(&self, params: &Value) -> Option<Cursor> {
         let at = TextDocumentPositionParams::deserialize(params).ok()?;
-        let path = buffers::path(&at.text_document.uri)?;
+        self.cursor_at(&at.text_document.uri, at.position)
+    }
+
+    /// The cursor at `position` of the file `uri` names, as
+    /// [`cursor`](Self::cursor) finds it.
+    pub fn cursor_at(&self, uri: &Uri, position: Position) -> Option<Cursor> {
+        let path = buffers::path(uri)?;
         let text = self.buffers.get(&path)?.text.clone();
         Some(Cursor {
             snapshot: self.snapshot(&path)?,
             path,
             encoding: self.encoding,
             text,
-            position: at.position,
+            position,
             opened: self.buffers.uris(),
         })
     }
