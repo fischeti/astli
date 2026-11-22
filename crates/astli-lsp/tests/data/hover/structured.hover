@@ -1,0 +1,202 @@
+structured.sv:24:23 Bus
+    local parameter `Bus`: `bus_cfg_t`, 70 bits
+
+    ```systemverilog
+    parameter bus_cfg_t Bus = '{AddrWidth: 32, DataWidth: 4, Speed: Fast, Mask: 4'hA}
+    ```
+
+    value `'{AddrWidth: 32, DataWidth: 4, Speed: Fast, Mask: 4'd10}`
+
+structured.sv:27:24 Port
+    local parameter `Port`: `port_cfg_t`, 78 bits
+
+    ```systemverilog
+    parameter port_cfg_t Port = '{Bus: Bus, Id: 8'd7}
+    ```
+
+    value `'{Bus: '{AddrWidth: 32, DataWidth: 4, Speed: Fast, Mask: 4'd10}, Id: 8'd7}`
+
+structured.sv:30:21 Speed
+    local parameter `Speed`: `speed_e`, 2 bits
+
+    ```systemverilog
+    parameter speed_e Speed = Slow
+    ```
+
+    value `Slow`
+
+structured.sv:34:21 Odd
+    local parameter `Odd`: `speed_e`, 2 bits
+
+    ```systemverilog
+    // No member has the value 3.
+    parameter speed_e Odd = speed_e'(3)
+    ```
+
+    value `2'd3`
+
+structured.sv:42:31 Base
+    local parameter `Base`: `logic [5:0] [31:0]`, 192 bits
+
+    ```systemverilog
+    parameter logic [5:0][31:0] Base = {32'h0, 32'h1000_0000, 32'h2000_0000, 32'h3000_0000, 32'h4000_0000, 32'h5000_0000}
+    ```
+
+    value `'{32'h0000_0000, 32'h1000_0000, 32'h2000_0000, 32'h3000_0000, … 2 more}`
+
+structured.sv:45:31 Pair
+    local parameter `Pair`: `logic [1:0] [31:0]`, 64 bits
+
+    ```systemverilog
+    parameter logic [1:0][31:0] Pair = {32'hdead_beef, 32'h0}
+    ```
+
+    value `'{32'hdead_beef, 32'h0000_0000}`
+
+structured.sv:49:32 Buses
+    local parameter `Buses`: `array [0:1] of bus_cfg_t`, 140 bits
+
+    ```systemverilog
+    // An unpacked array of structs, element by element.
+    parameter cfg_pkg::bus_cfg_t Buses [2] = '{cfg_pkg::Bus, '{default: 0}}
+    ```
+
+    value `'{'{AddrWidth: 32, DataWidth: 4, Speed: Fast, Mask: 4'd10}, '{AddrWidth: 0, DataWidth: 0, Speed: Off, Mask: 4'd0}}`
+
+structured.sv:58:27 Key
+    local parameter `Key`: `logic [127:0]`
+
+    ```systemverilog
+    parameter logic [127:0] Key = 128'h0123_4567_89ab_cdef_0011_2233_4455_6677
+    ```
+
+    value `128'h0123_4567_89ab_cdef_0011_2233_4455_6677`
+
+structured.sv:61:26 Odd
+    local parameter `Odd`: `logic [35:0]`
+
+    ```systemverilog
+    parameter logic [35:0] Odd = 36'h9_8765_4321
+    ```
+
+    value `36'h9_8765_4321`
+
+structured.sv:64:26 Holes
+    local parameter `Holes`: `logic [31:0]`
+
+    ```systemverilog
+    parameter logic [31:0] Holes = 32'hffff_xxzz
+    ```
+
+    value `32'hffff_xxzz`
+
+structured.sv:67:26 Mixed
+    local parameter `Mixed`: `logic [31:0]`
+
+    ```systemverilog
+    parameter logic [31:0] Mixed = 32'b1111_0000_1111_0000_1111_0000_1111_00x0
+    ```
+
+    value `32'b1111_0000_1111_0000_1111_0000_1111_00x0`
+
+structured.sv:70:26 Unset
+    local parameter `Unset`: `logic [63:0]`
+
+    ```systemverilog
+    parameter logic [63:0] Unset = 'x
+    ```
+
+    value `64'hx`
+
+structured.sv:73:33 Minus
+    local parameter `Minus`: `logic signed [39:0]`
+
+    ```systemverilog
+    parameter logic signed [39:0] Minus = -40'sd1
+    ```
+
+    value `40'shff_ffff_ffff`
+
+structured.sv:77:26 Short
+    local parameter `Short`: `logic [15:0]`
+
+    ```systemverilog
+    // Narrower than 32 bits stays the literal it is.
+    parameter logic [15:0] Short = 16'hbeef
+    ```
+
+    value `16'd48879`
+
+structured.sv:90:23 Cfg
+    local parameter `Cfg`: `top_cfg_t`, 104 bits
+
+    ```systemverilog
+    parameter top_cfg_t Cfg = '{Speed: cfg_pkg::Off, Count: -3, Bus: cfg_pkg::Bus}
+    ```
+
+    value `'{Speed: Off, Count: -3, Bus: '{AddrWidth: 32, DataWidth: 4, Speed: Fast, Mask: 4'd10}}`
+
+structured.sv:102:19 Ten
+    local parameter `Ten`: `ten_t`, 40 bits
+
+    ```systemverilog
+    parameter ten_t Ten = '0
+    ```
+
+    value `'{A: 4'd0, B: 4'd0, C: 4'd0, D: 4'd0, E: 4'd0, F: 4'd0, G: 4'd0, H: 4'd0, … 2 more}`
+
+structured.sv:110:20 Long
+    local parameter `Long`: `long_t`, 640 bits
+
+    ```systemverilog
+    parameter long_t Long = '1
+    ```
+
+    value `'{First: 128'hffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff, Second: 128'hffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff, Third: 128'hffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff, … 2 more}`
+
+structured.sv:119:20 Deep
+    local parameter `Deep`: `deep_t`, 4 bits
+
+    ```systemverilog
+    parameter deep_t Deep = '0
+    ```
+
+    value `'{Outer: '{Middle: '{Inner: '{…}}}}`
+
+structured.sv:136:5 port
+    input port `port`: `struct {a: struct {…}; b: logic [7:0]; c: logic [7:0]; d: logic [7:0]; … 1 more}`, 38 bits
+
+    ```systemverilog
+    input struct packed {
+      struct packed {
+        logic [2:0] opcode;
+        logic [2:0] param;
+      } a;
+      logic [7:0] b;
+      logic [7:0] c;
+      logic [7:0] d;
+    …
+    ```
+
+structured.sv:149:22 Max
+    local parameter `Max`: `level_e`, 32 bits
+
+    ```systemverilog
+    localparam level_e Max = High
+    ```
+
+    value `High` at `levels`'s defaults and in every `levels` the tops build
+
+structured.sv:165:5 u_sub
+    instance `u_sub` of module `sub`
+
+    ```systemverilog
+    // An instance's overrides are written as values are.
+    module sub #(
+      parameter cfg_pkg::bus_cfg_t Cfg   = cfg_pkg::Bus,
+      parameter cfg_pkg::speed_e   Speed = cfg_pkg::Off
+    ) ();
+    ```
+
+    overrides `Cfg = '{AddrWidth: 64, DataWidth: 8, Speed: Slow, Mask: 4'd15}, Speed = Fast`
+

@@ -978,6 +978,16 @@ places in an open file whose text differs could be left out, or mapped
 through the edits since. **Where** `astli-lsp/src/cursor.rs`
 (`Cursor::location`)
 
+### Hover writes a union's value as its bits
+
+A struct's value is written by member, but a union's, packed or not, is
+written as a vector of its bits, or the literal `elab` prints: which
+member a reader means is nothing the value keeps, and writing each would
+say one value several times. **Revisit when** a design's unions are read
+in a hover: the member a tag beside it names, or the first, could be
+shown. **Where** `astli-lsp/src/hover/value.rs` (`Said::packed`,
+`Said::value`)
+
 ### A lone `\r` does not end a line
 
 The protocol ends a line at `\n`, `\r\n` or `\r`; astli's line table, and so
