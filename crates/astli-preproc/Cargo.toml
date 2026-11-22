@@ -20,3 +20,4 @@ astli-text.workspace = true
 
 [dev-dependencies]
 astli-testing.workspace = true
+expect-test.workspace = true

@@ -40,6 +40,41 @@ pub struct Expanded {
     pub macros: MacroTable,
     /// Diagnostics emitted during expansion.
     pub diagnostics: Vec<Diagnostic>,
+    /// Each macro call a file writes, the unit's or a header's, in the order
+    /// they were expanded: the outermost calls, since one a body or an
+    /// argument writes is placed by the call around it. A built-in is one;
+    /// a call that records no [`Expansion`] is not.
+    pub calls: Vec<ExpansionId>,
+    /// The bodies of the branches expansion did not take, as written, in the
+    /// order it passed them. A branch in a macro body is decided per call and
+    /// is not here. A header included twice is a file each time, so each
+    /// inclusion has its own.
+    pub skipped: Vec<Span>,
+}
+
+impl Expanded {
+    /// The call written in `file` whose span holds the byte at `offset`, one
+    /// that writes nothing too. Where a call's arguments follow a macro that
+    /// takes none, the call around them is found, as the first expanded.
+    pub fn call_at(&self, origins: &Origins, file: SourceId, offset: u32) -> Option<ExpansionId> {
+        self.calls.iter().copied().find(|&id| {
+            let call = origins.expansion(id).call;
+            call.src_id == file && call.start <= offset && offset < call.end
+        })
+    }
+
+    /// The tokens `call` wrote, the expansions of the calls inside it
+    /// included, which [`render`] writes out. A call that builds an
+    /// `` `include ``'s name wrote nothing, since its tokens became the name.
+    pub fn written_by(&self, origins: &Origins, call: ExpansionId) -> Vec<ExpandedToken> {
+        (self.tokens.iter().copied())
+            .filter(|token| {
+                origins
+                    .placed_through(token.span.src_id)
+                    .any(|id| id == call)
+            })
+            .collect()
+    }
 }
 
 /// Binding of a formal parameter for a macro invocation.
@@ -193,6 +228,8 @@ struct Expander<'a> {
     out: Vec<ExpandedToken>,
     diags: Vec<Diagnostic>,
     active: Vec<TokenId>,
+    calls: Vec<ExpansionId>,
+    skipped: Vec<Span>,
     /// Each file's valid `` `line `` directives, in order.
     renumbered: FxHashMap<SourceId, Vec<Renumbered>>,
 }
@@ -225,6 +262,8 @@ impl<'a> Expander<'a> {
             out: Vec::new(),
             diags: Vec::new(),
             active: Vec::new(),
+            calls: Vec::new(),
+            skipped: Vec::new(),
             renumbered: FxHashMap::default(),
         }
     }
@@ -234,6 +273,8 @@ impl<'a> Expander<'a> {
             tokens: self.out,
             macros: self.table,
             diagnostics: self.diags,
+            calls: self.calls,
+            skipped: self.skipped,
         }
     }
 
@@ -439,7 +480,8 @@ impl<'a> Expander<'a> {
             self.report(diagnostics::unclosed_conditional(at));
         }
 
-        for branch in &region.branches {
+        let mut chosen = None;
+        for (at, branch) in region.branches.iter().enumerate() {
             let (taken, body) = match (branch.taken, frame.in_body()) {
                 (Taken::Defined(name) | Taken::Undefined(name), true) => {
                     self.substituted(tokens, branch, name, frame)
@@ -468,7 +510,15 @@ impl<'a> Expander<'a> {
             };
             if taken {
                 self.expand_range(body, frame);
+                chosen = Some(at);
                 break;
+            }
+        }
+        if !frame.in_body() {
+            for (at, branch) in region.branches.iter().enumerate() {
+                if chosen != Some(at) && !branch.body.is_empty() {
+                    self.skipped.push(branch.body.bytes(tokens));
+                }
             }
         }
         region.tokens.end
@@ -715,6 +765,9 @@ impl<'a> Expander<'a> {
             call: span,
             def: None,
         });
+        if frame.from.is_none() {
+            self.calls.push(id);
+        }
         let len = text.len() as u32;
         let file = self.origins.add_synthesised(text);
         self.push(kind, Span::new(file, 0, len), Some(id));
@@ -749,6 +802,9 @@ impl<'a> Expander<'a> {
             call,
             def: Some(def.tokens.bytes(&defined_in)),
         });
+        if frame.from.is_none() {
+            self.calls.push(id);
+        }
 
         let depth = self.active.len();
         self.active.push(def.name);

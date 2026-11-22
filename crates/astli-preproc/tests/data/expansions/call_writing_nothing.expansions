@@ -1,0 +1,6 @@
+call_writing_nothing.sv:4:11 `NOTHING
+  defined call_writing_nothing.sv:2:1
+  wrote (nothing)
+call_writing_nothing.sv:4:20 `EMPTY(a + b)
+  defined call_writing_nothing.sv:3:1
+  wrote (nothing)

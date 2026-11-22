@@ -1,0 +1,3 @@
+nested_calls.sv:5:12 `OUTER(`INNER(a))
+  defined nested_calls.sv:4:1
+  wrote ((a + 1) + 1) * (2 + 1)
