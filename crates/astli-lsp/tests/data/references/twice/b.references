@@ -1,0 +1,4 @@
+b.sv 2:8
+  twice/a.sv 4:3-4:12 `twice_dup`
+  twice/b.sv 2:8-2:17 `twice_dup` (declaration)
+  twice/c.sv 2:8-2:17 `twice_dup` (declaration)

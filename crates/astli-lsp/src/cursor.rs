@@ -8,6 +8,7 @@
 //! next, and answers what they agree on once.
 
 use std::collections::HashMap;
+use std::ops::Range as Bytes;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -56,6 +57,9 @@ pub struct Here<'a> {
     pub call: Option<ExpansionId>,
     /// The header that the `` `include `` the cursor is on read.
     pub include: Option<SourceId>,
+    /// The name a `` `define `` the cursor is on defines, outside the
+    /// branches the expansion skipped.
+    pub define: Option<Span>,
 }
 
 impl Server {
@@ -120,6 +124,9 @@ impl Cursor {
             let directive = origins.included_from(file);
             directive.is_some_and(|it| holds(it) && offset < it.end)
         });
+        let define = defined_at(text, offset)
+            .map(|name| Span::new(source, name.start, name.end))
+            .filter(|name| !(unit.skipped.iter()).any(|it| it.contains(*name)));
         Ok(Here {
             design,
             unit,
@@ -128,6 +135,7 @@ impl Cursor {
             sites: sites.at(source, offset).collect(),
             call,
             include,
+            define,
         })
     }
 
@@ -176,4 +184,46 @@ fn held(origins: &Origins, path: &Path) -> Vec<SourceId> {
     held.sort();
     held.dedup();
     held
+}
+
+/// Whether `origins` holds a file at `path`.
+pub fn holds_path(origins: &Origins, path: &Path) -> bool {
+    !held(origins, path).is_empty()
+}
+
+/// The bytes of the name the cursor at `offset` of `text` is on, where it
+/// is the name of a `` `define ``, which the HIR does not hold, so the
+/// text is read for it.
+fn defined_at(text: &str, offset: u32) -> Option<Bytes<u32>> {
+    let name = |it: &&u8| it.is_ascii_alphanumeric() || **it == b'_' || **it == b'$';
+    let (before, after) = text.as_bytes().split_at((offset as usize).min(text.len()));
+    let start = before.len() - before.iter().rev().take_while(name).count();
+    let end = before.len() + after.iter().take_while(name).count();
+    let first =
+        (text.as_bytes().get(start)).is_some_and(|it| it.is_ascii_alphabetic() || *it == b'_');
+    let defines = text[..start]
+        .trim_end_matches([' ', '\t'])
+        .ends_with("`define");
+    (first && defines).then_some(start as u32..end as u32)
+}
+
+/// The name a `` `define `` directive at `directive` defines, or the whole
+/// directive where it does not start as one plainly does.
+pub fn defined(origins: &Origins, directive: Span) -> Span {
+    let text = origins.slice(directive);
+    let Some(rest) = text.strip_prefix("`define") else {
+        return directive;
+    };
+    let name = rest.trim_start_matches([' ', '\t']);
+    let length = (name.find(|it: char| !(it.is_ascii_alphanumeric() || it == '_' || it == '$')))
+        .unwrap_or(name.len());
+    if length == 0 {
+        return directive;
+    }
+    let start = directive.start + (text.len() - name.len()) as u32;
+    Span {
+        start,
+        end: start + length as u32,
+        ..directive
+    }
 }

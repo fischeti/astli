@@ -1,0 +1,27 @@
+packages.sv 4:9
+  packages.sv 4:9-4:21 `packages_pkg` (declaration)
+  packages.sv 15:10-15:22 `packages_pkg`
+  packages.sv 17:3-17:15 `packages_pkg`
+  packages.sv 18:22-18:34 `packages_pkg`
+  packages.sv 22:10-22:22 `packages_pkg`
+packages.sv 6:29
+  packages.sv 6:29-6:31 `On` (declaration)
+  packages.sv 10:17-10:19 `On`
+  packages.sv 10:28-10:30 `On`
+  packages.sv 18:36-18:38 `On`
+packages.sv 6:34
+  packages.sv 6:34-6:40 `mode_t` (declaration)
+  packages.sv 8:22-8:28 `mode_t`
+  packages.sv 8:34-8:40 `mode_t`
+  packages.sv 17:17-17:23 `mode_t`
+  packages.sv 23:3-23:9 `mode_t`
+packages.sv 8:29
+  packages.sv 8:29-8:33 `flip` (declaration)
+  packages.sv 15:24-15:28 `flip`
+  packages.sv 18:17-18:21 `flip`
+  packages.sv 24:17-24:21 `flip`
+packages.sv 15:24
+  packages.sv 8:29-8:33 `flip` (declaration)
+  packages.sv 15:24-15:28 `flip`
+  packages.sv 18:17-18:21 `flip`
+  packages.sv 24:17-24:21 `flip`

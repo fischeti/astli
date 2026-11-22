@@ -8,13 +8,13 @@
 use std::ptr;
 
 use astli_index::Declaration;
-use astli_sema::{ExprKind, FileId, Resolution, SiteKind, SymbolKind, SymbolRef};
-use astli_text::{Origins, Span};
+use astli_sema::{ExprKind, Resolution, SiteKind, SymbolKind, SymbolRef};
+use astli_text::Span;
 use lsp_server::{RequestId, ResponseError};
 use lsp_types::{Definition, DefinitionParams, DefinitionResponse, Location, LocationLink, Range};
 use serde_json::Value;
 
-use crate::cursor::{Cursor, Here};
+use crate::cursor::{Cursor, Here, defined};
 use crate::server::Server;
 use crate::tasks::Cancel;
 use crate::workspace_symbols;
@@ -98,6 +98,10 @@ fn targets(cursor: &Cursor, here: &Here) -> Vec<Target> {
             at.and_then(|it| cursor.location(origins, it)),
         );
     }
+    // A macro's name in its `define is its declaration.
+    if let Some(name) = here.define {
+        lead(name, cursor.location(origins, name));
+    }
     if let Some(header) = here.include {
         let directive = origins.included_from(header).expect("a header is included");
         let start = Span::point(header, 0);
@@ -133,7 +137,7 @@ fn targets(cursor: &Cursor, here: &Here) -> Vec<Target> {
                 let elaboration = &design.elaboration;
                 let member = elaboration.member(elaboration.body_at(unit.file, scope), expr);
                 if let Some(member) = member
-                    && let Some(declared) = unit_of(design, member.file)
+                    && let Some(declared) = design.unit(member.file)
                 {
                     lead(site.span, cursor.location(&declared.origins, member.span));
                 }
@@ -152,7 +156,7 @@ fn targets(cursor: &Cursor, here: &Here) -> Vec<Target> {
 /// Where `symbol` is declared: its name, or for a definition or a package
 /// that several files declare, each declaration's name.
 fn declared(cursor: &Cursor, design: &Analysed, symbol: SymbolRef) -> Vec<Location> {
-    let Some(unit) = unit_of(design, symbol.file) else {
+    let Some(unit) = design.unit(symbol.file) else {
         return Vec::new();
     };
     let declared = design.elaboration.design().symbol(symbol);
@@ -190,15 +194,6 @@ fn declared(cursor: &Cursor, design: &Analysed, symbol: SymbolRef) -> Vec<Locati
         .collect()
 }
 
-/// The unit of `design` whose file is `file`.
-fn unit_of(design: &Analysed, file: FileId) -> Option<&Unit> {
-    // The units are in the order of the design's files.
-    match design.units.get(file.index()) {
-        Some(unit) if unit.file == file => Some(unit),
-        _ => design.units.iter().find(|it| it.file == file),
-    }
-}
-
 /// The unit whose summary in the index holds `declaration`.
 fn declaring<'a>(design: &'a Analysed, declaration: &Declaration) -> Option<&'a Unit> {
     // A design's summaries are its units, in the same order.
@@ -207,25 +202,4 @@ fn declaring<'a>(design: &'a Analysed, declaration: &Declaration) -> Option<&'a 
         .into_iter()
         .find(|(summary, _)| (summary.declarations.iter()).any(|it| ptr::eq(it, declaration)))
         .map(|(_, unit)| unit)
-}
-
-/// The name a `` `define `` directive at `directive` defines, or the whole
-/// directive where it does not start as one plainly does.
-fn defined(origins: &Origins, directive: Span) -> Span {
-    let text = origins.slice(directive);
-    let Some(rest) = text.strip_prefix("`define") else {
-        return directive;
-    };
-    let name = rest.trim_start_matches([' ', '\t']);
-    let length = (name.find(|it: char| !(it.is_ascii_alphanumeric() || it == '_' || it == '$')))
-        .unwrap_or(name.len());
-    if length == 0 {
-        return directive;
-    }
-    let start = directive.start + (text.len() - name.len()) as u32;
-    Span {
-        start,
-        end: start + length as u32,
-        ..directive
-    }
 }

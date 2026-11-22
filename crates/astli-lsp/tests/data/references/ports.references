@@ -1,0 +1,27 @@
+ports.sv 5:8
+  ports.sv 5:8-5:19 `ports_child` (declaration)
+  ports.sv 12:3-12:14 `ports_child`
+  ports.sv 14:3-14:14 `ports_child`
+ports.sv 5:36
+  ports.sv 5:36-5:37 `N` (declaration)
+  ports.sv 12:18-12:19 `N`
+  ports.sv 14:17-14:18 `3`
+ports.sv 5:56
+  ports.sv 5:56-5:57 `a` (declaration)
+  ports.sv 7:14-7:15 `a`
+  ports.sv 12:32-12:33 `a`
+  ports.sv 14:32-14:33 `a`
+ports.sv 12:3
+  ports.sv 5:8-5:19 `ports_child` (declaration)
+  ports.sv 12:3-12:14 `ports_child`
+  ports.sv 14:3-14:14 `ports_child`
+ports.sv 12:18
+  ports.sv 5:36-5:37 `N` (declaration)
+  ports.sv 12:18-12:19 `N`
+  ports.sv 14:17-14:18 `3`
+ports.sv 12:32
+  ports.sv 5:56-5:57 `a` (declaration)
+  ports.sv 7:14-7:15 `a`
+  ports.sv 11:9-11:10 `a` (declaration)
+  ports.sv 12:32-12:33 `a`
+  ports.sv 14:32-14:33 `a`

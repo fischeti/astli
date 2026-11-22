@@ -951,21 +951,13 @@ A unit's expansion lists the calls its files write outside any other call,
 and the lookup finds the call under the cursor among them. A call written
 in another call's argument, as the inner one of `` `MIN(`MIN(a, b), c) ``,
 is placed by the call around it, so its name leads nowhere: definition does
-not reach its `` `define ``. The names its arguments give are found where
-they are spelled, as any other. **Revisit when** a reader asks for one:
-the origins hold every expansion, and the one whose call is spelled at the
+not reach its `` `define ``, nor references its calls. The names its
+arguments give are found where they are spelled, as any other, and
+references from the `` `define `` find the call, as they read every
+expansion. **Revisit when** a reader asks for one: the origins list every
+expansion (`Origins::expansions`), and the one whose call is spelled at the
 cursor could be found among them. **Where** `astli-lsp/src/cursor.rs`
 (`Cursor::here`)
-
-### A `` `define ``'s name goes nowhere
-
-A declaration under the cursor answers definition with itself, but a
-macro's name in its `` `define `` answers nothing: the lookup finds a
-macro by its calls, and a `define` is no name the HIR holds. **Revisit
-when** references are built, which needs every call of a macro from its
-`` `define `` anyway: the calls whose expansion read that directive are
-what both would answer. **Where** `astli-lsp/src/definition.rs`
-(`targets`)
 
 ### An expansion nothing lays out loses its first line's indentation
 
@@ -981,14 +973,40 @@ it: the `` `define `` as written holds that indentation. **Where**
 
 ### A place in another file edited since the load is placed in the text the load read
 
-Definition answers only where the text its snapshot read of the cursor's
-file is the buffer's ([L26](lsp.md#decisions)), but a place it leads to in
-another open file is counted in the text the snapshot read of that file,
-which an edit since may have moved. That edit has made the design due, so
-the answer is right again once it loads. **Revisit when** it misleads: the
-places in an open file whose text differs could be left out, or mapped
-through the edits since. **Where** `astli-lsp/src/cursor.rs`
-(`Cursor::location`)
+Definition and references answer only where the text their snapshot read
+of the cursor's file is the buffer's ([L26](lsp.md#decisions)), but a
+place they find in another open file is counted in the text the snapshot
+read of that file, which an edit since may have moved. That edit has made
+the design due, so the answer is right again once it loads. **Revisit
+when** it misleads: the places in an open file whose text differs could be
+left out, or mapped through the edits since. **Where**
+`astli-lsp/src/cursor.rs` (`Cursor::location`)
+
+### A name in an opaque region is no reference
+
+A region the parser kept as written is looked into for the names it
+spells, each a loose name that sema looks up in the scopes around it
+(`Names::loose`), but what the text is, and so what the name is, is not
+known: `sig` in it may be a signal of that name, a port of an instance, or
+no name at all. References answer a flat list of places, with no way to
+say one is less certain than the rest, so a loose name is left out, as
+definition leaves it. OpenTitan spells 23,218 of them, of 776,210 names
+used. **Revisit when** a reader misses one: those that resolve to the
+declaration asked about could be listed, if a client comes to tell an
+uncertain place apart, or once the parser reads the regions they are in.
+**Where** `astli-lsp/src/references.rs` (`symbol`)
+
+### What `.*` connects and a pattern's key are no references
+
+`.*` connects each port it is left to with the name of it where the
+instance stands, and `'{low: 1}` names a member of a struct, but neither
+is a site: what `.*` connects is kept beside the sites
+(`Names::wildcard`), and a pattern's key is looked up as a name, which a
+member is not. References to a port, to a signal `.*` connects, or to a
+member leave them out. **Revisit when** a design that connects by `.*`
+asks where a signal is read: each `.*` of a unit could be a reference to
+each port and each name it connects, and a key one to the member of the
+pattern's type. **Where** `astli-sema/src/sites.rs` (`sites`)
 
 ### Hover writes a union's value as its bits
 

@@ -94,7 +94,11 @@ impl Analysed {
 
     /// The unit of `file`.
     pub fn unit(&self, file: FileId) -> Option<&Unit> {
-        self.units.iter().find(|unit| unit.file == file)
+        // The units are in the order of the design's files.
+        match self.units.get(file.index()) {
+            Some(unit) if unit.file == file => Some(unit),
+            _ => self.units.iter().find(|it| it.file == file),
+        }
     }
 }
 

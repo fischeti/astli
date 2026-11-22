@@ -1,0 +1,6 @@
+hierarchical.sv 3:8
+  hierarchical.sv 3:8-3:24 `hierarchical_top` (declaration)
+  hierarchical.sv 11:17-11:33 `hierarchical_top`
+hierarchical.sv 5:9
+  hierarchical.sv 5:9-5:14 `probe` (declaration)
+  hierarchical.sv 11:34-11:39 `probe`

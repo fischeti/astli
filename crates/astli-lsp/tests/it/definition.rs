@@ -95,7 +95,7 @@ fn snapshots() {
 }
 
 /// The position of each character a `// ^` line of `text` marks.
-fn marked(text: &str) -> Vec<Position> {
+pub fn marked(text: &str) -> Vec<Position> {
     let mut found = Vec::new();
     let mut above = None;
     for (number, line) in text.lines().enumerate() {
@@ -118,7 +118,7 @@ fn marked(text: &str) -> Vec<Position> {
 
 /// The text `range` covers of the file at `path`, on one line, counted in
 /// UTF-16 code units.
-fn spelled(path: &Path, range: Range) -> String {
+pub fn spelled(path: &Path, range: Range) -> String {
     let text = std::fs::read_to_string(path).unwrap();
     let line = text
         .lines()
@@ -139,15 +139,15 @@ fn spelled(path: &Path, range: Range) -> String {
     said
 }
 
-fn written(position: Position) -> String {
+pub fn written(position: Position) -> String {
     format!("{}:{}", position.line + 1, position.character + 1)
 }
 
-fn range(range: Range) -> String {
+pub fn range(range: Range) -> String {
     format!("{}-{}", written(range.start), written(range.end))
 }
 
-fn uri(path: &Path) -> String {
+pub fn uri(path: &Path) -> String {
     lsp_types::Uri::from_file_path(path)
         .expect("absolute")
         .to_string()
