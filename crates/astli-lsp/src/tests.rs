@@ -171,6 +171,8 @@ fn initialize_negotiates_utf8_where_the_client_offers_it() {
         {
           "capabilities": {
             "documentFormattingProvider": true,
+            "documentSymbolProvider": true,
+            "foldingRangeProvider": true,
             "positionEncoding": "utf-8",
             "textDocumentSync": {
               "change": 2,

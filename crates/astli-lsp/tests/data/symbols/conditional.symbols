@@ -1,0 +1,10 @@
+module cond 12:1-37:10 name 12:8-12:12
+  property clk (input logic) 13:3-13:18 name 13:15-13:18
+  property dbg (input logic) 15:3-15:18 name 15:15-15:18
+  property q (output logic) 17:3-17:17 name 17:16-17:17
+  variable fpga_only (logic) 20:3-20:19 name 20:9-20:18
+  object u_impl (sub_fpga) 21:3-21:22 name 21:12-21:18
+  variable asic_only (logic) 23:3-23:19 name 23:9-23:18
+  object u_impl (sub_asic) 24:3-24:22 name 24:12-24:18
+  variable sim_only (logic) 26:3-26:18 name 26:9-26:17
+  variable after_macros (logic) 32:3-32:22 name 32:9-32:21

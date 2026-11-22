@@ -1,0 +1,53 @@
+module top 2:1-34:16 name 2:8-2:11
+  constant W (parameter int) 3:3-3:22 name 3:17-3:18
+  constant D (localparam int) 4:3-4:27 name 4:18-4:19
+  property clk (input logic) 6:3-6:27 name 6:24-6:27
+  property rst_n (input logic) 7:24-7:29 name 7:24-7:29
+  property q (output logic [W-1:0]) 8:3-8:25 name 8:24-8:25
+  property bus (bus_if.master) 9:3-9:27 name 9:24-9:27
+  enum state_t 11:3-11:56 name 11:48-11:55
+    enummember IDLE 11:29-11:33 name 11:29-11:33
+    enummember BUSY 11:35-11:46 name 11:35-11:39
+  struct beat_t 12:3-15:12 name 15:5-15:11
+    field valid (logic) 13:5-13:23 name 13:17-13:22
+    field data (logic [7:0]) 14:5-14:22 name 14:17-14:21
+  typeparameter word_t 16:3-16:32 name 16:25-16:31
+  variable a (wire) 18:3-18:14 name 18:9-18:10
+  variable b (wire) 18:3-18:14 name 18:12-18:13
+  variable count (logic [D-1:0]) 19:3-19:28 name 19:17-19:22
+  variable state (state_t) 20:3-20:17 name 20:11-20:16
+  object u_sub (sub) 22:3-22:48 name 22:16-22:21
+  object u_other (sub) 22:3-22:48 name 22:37-22:44
+  object g_and (and) 23:3-23:25 name 23:7-23:12
+  function add (int) 25:3-29:14 name 25:26-25:29
+    property x (input int) 25:30-25:41 name 25:40-25:41
+    property y (input int) 25:43-25:44 name 25:43-25:44
+    variable sum (int) 26:5-26:13 name 26:9-26:12
+  function wait_cycles (task) 31:3-33:10 name 31:18-31:29
+    property n (int) 31:30-31:35 name 31:34-31:35
+interface bus_if 36:1-40:13 name 36:11-36:17
+  variable valid (logic) 37:3-37:15 name 37:9-37:14
+  interface master (modport) 38:11-38:32 name 38:11-38:17
+    property valid (output) 38:19-38:31 name 38:26-38:31
+  interface slave (modport) 39:11-39:30 name 39:11-39:16
+    property valid (input) 39:18-39:29 name 39:24-39:29
+module test_prog (program) 42:1-44:11 name 42:19-42:28
+  event initial 43:3-43:26 name 43:3-43:10
+package pkg 46:1-50:11 name 46:9-46:12
+  constant N (parameter int) 47:3-47:23 name 47:17-47:18
+  function helper (void) 48:3-49:14 name 48:17-48:23
+class Packet 52:1-60:9 name 52:7-52:13
+  variable payload (rand bit [7:0]) 53:3-53:26 name 53:18-53:25
+  constructor new 54:3-56:14 name 54:12-54:15
+  method show (void) 57:3-57:39 name 57:32-57:36
+  method run (task) 58:3-59:10 name 58:8-58:11
+function Packet::show (void) 62:1-63:12 name 62:15-62:27
+module c_stable (checker) 65:1-69:11 name 65:9-65:17
+  property sig (logic) 65:19-65:28 name 65:25-65:28
+  property clk (event) 65:30-65:39 name 65:36-65:39
+  function p_stable (property) 66:3-68:14 name 66:12-66:20
+module mux (primitive) 71:1-78:13 name 71:11-71:14
+  property out (output) 72:3-72:14 name 72:10-72:13
+  property sel (input) 73:3-73:19 name 73:9-73:12
+  property a (input) 73:3-73:19 name 73:14-73:15
+  property b (input) 73:3-73:19 name 73:17-73:18

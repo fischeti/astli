@@ -1,0 +1,4 @@
+1-2 comment: // What the parser could not read is a `VERBATIM` region, and nothing in it
+3-9: module m;
+7-8: initial begin
+12-13 comment: // A module missing its `endmodule` falls back whole, so nothing in it is

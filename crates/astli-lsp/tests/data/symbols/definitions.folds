@@ -1,0 +1,15 @@
+2-4: module top #(
+5-9: ) (
+10-33: );
+12-14: typedef struct packed {
+25-28: function automatic int add(input int x, y);
+31-32: task automatic wait_cycles(int n);
+36-39: interface bus_if;
+42-43: program automatic test_prog;
+46-49: package pkg;
+52-59: class Packet extends Base;
+54-55: function new();
+65-68: checker c_stable (logic sig, event clk);
+66-67: property p_stable;
+71-77: primitive mux (out, sel, a, b);
+74-76: table

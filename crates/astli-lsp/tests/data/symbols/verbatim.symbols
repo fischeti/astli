@@ -1,0 +1,4 @@
+module m 3:1-10:10 name 3:8-3:9
+  variable first (logic) 4:3-4:15 name 4:9-4:14
+  variable last (logic) 6:3-6:14 name 6:9-6:13
+  event initial 7:3-9:6 name 7:3-7:10

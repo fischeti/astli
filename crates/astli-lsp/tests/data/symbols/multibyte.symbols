@@ -1,0 +1,8 @@
+module m 3:1-7:10 name 3:8-3:9
+  property a (input logic) 3:19-3:32 name 3:31-3:32
+  property \😀q (output logic) 3:42-3:60 name 3:55-3:59
+  variable b (logic) 4:12-4:20 name 4:18-4:19
+  variable \café (wire) 5:3-5:18 name 5:8-5:13
+  variable c (wire) 5:3-5:18 name 5:16-5:17
+  object u_sub (sub) 6:3-6:30 name 6:7-6:12
+  object u_two (sub) 6:40-6:53 name 6:44-6:49

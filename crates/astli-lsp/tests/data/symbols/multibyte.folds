@@ -1,0 +1,2 @@
+1-2 comment: // A character is counted in UTF-16 code units: `é` is one and `😀` two.
+3-6: module m /* é */ (input logic a /* ä */, output logic \😀q );
