@@ -23,15 +23,18 @@ use astli_diag::resolve_all;
 use astli_lint::{Config, Layer, Linter, RULES, Waivers, lint};
 use astli_parse::SyntaxTree;
 use astli_sema::{check, check_built};
-use astli_text::{Diagnostic as Finding, Edit, LineCol, Lines, Origins, Reader, Severity, Span};
+use astli_text::{
+    Diagnostic as Finding, Edit, LineCol, Lines, Origins, Reader, Severity, SourceId, Span,
+};
 use lsp_server::Notification;
 use lsp_types::{
-    Code, CodeDescription, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity, Location,
-    MessageType, Position, PublishDiagnosticsParams, Range, Uri,
+    Code, CodeDescription, Diagnostic, DiagnosticRelatedInformation, DiagnosticSeverity,
+    DiagnosticTag, Location, MessageType, Position, PublishDiagnosticsParams, Range, Uri,
 };
 use rayon::prelude::*;
 
 use crate::buffers::{self, key};
+use crate::cursor::held;
 use crate::position::Encoding;
 use crate::server::Server;
 use crate::tasks::panic_message;
@@ -140,6 +143,17 @@ pub fn found(
             }
             Err(payload) => panicked.push(format!(
                 "finding what the design at {at} says panicked: {}",
+                panic_message(&*payload)
+            )),
+        }
+        match catch_unwind(AssertUnwindSafe(|| inactive(snapshot, &open, shape))) {
+            Ok(inactive) => {
+                for (path, told) in inactive {
+                    design.entry(path).or_default().push(told);
+                }
+            }
+            Err(payload) => panicked.push(format!(
+                "finding what the build at {at} left out panicked: {}",
                 panic_message(&*payload)
             )),
         }
@@ -267,6 +281,128 @@ fn holds(unit: &Unit, open: &HashSet<&Path>) -> bool {
         .filter_map(|file| origins.path(file))
         .chain([unit.path.as_path()])
         .any(|path| named(path) && open.contains(key(path).as_path()))
+}
+
+/// The code of a branch body the build did not take.
+const INACTIVE: &str = "inactive-code";
+
+/// Each branch body of a file of `open` that the build did not take, as a
+/// hint the client fades, its range the lines the body covers and not the
+/// directives around it.
+///
+/// A file is read by every unit that holds it, a header by each inclusion,
+/// and a body is faded only where each of them skipped it: a header's
+/// branch one unit takes is code to the reader of that unit.
+fn inactive(snapshot: &Snapshot, open: &HashSet<&Path>, shape: Shape) -> Vec<(PathBuf, Told)> {
+    let mut found = Vec::new();
+    for &path in open {
+        // The bytes each reading of the file skipped, each with where its
+        // body starts, which names the directive that left it out.
+        let mut skipped: Option<Vec<(u32, u32, Option<u32>)>> = None;
+        let mut text: Option<(&Origins, SourceId)> = None;
+        for unit in snapshot.designs.iter().flat_map(|it| &it.units) {
+            for source in held(&unit.origins, path) {
+                let mut bodies: Vec<(u32, u32, Option<u32>)> = (unit.skipped.iter())
+                    .filter(|it| it.src_id == source)
+                    .map(|it| (it.start, it.end, Some(it.start)))
+                    .collect();
+                bodies.sort();
+                skipped = Some(match skipped {
+                    None => bodies,
+                    Some(was) => overlap(&was, &bodies),
+                });
+                text.get_or_insert((&*unit.origins, source));
+            }
+        }
+        let (Some(skipped), Some((origins, source))) = (skipped, text) else {
+            continue;
+        };
+        let (text, lines) = (origins.text(source), origins.lines(source));
+        for (start, end, body) in skipped {
+            let Some(bytes) = written_lines(text, start..end) else {
+                continue;
+            };
+            let range = shape.encoding.range(text, lines, bytes);
+            let message = match body.and_then(|it| left_out_by(text, it)) {
+                Some(why) => format!("not built: {why}"),
+                None => "not built under this build's defines".to_string(),
+            };
+            let diagnostic = Diagnostic {
+                range,
+                severity: Some(DiagnosticSeverity::Hint),
+                code: Some(Code::String(INACTIVE.to_string())),
+                source: Some("astli".to_string()),
+                message: message.into(),
+                tags: Some(vec![DiagnosticTag::Unnecessary]),
+                ..Diagnostic::default()
+            };
+            let reach = range.end;
+            let fix = Vec::new();
+            let told = Told {
+                diagnostic,
+                reach,
+                fix,
+            };
+            found.push((path.to_path_buf(), told));
+        }
+    }
+    found
+}
+
+/// The bytes both `a` and `b` cover, each a sorted list of ranges apart
+/// from one another, with the body they start in where both are in the
+/// same one.
+fn overlap(
+    a: &[(u32, u32, Option<u32>)],
+    b: &[(u32, u32, Option<u32>)],
+) -> Vec<(u32, u32, Option<u32>)> {
+    let mut found = Vec::new();
+    let (mut i, mut j) = (0, 0);
+    while let (Some(&(a_start, a_end, a_body)), Some(&(b_start, b_end, b_body))) =
+        (a.get(i), b.get(j))
+    {
+        let (start, end) = (a_start.max(b_start), a_end.min(b_end));
+        if start < end {
+            let body = a_body.filter(|_| a_body == b_body);
+            found.push((start, end, body));
+        }
+        match a_end < b_end {
+            true => i += 1,
+            false => j += 1,
+        }
+    }
+    found
+}
+
+/// The lines of `text` that what `bytes` holds is written on, from the
+/// first line's start to the last's end, but none of either outside
+/// `bytes`, where a directive may stand; `None` if it holds only space.
+fn written_lines(text: &str, bytes: Bytes<u32>) -> Option<Bytes<u32>> {
+    let body = &text[bytes.start as usize..bytes.end as usize];
+    let first = bytes.start as usize + body.find(|it: char| !it.is_whitespace())?;
+    let last = bytes.start as usize + body.trim_end().len();
+    let start = text[..first].rfind('\n').map_or(0, |at| at + 1);
+    let end = text[last..]
+        .find(['\r', '\n'])
+        .map_or(text.len(), |at| last + at);
+    Some(start.max(bytes.start as usize) as u32..end.min(bytes.end as usize) as u32)
+}
+
+/// Why the body that starts at byte `body` of `text` was left out, where
+/// the directive before it says so plainly: the name an `` `ifdef `` or an
+/// `` `ifndef `` tests, or that an `` `else `` follows a branch taken. An
+/// `` `elsif `` may be left out for its name or for a branch before it, and
+/// an expression is not read again here.
+fn left_out_by(text: &str, body: u32) -> Option<String> {
+    let before = &text[..body as usize];
+    let directive = &before[before.rfind('`')?..];
+    let words: Vec<&str> = directive.split_whitespace().collect();
+    match words.as_slice() {
+        ["`ifdef", name] if !name.starts_with('(') => Some(format!("`{name}` is not defined")),
+        ["`ifndef", name] if !name.starts_with('(') => Some(format!("`{name}` is defined")),
+        ["`else"] => Some("a branch before it is taken".to_string()),
+        _ => None,
+    }
 }
 
 /// What the file of `unit` waives, as written: the design rules honour the

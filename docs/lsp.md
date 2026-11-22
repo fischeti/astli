@@ -6,9 +6,10 @@
 > Formatting is answered from the buffer, document symbols and folding
 > from its raw tree, and workspace symbols from the loaded designs' indexes,
 > on the pool; diagnostics are published from the buffer and the snapshot,
-> and their fixes offered as code actions. A position is looked up in the
-> snapshot, and go to definition, references, document highlights and
-> hover answer from it; semantic tokens say what each name of a file is.
+> the branches the build did not take among them, and their fixes offered
+> as code actions. A position is looked up in the snapshot, and go to
+> definition, references, document highlights and hover answer from it;
+> semantic tokens say what each name of a file is.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
 
 `astli lsp` is a language server for reading a design more than for writing
@@ -38,13 +39,13 @@ lowered and elaborated, as `check` builds it.
 | --- | --- | --- |
 | Document symbols, folding | the raw tree | definitions, classes, subroutines, declarations, instances, blocks, each with its range; every branch of a conditional |
 | Formatting | the buffer | `astli fmt`'s output under the package's `[fmt]`, as an edit of the lines that differ |
-| Diagnostics | both | the raw parse's and the tree lint rules' at once; the preprocessor's, the expanded parse's, `check`'s and the design lint rules' from the snapshot |
+| Diagnostics | both | the raw parse's and the tree lint rules' at once; the preprocessor's, the expanded parse's, `check`'s and the design lint rules' from the snapshot, and the branches the build did not take |
 | Code actions | what was published | the edits `lint --fix` would apply, one finding or the whole file |
 | Workspace symbols | each snapshot's index | every module, interface, program, checker, primitive, package and class of the packages and their dependencies |
 | Definition, references, highlights | the snapshot | where a name is declared and used, a macro's `` `define `` and calls, an `` `include ``'s header |
 | Hover | the snapshot | a declaration's type and width, a parameter's value, a macro call's expansion |
 | Inlay hints | the snapshot | the formal a positional connection lands on, what `.*` connects, an override's value |
-| Semantic tokens | the snapshot | what a name is, and the branches the build did not take |
+| Semantic tokens | the snapshot | what a name is |
 
 ## Buffers, units and snapshots
 
@@ -452,6 +453,30 @@ write a drive letter, otherwise than the path's own URI does. A file not
 open is published under the URI its path makes, and cleared under the one
 it was last published under.
 
+### What the build did not take
+
+The body of each conditional branch the build left out, under the
+package's defines and those a unit's files define before it, is published
+with the design's findings as a hint tagged `Unnecessary`, code
+`inactive-code`, which most editors fade and leave out of a problems list
+([L32](#decisions)). Its range is the lines the body is written on, not
+the directives around it, and its message says why where the directive
+says so plainly: the name an `` `ifdef `` or `` `ifndef `` tests, or that
+an `` `else `` follows a branch taken; an `` `elsif `` or an expression
+says only that it is not built. A body with nothing but space in it is not
+published.
+
+A file is read by every unit, of every design of the snapshot, that holds
+it, and a header by each time a unit includes it. A body is faded only
+where each of them left it out, since a header's branch one unit takes is
+code to the reader of that unit: where one skips an outer branch and
+another takes it and skips a branch inside, the inner body is faded. A
+branch in a macro's body is decided at each call, and is never faded. As
+the design's findings, it is taken only from a load that read the buffer
+as it is, dropped by a change at or before it, and held back where the
+dependencies could not be read ([L24](#decisions)). It has no fix, so no
+code action.
+
 ## Code actions
 
 `textDocument/codeAction` offers the fixes of what was last published for
@@ -786,6 +811,7 @@ neither `full/delta` nor a cache of the answer is built.
 | L29 | A code action is made from what was last published for the file, while that was published for the buffer's version; a quick fix for each diagnostic the request names that was published with a fix, and fix all as `lint --fix` fixes the buffer, at the levels it was published with | A fix is bytes of the text its finding was found in, and the buffer's findings are found again on every change, so what was published for the version is what the fix is right for. Matching the client's diagnostics against what was published, rather than finding again what lies in the range, offers nothing for a diagnostic the client holds from an older text. Fix all lints the fixed text again, as `lint --fix` does, since a fix that overlaps another is right only for the text the other leaves; its first pass is what was published, the same text at the same levels. |
 | L30 | References scan each unit's kept sites for those that mean what the cursor's mean, a symbol or a member by where its name is spelled and a definition by its name, in the units whose text spells the name. No table from a declaration to its uses is kept. A name in an opaque region is not listed | The sites are what costs, and the lookup keeps them already; a table built from them would be built again on every edit, for a request a reader makes now and then, where the scan takes milliseconds. A header's symbol is one per unit that includes it, and a reader means one. Whether a text spells a name is a superset of where a use may be, where the index's references are not: a name sema finds among the definitions, as the head of `top.sig`, is no reference in a summary. The protocol's answer is a flat list with no place to say one is uncertain, and an opaque region's name may mean any declaration of it. |
 | L31 | Semantic tokens say what a name is, from the first unit that holds the file, in standard types where one fits and with a custom modifier for a port's direction and a net. Nothing the grammar colours gets a token, and no `full/delta` | The grammar already colours keywords, literals and comments, and a token over them would fight the theme for nothing. Asking every unit that includes a header would walk each one's HIR on every edit, 595 of them for `prim_assert.sv`, to settle a disagreement that almost never arises. A custom type is coloured by no theme, where a custom modifier on `variable` falls back to the variable's colour. The whole of a 560 kB file takes 4.4 ms. |
+| L32 | A branch the build did not take is a hint diagnostic tagged `Unnecessary`, published with the design's findings, and only where every unit that reads the file left it out. Not a `comment` semantic token | The protocol has no token for inactive code. A `comment` token recolours the code as a comment, which hides what it is from a reader who still reads it as code; a faded hint keeps the grammar's colours and stays out of the problems list. Published as a diagnostic, it is versioned, kept across a change and cleared as every other finding is, and it is the design's, as which branch is taken depends on the build. A header's branch taken by one unit is code there. |
 
 ## Prior art
 
