@@ -1000,18 +1000,6 @@ in a hover: the member a tag beside it names, or the first, could be
 shown. **Where** `astli-lsp/src/hover/value.rs` (`Said::packed`,
 `Said::value`)
 
-### Fixing all of a file is one pass of `lint --fix`
-
-`source.fixAll.astli` applies every fix of what was published for the
-file at once, and a fix that overlaps one before it, as two parentheses
-opened at the same place do, is left for the next time it is asked.
-`lint --fix` lints the fixed text again, up to eight passes, but that loop
-is the driver's (`astli-cli/src/cmd/lint.rs`, `fix`), and the server
-depends on no driver code. **Revisit when** a fix all on save leaves a
-finding often enough to notice: the loop would move into `astli-lint`, as
-a function from a tree and its levels to the fixed text, which both call.
-**Where** `astli-lsp/src/actions.rs` (`Fixable::actions`)
-
 ### A code action is answered as a literal, whatever the client takes
 
 `textDocument/codeAction` answers code actions that carry their edits, and

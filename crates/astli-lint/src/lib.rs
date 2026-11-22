@@ -76,7 +76,7 @@ pub use waiver::{INVALID_WAIVER, Waivers};
 
 use astli_parse::SyntaxTree;
 use astli_sema::{Access, Built, Elaboration, FileId, Resolution, SymbolRef, accesses};
-use astli_text::{Diagnostic, Origins, Severity};
+use astli_text::{Diagnostic, Edit, Origins, Severity, apply};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -113,6 +113,47 @@ pub fn lint(tree: &SyntaxTree, waivers: &Waivers, config: &Config) -> Vec<Diagno
         },
     );
     found
+}
+
+/// How many times [`fix`] lints a tree at most: a fix that overlaps another
+/// waits for the next pass, and a file that still has one after this many
+/// is left with it rather than run on.
+const PASSES: usize = 8;
+
+/// `tree` with the fixes of what [`lint`] finds in it at `config` applied,
+/// pass after pass until none is left, and how many were; `None` if none
+/// was.
+///
+/// Each pass reads the waivers of the tree it lints, and applies its fixes
+/// with [`apply`], one overlapping a fix before it left for the next pass.
+/// A tree the parser did not read whole is not fixed, since a fix is only
+/// known safe in a tree that says what each token is; a pass whose result
+/// would not parse whole is dropped, and ends the passes.
+pub fn fix(tree: &SyntaxTree, config: &Config) -> Option<(SyntaxTree, usize)> {
+    if !tree.diagnostics().is_empty() {
+        return None;
+    }
+    let (mut fixed, mut applied) = (None::<SyntaxTree>, 0);
+    for _ in 0..PASSES {
+        let current = fixed.as_ref().unwrap_or(tree);
+        let (waivers, _) = Waivers::read(current);
+        let found = lint(current, &waivers, config);
+        let fixes: Vec<&[Edit]> = (found.iter())
+            .map(|it| it.fix.as_slice())
+            .filter(|it| !it.is_empty())
+            .collect();
+        if fixes.is_empty() {
+            break;
+        }
+        let (text, count) = apply(current.source(), &fixes);
+        let next = SyntaxTree::parse(current.path(), text);
+        if !next.diagnostics().is_empty() {
+            break;
+        }
+        applied += count;
+        fixed = Some(next);
+    }
+    fixed.map(|it| (it, applied))
 }
 
 /// Runs `check` for each rule `config` leaves on, given the rule with its

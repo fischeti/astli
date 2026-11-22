@@ -474,11 +474,12 @@ would not.
   an older version names a range or a message the server no longer has,
   and is offered nothing. It is marked preferred, since a fix keeps what
   the code means.
-- **Fix all**, `source.fixAll.astli`, every fix of the file, applied as a
-  pass of `lint --fix` applies them: in the order of the file, each whole,
-  one overlapping a fix before it left out. It is one pass, where `--fix`
-  runs up to eight
-  ([limitations](limitations.md#fixing-all-of-a-file-is-one-pass-of-lint---fix)),
+- **Fix all**, `source.fixAll.astli`, the file fixed as `lint --fix`
+  fixes it, by the same function of `astli-lint`: the buffer linted again
+  at the levels it was published with and every fix applied, one
+  overlapping a fix before it left for the next pass, pass after pass,
+  eight at most. Its first pass finds what was published, in the same text
+  at the same levels. It is offered while something published has a fix,
   and its edit is one per run of lines that changed, as formatting's.
 
 `context.only` keeps the kinds it names or a kind under one: `source`
@@ -645,7 +646,7 @@ or a macro no `` `define `` defines.
 | L26 | A lookup in a file whose buffer differs from the text its snapshot read answers `ContentModified` | The position is in the buffer's text, and the snapshot's places are in the text it read, so any answer would be placed where the text no longer is. The edit has made the design due already, and the client asks again. Mapping the position back through the edit would need the edits kept since the load. |
 | L27 | Definition answers every place what stands at the cursor leads to, each once: a name's declaration, each declaration of a definition several files declare, what a macro-written name is in each expansion. A declaration answers itself, as links where the client takes them | A name in a header or a macro's body means one thing per inclusion or expansion, and a reader asking where it is declared wants all of them, not the first unit's. An answer of itself lets a client say "this is the definition" rather than nothing. A link's origin tells the client what the answer was for, which a macro call or a positional connection spans more widely than the word under the cursor. |
 | L28 | Hover shows a declaration as written, read from the raw tree of its file, with the comment above it in the same code block. A value is said at the defaults and for each distinct value under the tops, an integer atom type's as a plain number | Lowering keeps a declaration's name and not its range ([S74](sema.md#decisions)), and the raw tree has every declaration as written, the ones a branch hides too, so a hover reads the one file it shows. A comment in SystemVerilog is plain text, which markdown would mangle, and in the block it is shown as written. A sized literal says a value exactly, and `32'sd8` for an `int` is noise where `8` says the same. |
-| L29 | A code action is made from what was last published for the file, while that was published for the buffer's version; a quick fix for each diagnostic the request names that was published with a fix, and fix all as one pass of `lint --fix` | A fix is bytes of the text its finding was found in, and the buffer's findings are found again on every change, so what was published for the version is what the fix is right for. Matching the client's diagnostics against what was published, rather than finding again what lies in the range, offers nothing for a diagnostic the client holds from an older text. |
+| L29 | A code action is made from what was last published for the file, while that was published for the buffer's version; a quick fix for each diagnostic the request names that was published with a fix, and fix all as `lint --fix` fixes the buffer, at the levels it was published with | A fix is bytes of the text its finding was found in, and the buffer's findings are found again on every change, so what was published for the version is what the fix is right for. Matching the client's diagnostics against what was published, rather than finding again what lies in the range, offers nothing for a diagnostic the client holds from an older text. Fix all lints the fixed text again, as `lint --fix` does, since a fix that overlaps another is right only for the text the other leaves; its first pass is what was published, the same text at the same levels. |
 
 ## Prior art
 
