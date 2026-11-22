@@ -43,7 +43,15 @@ use crate::error::{Error, Result};
 #[derive(Cli)]
 // Disallow unknown flags so typos are reported immediately instead of
 // being mistakenly treated as input file paths.
-#[usage(bin = "astli", long_version, completion, unknown_flags = "error")]
+// The built-in `help` row takes no heading of its own: it joins the commands
+// that have none, so the section they share is named here.
+#[usage(
+    bin = "astli",
+    long_version,
+    completion,
+    unknown_flags = "error",
+    subcommand_help_heading = "Editor and shell"
+)]
 pub struct Astli {
     #[usage(subcommand)]
     pub command: Commands,
@@ -56,48 +64,48 @@ pub struct Astli {
 #[derive(Subcommands)]
 #[usage(run_with)]
 pub enum Commands {
-    #[usage(help_heading = "Source", display_order = 1)]
+    #[usage(help_heading = "Code", display_order = 1)]
     Fmt(Fmt),
-    #[usage(help_heading = "Source", display_order = 2)]
+    #[usage(help_heading = "Code", display_order = 2)]
     Lint(Lint),
-    #[usage(help_heading = "Design", display_order = 3)]
+    #[usage(help_heading = "Code", display_order = 3)]
     Check(Check),
     #[usage(help_heading = "Design", display_order = 4)]
-    Files(Files),
-    #[usage(help_heading = "Design", display_order = 5)]
-    Pickle(Pickle),
-    #[usage(help_heading = "Design", display_order = 6)]
     Elab(Elab),
-    #[usage(help_heading = "Design", display_order = 7)]
+    #[usage(help_heading = "Design", display_order = 5)]
+    Files(Files),
+    #[usage(help_heading = "Design", display_order = 6)]
+    Pickle(Pickle),
+    #[usage(help_heading = "Simulation", display_order = 7)]
     Build(Build),
-    #[usage(help_heading = "Design", display_order = 8)]
+    #[usage(help_heading = "Simulation", display_order = 8)]
     Run(Run),
-    #[usage(help_heading = "Design", display_order = 9)]
+    #[usage(help_heading = "Simulation", display_order = 9)]
     Test(Test),
-    #[usage(help_heading = "Design", display_order = 10)]
+    #[usage(help_heading = "Simulation", display_order = 10)]
     Clean(Clean),
-    #[usage(help_heading = "Dependencies", display_order = 11)]
+    #[usage(help_heading = "Package", display_order = 11)]
     Init(Init),
-    #[usage(help_heading = "Dependencies", display_order = 12)]
+    #[usage(help_heading = "Package", display_order = 12)]
     Add(Add),
-    #[usage(help_heading = "Dependencies", display_order = 13)]
+    #[usage(help_heading = "Package", display_order = 13)]
     Remove(Remove),
-    #[usage(help_heading = "Dependencies", display_order = 14)]
+    #[usage(help_heading = "Package", display_order = 14)]
     Update(Update),
-    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 15)]
-    Fetch(Fetch),
-    #[usage(help_heading = "Dependencies", display_order = 16)]
+    #[usage(help_heading = "Package", display_order = 15)]
     Tree(Tree),
-    #[usage(help_heading = "Dependencies", display_order = 17)]
-    Path(Path),
-    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 18)]
-    Patch(Patch),
-    #[usage(help_heading = "Dependencies", display_order = 19)]
-    Snapshot(Snapshot),
-    #[usage(help_heading = "Dependencies", display_order = 20)]
-    Cache(Cache),
-    #[usage(help_heading = "Dependencies", display_order = 21)]
+    #[usage(help_heading = "Package", display_order = 16)]
     Bender(Bender),
+    #[usage(alias = "checkout", help_heading = "Dependencies", display_order = 17)]
+    Fetch(Fetch),
+    #[usage(help_heading = "Dependencies", display_order = 18)]
+    Path(Path),
+    #[usage(alias = "clone", help_heading = "Dependencies", display_order = 19)]
+    Patch(Patch),
+    #[usage(help_heading = "Dependencies", display_order = 20)]
+    Snapshot(Snapshot),
+    #[usage(help_heading = "Dependencies", display_order = 21)]
+    Cache(Cache),
     #[usage(display_order = 22)]
     Lsp(Lsp),
     #[usage(display_order = 23)]
