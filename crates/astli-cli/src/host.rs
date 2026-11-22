@@ -12,6 +12,7 @@ use astli_fmt::Options;
 use astli_lint::Config;
 use astli_lsp::{Analysed, At, Memo, Place, Problem, Snapshot, Unit, Watched};
 use astli_package::{BENDER_MANIFEST, EXTENSIONS, MANIFEST, mark};
+use astli_preproc::Build;
 use astli_resolve::LOCKFILE;
 use astli_text::Reader;
 
@@ -323,6 +324,15 @@ fn analysed(run: &Run, plan: &Plan, analysis: Analysis, levels: &Leveled) -> Res
     };
     let linted = marked(plan.shown(reached.as_deref(), Whose::Own));
     let checked = marked(checked);
+    // A package's units share a few builds.
+    let mut builds: Vec<Arc<Build>> = Vec::new();
+    let mut shared = |build: &Build| match builds.iter().find(|it| ***it == *build) {
+        Some(it) => it.clone(),
+        None => {
+            builds.push(Arc::new(build.clone()));
+            builds[builds.len() - 1].clone()
+        }
+    };
     let units = (plan
         .units
         .iter()
@@ -340,6 +350,7 @@ fn analysed(run: &Run, plan: &Plan, analysis: Analysis, levels: &Leveled) -> Res
         linted: linted[at] && levels.contains_key(&unit.path),
         calls: recorded.calls,
         skipped: recorded.skipped,
+        build: shared(plan.build(unit)),
         memo: Memo::default(),
     })
     .collect();
@@ -384,6 +395,7 @@ mod tests {
 
     use astli_lint::Layer;
     use astli_lsp::{Host as _, Snapshot};
+    use astli_preproc::Resolved;
     use astli_testing::Fixture;
     use astli_text::{Disk, Reader};
 
@@ -463,7 +475,14 @@ mod tests {
             assert_eq!(snapshot.units(), 3);
             snapshot
         };
-        assert_eq!(load(&buffers).lowered, 3);
+        let snapshot = load(&buffers);
+        assert_eq!(snapshot.lowered, 3);
+        // Each unit keeps the build it was expanded with, one for all
+        // three, which searches the manifest's include directories.
+        let units = &snapshot.designs[0].units;
+        assert!((units.iter()).all(|it| Arc::ptr_eq(&it.build, &units[0].build)));
+        let resolved = units[0].build.resolve("a.svh", false, &Disk);
+        assert_eq!(resolved, Resolved::Found(header.clone()));
 
         let edited = "`include \"a.svh\"\nmodule edited;\nendmodule\n";
         buffers.0.insert(one.clone(), edited.to_string());

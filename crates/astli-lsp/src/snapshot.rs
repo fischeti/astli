@@ -9,6 +9,7 @@ use std::sync::{Arc, OnceLock};
 
 use astli_index::Index;
 use astli_lint::Config;
+use astli_preproc::Build;
 use astli_sema::{BodyId, Built, Design, Elaboration, FileId, Sites};
 use astli_text::{Diagnostic, ExpansionId, LineCol, Origins, Severity, Span};
 
@@ -115,6 +116,10 @@ pub struct Unit {
     pub calls: Arc<[ExpansionId]>,
     /// The body of each branch its expansion did not take, as written.
     pub skipped: Arc<[Span]>,
+    /// The include directories and defines it was expanded with, which
+    /// expanding it again from the texts its origins hold takes. Units of
+    /// one build share it.
+    pub build: Arc<Build>,
     /// What requests find of it and keep for the next; a load makes it
     /// empty, with `Memo::default()`.
     pub memo: Memo,
