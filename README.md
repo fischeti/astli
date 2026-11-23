@@ -1,6 +1,6 @@
 # astli
 
-A modern SystemVerilog toolchain in a single binary, written in pure Rust. Much like `cargo` does for Rust, `astli` formats, lints, and checks your designs while managing dependencies—discovering your project structure automatically without requiring manual filelists.
+A modern SystemVerilog toolchain in a single binary, written in pure Rust. Much like `cargo` does for Rust, `astli` formats, lints, checks, builds and tests your designs and manages their dependencies, finding your project's files on its own instead of asking for a filelist. `astli lsp` brings the same analysis to your editor.
 
 ```sh
 astli fmt          # Format every file in the package (lowRISC style)
@@ -10,9 +10,11 @@ astli elab         # Inspect the elaborated instance hierarchy for a top-level m
 astli files        # Generate a trimmed, topologically ordered filelist for a top module
 astli pickle       # Flatten an entire design into a single self-contained source file
 astli run          # Build a testbench with Verilator and run it
+astli test         # Build and run every testbench the package marks, in parallel
 astli add URL      # Add a git dependency at its latest release
 astli update       # Resolve dependencies and pin them in astli.lock
 astli fetch        # Download dependencies into a shared local cache
+astli lsp          # Run the language server for your editor
 ```
 
 An `astli` package is simply a directory containing an `astli.toml` manifest. Instead of forcing you to maintain exhaustive lists of source files, `astli` automatically discovers your sources by convention and uses `astli.toml` to manage package settings, features, and dependencies.
@@ -34,6 +36,7 @@ Rust solved this fragmentation for its ecosystem with `cargo`: one tool, one pac
 - **A single shared frontend**: One preprocessor and one lossless concrete syntax tree (CST) power every stage—formatting, linting, semantic checking, and dependency resolution all share the exact same view of your code.
 - **Pure Rust data structures**: While [slang](https://github.com/MikePopoloski/slang) is a phenomenal C++ reference frontend, integrating with it from Rust requires complex FFI bindings, opaque pointers, and hefty C++ toolchain dependencies. `astli` is 100% Rust: syntax nodes are native Rust types that can be walked, transformed, and emitted back to text with comments and formatting perfectly preserved.
 - **Zero-configuration discovery**: Run `astli` inside a repository and it discovers your packages and source files on its own.
+- **The same answers in the editor**: The language server reads the package exactly as `astli check` does, so what your editor flags is what CI fails on.
 
 ---
 
@@ -52,7 +55,7 @@ Each of these tools excels in specific areas, and several remain mature industry
 | **Name resolution & elaboration** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Filelist-free design discovery** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Fetches & locks dependencies** | ✅ | ❌ | ❌ | ✅ | ❌ |
-| **Language server (LSP)** | ❌ | ◐ | ✅ | ❌ | ❌ |
+| **Language server (LSP)** | ✅ | ◐ | ✅ | ❌ | ❌ |
 
 *(Legend: ✅ Full support, ◐ Partial support, ❌ Not supported)*
 
@@ -70,11 +73,13 @@ Each of these tools excels in specific areas, and several remain mature industry
 - Cross-file name resolution, constant evaluation, and type checking
 - Module elaboration and multi-driver checking
 - Dependency resolution, caching, and lockfiles
+- Building and testing with Verilator, from the files each top needs
+- A language server over the same semantic model
 
-`astli` is strictly an analysis, verification, and tooling platform; it is **not** a simulator or synthesis tool, nor does it aim to be one. A Language Server Protocol (LSP) implementation based on the existing semantic model is planned for upcoming releases.
+`astli` is an analysis, verification, and tooling platform; it is **not** a simulator or synthesis tool, nor does it aim to be one. `astli build`, `run` and `test` hand the design to Verilator.
 
 > [!IMPORTANT]
-> `astli` is currently pre-1.0. While active development is thoroughly validated against large real-world open-source designs via [`scripts/fetch-corpus.sh`](https://github.com/fischeti/astli/blob/main/scripts/fetch-corpus.sh), command flags and library APIs may evolve before stabilization.
+> `astli` is currently pre-1.0. While active development is thoroughly validated against large real-world open-source designs via [`scripts/fetch-corpus.sh`](https://github.com/fischeti/astli/blob/main/scripts/fetch-corpus.sh), command flags and library APIs may evolve before stabilization. `astli elab` and `astli lsp` are previews, whose output may change in any release.
 
 ---
 
@@ -82,10 +87,16 @@ Each of these tools excels in specific areas, and several remain mature industry
 
 Precompiled binaries are available for Linux (x86_64, aarch64), macOS (Apple Silicon), and Windows.
 
-### Shell Installer (Linux & macOS)
+### Installer
 
 ```sh
+# Linux and macOS
 curl -LsSf https://astli.dev/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -c "irm https://astli.dev/install.ps1 | iex"
 ```
 
 ### Python Package (`uv` or `pip`)
@@ -113,13 +124,26 @@ For more options, check the [Getting Started Guide](https://astli.dev/getting-st
 
 ---
 
+## Editors
+
+`astli lsp` reports what `astli lint` and `astli check` find as you type, formats under the package's `[fmt]`, and offers go to definition, find references, hover with elaborated types and parameter values, and inlay hints for positional connections.
+
+- **VS Code**: install [astli](https://marketplace.visualstudio.com/items?itemName=fischeti.astli) from the Marketplace, or from [Open VSX](https://open-vsx.org/extension/fischeti/astli) for VSCodium and Cursor. It bundles the `astli` binary.
+- **Zed, Neovim and Emacs**: see the [Editors guide](https://astli.dev/editors/) for the configuration each needs.
+- **Claude Code**: the astli plugin teaches the agent the CLI and starts the language server, so it sees the problems after each edit:
+  ```sh
+  /plugin marketplace add fischeti/astli
+  /plugin install astli@astli
+  ```
+
+---
+
 ## Using astli as a Library
 
 All underlying crates are published on [crates.io](https://crates.io/crates/astli) under the umbrella `astli` crate:
 
-```toml
-[dependencies]
-astli = "0.6"
+```sh
+cargo add astli
 ```
 
 ```rust
@@ -209,6 +233,10 @@ cargo run -- parse top.sv --quiet
 | `crates/astli-lsp` | The language server's loop, behind `astli lsp` |
 | `crates/astli` | Top-level library re-exporting the library crates |
 | `crates/astli-cli` | The main command-line executable (`astli`) |
+| `crates/astli-testing` | Test helpers the crates share: the corpus walker and the snapshot loop (never published) |
+| `editors/vscode` | The VS Code extension, bundling the binary |
+| `editors/zed` | The Zed extension, which starts `astli lsp` |
+| `plugin/` | The Claude Code plugin and its Agent Skill |
 | `docs/` | Internal architecture and planning documents |
 | `site/` | Documentation website, generated via `scripts/site.sh` |
 </details>

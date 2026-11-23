@@ -156,13 +156,17 @@ astli elab --top my_soc_top
 On GitHub Actions, [`astli-action`](https://github.com/fischeti/astli-action) installs a pinned `astli` and caches the dependencies. `--locked` fails the run if `astli.lock` does not match `astli.toml`:
 
 ```yaml
-- uses: fischeti/astli-action@v0.5.0
+- uses: fischeti/astli-action@v0.7.0
 - run: astli fmt --check
 - run: astli lint --locked
 - run: astli check --locked --top my_soc_top
 ```
 
 For other CI systems, upgrades and pull request annotations, see the [CI Guide](ci.md).
+
+## Editor setup
+
+`astli lsp` is a language server: the problems `lint` and `check` find appear as you type, and go to definition, hover and formatting work across the package and its dependencies. In VS Code, install the [astli extension](https://marketplace.visualstudio.com/items?itemName=fischeti.astli), which brings the binary. [Editors](editors.md) has the setup for Zed, Neovim and Emacs.
 
 ## AI agent integration
 

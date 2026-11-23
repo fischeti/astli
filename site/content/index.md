@@ -1,12 +1,12 @@
 # astli
 
-A SystemVerilog toolchain in one binary. As `cargo` does for Rust, `astli` formats, lints, checks and builds your designs, and manages their dependencies, without a hand-written filelist.
+A SystemVerilog toolchain in one binary. As `cargo` does for Rust, `astli` formats, lints, checks, builds and tests your designs, and manages their dependencies, without a hand-written filelist.
 
 ```sh
 astli fmt     # Format every file in the package (lowRISC style)
 astli lint    # Catch common bugs, syntax pitfalls, and style violations
 astli check   # Check undeclared names, port mismatches, and multi-driver conflicts
-astli run     # Build a testbench with Verilator and run it
+astli test    # Build and run every testbench the package marks, with Verilator
 ```
 
 Run `astli` in a repository and it finds the package's files itself. An optional `astli.toml` names the package, its include directories and its dependencies, and every command reads the design from it.
@@ -24,16 +24,23 @@ Run `astli` in a repository and it finds the package's files itself. An optional
 - [`astli elab`](checking.md#the-instance-tree-astli-elab) prints the instance tree a top builds.
 - [`astli files` and `astli pickle`](filelists.md) write the files a top needs, in compile order, as a filelist or as one source file.
 
-- [`astli build` and `astli run`](building.md) compile a top with Verilator, from the files it needs, and run the simulation.
-- [`astli test`](testing.md) builds and runs every testbench the package marks `(* astli_test *)`, in parallel, and reports each one on its own.
+**Simulation**, with Verilator:
+
+- [`astli build` and `astli run`](building.md) compile a top from the files it needs, and run the simulation.
+- [`astli test`](testing.md) builds and runs every testbench the package marks `(* astli_test *)`, across the parameter values it sweeps, in parallel, and reports each one on its own.
 
 **Dependencies**:
 
 - [`astli add`, `astli update` and `astli fetch`](dependencies.md) resolve Git and path dependencies, record the chosen commits in `astli.lock`, and check them out into a shared cache.
+- [Workspaces](workspaces.md) hold several packages in one repository, with one lock between them.
+
+**In the editor**:
+
+- [`astli lsp`](editors.md) shows what `lint` and `check` report as you type, formats, and adds go to definition, references, hover and inlay hints, in VS Code, Zed, Neovim, Emacs and Claude Code.
 
 ## How it works
 
-Every command reads code through the same preprocessor and the same lossless parser, so the formatter, the linter and the checker agree on what the code says. What the parser doesn't recognize stays in the tree as it was written, so no comment, macro or construct is ever dropped.
+Every command reads code through the same preprocessor and the same lossless parser, so the formatter, the linter, the checker and the language server agree on what the code says. What the parser doesn't recognize stays in the tree as it was written, so no comment, macro or construct is ever dropped.
 
 `astli` is not a simulator or a synthesis tool: `astli build` hands the design to Verilator.
 

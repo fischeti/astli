@@ -26,7 +26,7 @@ nav = [
     { "Testing" = "testing.md" },
     { "CI" = "ci.md" },
     { "Editors" = "editors.md" },
-    { "Coming from bender" = "bender.md" },
+    { "Coming from Bender" = "bender.md" },
   ] },
   { "Reference" = [
     { "Commands" = "reference/cli.md" },
