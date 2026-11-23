@@ -1,6 +1,184 @@
 # Coming from Bender
 
-[Bender](https://github.com/pulp-platform/bender), from the PULP Platform, manages dependencies and generates filelists. `astli` reads a Bender project as it is, and you can move to `astli` one step at a time.
+[Bender](https://github.com/pulp-platform/bender), from the PULP Platform, manages dependencies and generates filelists. `astli` does both, built on the same ideas, and also reads the code: it formats, lints and checks the design, and builds and tests it with Verilator. It reads a Bender project as it is, so you can move to `astli` one step at a time.
+
+## At a glance
+
+| | Bender | `astli` |
+| :--- | :--- | :--- |
+| Source files | Listed in `Bender.yml`, in compile order | Found below the package root; ordered by what each file declares and uses |
+| Build variants | Targets, set for every package at once with `-t` | Features, each package's own, enabled by name across dependencies |
+| Version conflicts | The root's requirement wins, or Bender asks at the terminal | An error, unless `[resolve] pinned` in `astli.toml` settles it, with a warning for each requirement it overrules |
+| Checkouts | In `.bender/` of each project | One cache per machine, one read-only checkout per commit |
+| A local copy of a dependency | `Bender.local`, which each developer keeps out of git | `astli patch`, kept out of git by `astli` itself |
+| Tool flows | A script per tool, from `bender script` | One filelist every tool reads; `astli build`, `run` and `test` drive Verilator |
+| Reading the code | No | `fmt`, `lint`, `check` and a language server, over one parser |
+
+## What `astli` does differently
+
+Each example below shows a Bender project and the same project in `astli`.
+
+### Files are found, not listed
+
+A `Bender.yml` lists every file, and its order is the compile order: a new file is a new line, and a package listed after the module that imports it fails in the simulator. `astli` takes the files in a directory, and puts each after the files it depends on:
+
+=== "Bender"
+
+    ```yaml
+    sources:
+      - include_dirs: [include]
+        files:
+          - rtl/soc_pkg.sv
+          - rtl/soc_regs.sv
+          - rtl/soc_xbar.sv
+          - rtl/soc_top.sv
+      - target: test
+        files:
+          - tb/tb_soc.sv
+    ```
+
+=== "astli"
+
+    ```toml
+    [package]
+    name = "soc"
+    sources = ["rtl"]
+    include-dirs = ["include"]
+    dev = ["tb"]
+    ```
+
+`astli files --top soc_top` writes the list, holding only what `soc_top` reaches, and `--why rtl/soc_regs.sv` says which instance or import needs a file. See [Packages](packages.md) and [Filelists](filelists.md).
+
+### Features instead of targets
+
+A Bender target set with `-t` holds in every package of the design at once, so `-t test` brings in every dependency's testbenches, and a project names its targets so that they don't collide. A [feature](features.md) belongs to its package: a dependent asks for a dependency's feature by name, and a package's own testbenches (`dev`) are never a dependent's.
+
+=== "Bender"
+
+    ```yaml
+    dependencies:
+      axi: { git: "https://github.com/pulp-platform/axi.git", version: 0.39.0 }
+      tech_cells: { git: "https://github.com/acme/tech_cells.git", version: 1.0.0, target: asic }
+
+    sources:
+      - target: fpga
+        files: [rtl/fpga/sram_wrap.sv]
+      - target: asic
+        files: [rtl/asic/sram_wrap.sv]
+    ```
+
+    ```sh
+    bender script vsim -t fpga -t test
+    ```
+
+=== "astli"
+
+    ```toml
+    [dependencies]
+    axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.39" }
+    tech_cells = { git = "https://github.com/acme/tech_cells.git", version = "1.0" }
+
+    [features]
+    default = ["fpga"]
+    fpga = { sources = ["rtl/fpga/**"] }
+    asic = { sources = ["rtl/asic/**"], dependencies = ["tech_cells"] }
+
+    [top.soc_asic]
+    top = "soc_top"
+    features = ["asic"]
+    ```
+
+    ```sh
+    astli files --top soc_asic
+    ```
+
+`fpga` and `asic` each declare `sram_wrap`, so they are alternatives: a design that enables both is an error naming the two declarations, where a filelist with both leaves it to the tool which one it builds. `tech_cells`, which only `asic` names, is fetched and read only while `asic` is on. Without `--top`, `astli check` checks every `[top.NAME]` table, each with its own features, so a mistake in the ASIC variant fails CI even when nobody builds it.
+
+Defines are the root's alone: a package exports none, and a `[top.NAME]` table sets the ones its build needs. Code that differs by tool keeps its `` `ifdef VERILATOR ``, which every tool already understands.
+
+### Conflicts are errors, and a pin says so in the manifest
+
+Bender lets the root's requirement decide a conflict, or asks at the terminal, so a design can build against a version its dependency never asked for without anyone seeing. `astli` never prompts: when two packages require versions no commit meets, it stops and names both requirements.
+
+To build anyway, pin the package in `[resolve] pinned`. The root's requirement then decides, and each requirement it overrules is a warning on every run, so the conflict stays in sight until upstream fixes it:
+
+```toml
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.38" }
+
+[resolve]
+pinned = ["common_cells"]
+```
+
+`Bender.yml` has no way to pin a package, so a project with only a `Bender.yml` whose dependencies conflict needs an `astli.toml` for its pins. See [Version resolution and pinning](dependencies.md#version-resolution-and-pinning).
+
+### One cache, shared and sealed
+
+Bender clones a project's dependencies into its own `.bender/`, so every checkout of a project clones them again. `astli` keeps one mirror per repository in a cache the whole machine shares, and checks each commit out once, for every design that uses it:
+
+```sh
+astli fetch              # check out everything the lock names, ahead of time
+astli check --offline    # then run without the network, as on a build node
+astli path common_cells  # where a dependency's checkout is
+```
+
+A checkout's files are read-only, and a file put into one by hand is refused where a run would read it: a register file generated into a dependency's checkout would change that dependency for every design on the machine. Generate it into your own package and [override](features.md#overrides) the dependency's module instead.
+
+Submodules and Git LFS files are checked out only when a requirement [asks for them](dependencies.md#submodules), so a dependency is the files its own repository holds, the same on every machine.
+
+### Working on a dependency in place
+
+To fix a bug in a dependency where your design uses it, Bender points the dependency at a local clone through `Bender.local`, which must not be committed. `astli patch` clones the dependency at its locked commit and points the design at the clone, in `.astli/`, which `astli` keeps out of git itself:
+
+```sh
+astli patch common_cells     # clone it into .astli/patch/common_cells, and build from there
+# fix it, commit and push in the clone
+astli snapshot common_cells  # require that commit in astli.toml, and drop the patch
+```
+
+While a patch is in place, `astli.lock` is never written, and `--locked` fails, so CI never builds against one developer's clone. See [Working on a dependency in place](dependencies.md#working-on-a-dependency-in-place).
+
+### One filelist, and Verilator driven for you
+
+`bender script` writes a script for each tool it knows. `astli files` writes the one list every simulator and synthesis tool reads with `-f`, and a flow with a script of its own wraps that:
+
+```sh
+astli files --top soc_top > soc.f
+vcs -sverilog -f soc.f
+```
+
+A filelist has one include path for every file, while each package searches its own. Where two packages each hold a `defs.svh`, the tool would read the wrong one for some files, and `astli files` warns with `include-differs` before it does.
+
+For Verilator, `astli` runs the tool itself: `astli build` checks the design, compiles it and skips the build when nothing it reads changed, and `astli test` runs every testbench the package marks, across the parameter values it sweeps. See [Building](building.md) and [Testing](testing.md).
+
+### It reads the code
+
+Bender knows files; `astli` also knows what they say. The same parser behind dependency resolution formats the package, lints it, and checks every instance against its definition, before a simulator ever sees it:
+
+```sh
+astli fmt --check
+astli lint
+astli check --top soc_top
+```
+
+Your editor gets the same answers from [`astli lsp`](editors.md).
+
+### Dependencies without an `astli.toml`
+
+Most dependencies have a `Bender.yml` and no `astli.toml`. `astli` reads such a package by its defaults, every file below its root, which is wrong for one that keeps two versions of each cell side by side, as `tech_cells_generic` keeps its generic cells and their Xilinx versions. Until it gets a manifest upstream, the root can describe it:
+
+```toml
+[described.tech_cells_generic]
+exclude = ["src/fpga/**"]   # its Xilinx versions of the same cells
+```
+
+A description says only what the dependency's own manifest would, so it moves there unchanged, and it is ignored, with a warning, once the dependency has an `astli.toml`. See [Describing unmanifested dependencies](dependencies.md#describing-unmanifested-dependencies-described).
+
+### What `astli` does not do
+
+- It writes no per-tool scripts: a flow other than Verilator reads the filelist.
+- It reads no `sources`, `defines` or `targets` of a `Bender.yml`, only its dependencies.
+- It has no counterpart to `bender vendor`, which copies a foreign repository into yours with patches applied.
 
 ## What `astli` reads from `Bender.yml`
 
@@ -42,7 +220,7 @@ With no `[dependencies]` in `astli.toml`, `astli` still reads them from `Bender.
 
 ### Step 3: Transition dependencies to `astli.toml`
 
-When you are ready to manage dependencies natively with `astli`, run `astli bender import` (or manually copy your dependencies). This copies Bender's dependency definitions into `[dependencies]` in `astli.toml`, creating the file if there is none:
+`astli bender import` copies the dependencies of `Bender.yml` into `[dependencies]` in `astli.toml`, creating the file if there is none:
 
 ```toml
 [dependencies]
@@ -50,14 +228,14 @@ common_cells = { git = "https://github.com/pulp-platform/common_cells.git", vers
 axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.39" }
 ```
 
-Once `[dependencies]` is defined in `astli.toml`, `astli` exclusively uses its own native resolver and lockfile.
+Once `astli.toml` has `[dependencies]`, `astli` reads no dependency from `Bender.yml`.
 
 !!! note "Target-specific dependencies"
     `astli bender import` omits dependencies that are restricted to specific Bender `target`s (such as simulation testbenches or FPGA builds). In `astli`, flow-specific dependencies and conditional compilation are managed declaratively using [Features](features.md).
 
 ### Step 4: Export `Bender.yml` for downstream compatibility
 
-If external projects still consume your package using Bender, maintain `astli.toml` as your single source of truth and export `Bender.yml` automatically:
+Where other projects still read your package with Bender, keep `astli.toml` as the one source of truth and write `Bender.yml` from it:
 
 ```sh
 astli bender export
@@ -93,24 +271,3 @@ The export maps `astli`'s package model onto Bender's:
 
 !!! tip "Organize sources into directories per target"
     While Bender projects often place all sources in a single directory and list individual files explicitly under targets, `astli` selects feature, `dev`, and excluded files using directory glob patterns. Organizing files into dedicated directories (e.g. `rtl/fpga/`, `rtl/asic/`, and `tb/`) turns long file lists into concise patterns and ensures new files are categorized automatically without updating `astli.toml`.
-
-## Handling version conflicts (`[resolve] pinned`)
-
-When dependency version requirements conflict, Bender interactively prompts the user in the terminal to pick a version (or requires a local override file such as `Bender.local`).
-
-`astli` is strictly non-interactive and scriptable: it never halts to prompt for manual user input during dependency resolution. If two packages request incompatible versions, `astli` stops with an explicit conflict error by default.
-
-To resolve a conflict without modifying transitive upstream manifests, pin the package in `[resolve] pinned` in your `astli.toml`:
-
-```toml
-[resolve]
-pinned = ["common_cells"]
-```
-
-When a package is pinned:
-
-- `astli` forces the dependency to whichever version or revision the root package specifies.
-- Any conflicting downstream requirements that cannot be met are downgraded to informative warnings rather than fatal errors.
-
-!!! note "Projects with only a `Bender.yml`"
-    A project that relies solely on `Bender.yml` has no mechanism to declare pins. If your design encounters version conflicts across its dependencies, you will need to add an `astli.toml` and declare `[resolve] pinned` to explicitly resolve them.
