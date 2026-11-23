@@ -232,6 +232,9 @@ struct Expander<'a> {
     skipped: Vec<Span>,
     /// Each file's valid `` `line `` directives, in order.
     renumbered: FxHashMap<SourceId, Vec<Renumbered>>,
+    /// Whether the last token emitted is a `` `name `` left unexpanded for
+    /// the paste right after it, in case the paste builds a longer name.
+    unexpanded_name: bool,
 }
 
 /// What a `` `line `` says about the lines after it, for `` `__LINE__ `` and
@@ -265,6 +268,7 @@ impl<'a> Expander<'a> {
             calls: Vec::new(),
             skipped: Vec::new(),
             renumbered: FxHashMap::default(),
+            unexpanded_name: false,
         }
     }
 
@@ -403,6 +407,7 @@ impl<'a> Expander<'a> {
             // The first piece of a name a paste builds, looked up once whole.
             None if frame.in_body() && pasted_onto(tokens, at + 1, rest.end) => {
                 self.emit(tokens, rest.at(at), frame);
+                self.unexpanded_name = true;
                 at + 1
             }
             None => {
@@ -960,6 +965,7 @@ impl<'a> Expander<'a> {
     fn paste(&mut self, tokens: &[Token], rest: TokenSpan, frame: &Frame) -> u32 {
         let id = frame.expansion();
         let at = rest.start;
+        let named = std::mem::take(&mut self.unexpanded_name);
         // The operator writes nothing, so a run of them joins as one.
         let next = after_pastes(tokens, at, rest.end);
 
@@ -967,9 +973,11 @@ impl<'a> Expander<'a> {
         if next >= rest.end {
             let origin = self.placed(rest.with(at..rest.end), tokens, frame);
             self.report(diagnostics::paste_without_operand(origin));
+            self.expand_name_before(named, frame);
             return next;
         }
         if (at > 0 && spaced(at - 1)) || spaced(next) {
+            self.expand_name_before(named, frame);
             return next;
         }
 
@@ -984,15 +992,27 @@ impl<'a> Expander<'a> {
 
         let (end, mut right) =
             self.aside(|expander| expander.step(tokens, rest.with(next..rest.end), frame));
+        let right_named = std::mem::take(&mut self.unexpanded_name);
         let Some(first) = right
             .first()
             .copied()
             .filter(|token| token.kind != WHITESPACE)
         else {
             self.out.push(left);
+            self.expand_name_before(named, frame);
             self.out.append(&mut right);
             return end;
         };
+
+        // A name the paste joins nothing to has ended, so it is a reference
+        // of its own, as it would be with no paste after it.
+        let left_text = self.origins.slice(left.span);
+        if named && !pastes(left_text, self.origins.slice(first.span)) {
+            self.expand_synthesised(left_text.to_string(), frame);
+            self.out.append(&mut right);
+            self.unexpanded_name = right_named;
+            return end;
+        }
 
         // An escape keeps its kind, which lexing it again outside a
         // `` `define `` would lose: the `\` would start a name.
@@ -1029,8 +1049,24 @@ impl<'a> Expander<'a> {
                 );
             }
         }
+        self.unexpanded_name = (named || right_named)
+            && right.len() == 1
+            && pasted_onto(tokens, end, rest.end)
+            && self
+                .out
+                .last()
+                .is_some_and(|token| token.kind == TICK_IDENT);
         self.out.extend(right.drain(1..));
         end
+    }
+
+    /// Expands the `` `name `` last emitted, if `named` says a paste left it
+    /// unexpanded and the paste turned out to build no longer name.
+    fn expand_name_before(&mut self, named: bool, frame: &Frame) {
+        if named && let Some(name) = self.out.pop() {
+            let name = self.origins.slice(name.span).to_string();
+            self.expand_synthesised(name, frame);
+        }
     }
 
     /// Writes the comment a `/` pasted onto the `*` or `/` that starts `rest`
@@ -1100,11 +1136,16 @@ impl<'a> Expander<'a> {
         let (_, args) =
             self.aside(|expander| expander.expand_range(rest.with(rest.start..end), frame));
         let call = format!("{name}{}", render(self.origins, &args));
+        self.expand_synthesised(call, frame);
+        end
+    }
 
-        let file = self.origins.add_synthesised(call);
+    /// Expands `text`, which a paste made and no file holds, so it names no
+    /// formal.
+    fn expand_synthesised(&mut self, text: String, frame: &Frame) {
+        let file = self.origins.add_synthesised(text);
         let len = self.lex(file).len() as u32 - 1;
         self.expand_range(TokenSpan::new(file, 0, len), &frame.without_formals());
-        end
     }
 
     fn aside<T>(&mut self, walk: impl FnOnce(&mut Self) -> T) -> (T, Vec<ExpandedToken>) {
