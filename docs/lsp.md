@@ -6,8 +6,8 @@
 > Formatting is answered from the buffer, document symbols and folding
 > from its raw tree, and workspace symbols from the loaded designs' indexes,
 > on the pool; diagnostics are published from the buffer and the snapshot,
-> the branches the build did not take among them, and their fixes offered
-> as code actions. A position is looked up in the snapshot, and go to
+> the branches the build did not take among them, and their fixes and
+> waivers offered as code actions. A position is looked up in the snapshot, and go to
 > definition, references, document highlights, hover and inlay hints answer
 > from it; semantic tokens say what each name of a file is.
 > Milestone M12 in [`plan.md`](plan.md#5-milestones).
@@ -503,6 +503,30 @@ would not.
   an older version names a range or a message the server no longer has,
   and is offered nothing. It is marked preferred, since a fix keeps what
   the code means.
+- **A waiver**, `quickfix` too, for each diagnostic the request names that
+  a lint rule published, matched as a quick fix is, whether or not it has a
+  fix ([L34](#decisions)): "waive `rule` here", never preferred and never
+  part of fix all, since it changes what the build reports rather than the
+  code. It writes the attribute [S7](sema.md#decisions) makes a waiver, on
+  the innermost node of the buffer's raw tree that takes an attribute and
+  holds the diagnostic's range: an item, a statement, a port. A node with
+  an `astli_allow` already gains the rule in its string, after the names
+  it lists; otherwise `(* astli_allow = "rule" *) ` goes before the node's
+  first token, which `fmt` keeps on the node's line, or a design unit's
+  above it. Where the result would not waive the finding, the parser
+  reading the attribute as another node's, the next node out is tried. It
+  is not offered for a finding in a directive, a `` `define `` or an
+  `` `endif ``, which no attribute reaches: the node around it is a body,
+  a block or a region, and its waiver would cover all of it for one line.
+  Nor is it offered where the node is a design unit and the range lies
+  past its header, nor where the node is a lone `;`, whose finding its fix
+  deletes, nor where no node holds the range. A `check` finding has no
+  waiver ([S73](sema.md#decisions)), and nor have a parse error, an
+  `invalid-waiver` or a branch the build did not take. A finding in a
+  header or in the text a macro call placed is published where it is
+  reported, at the outermost call in the file, and the waiver goes there,
+  which is where `lint` reads it. The edit is checked to parse whole, and
+  the waivers read from the result to cover the finding.
 - **Fix all**, `source.fixAll.astli`, the file fixed as `lint --fix`
   fixes it, by the same function of `astli-lint`: the buffer linted again
   at the levels it was published with and every fix applied, one
@@ -512,7 +536,7 @@ would not.
   and its edit is one per run of lines that changed, as formatting's.
 
 `context.only` keeps the kinds it names or a kind under one: `source`
-asks for fix all, `quickfix` for the quick fixes. Without it, both are
+asks for fix all, `quickfix` for the quick fixes and the waivers. Without it, both are
 offered. An edit names the buffer's version where the client takes
 versioned edits (`workspace.workspaceEdit.documentChanges`), so a client
 whose buffer moved on since refuses it; otherwise it is the edits of the
@@ -876,6 +900,7 @@ of `instr_tracer_pkg.sv`.
 | L31 | Semantic tokens say what a name is, from the first unit that holds the file, in standard types where one fits and with a custom modifier for a port's direction and a net. Nothing the grammar colours gets a token, and no `full/delta` | The grammar already colours keywords, literals and comments, and a token over them would fight the theme for nothing. Asking every unit that includes a header would walk each one's HIR on every edit, 595 of them for `prim_assert.sv`, to settle a disagreement that almost never arises. A custom type is coloured by no theme, where a custom modifier on `variable` falls back to the variable's colour. The whole of a 560 kB file takes 4.4 ms. |
 | L32 | A branch the build did not take is a hint diagnostic tagged `Unnecessary`, published with the design's findings, and only where every unit that reads the file left it out. Not a `comment` semantic token | The protocol has no token for inactive code. A `comment` token recolours the code as a comment, which hides what it is from a reader who still reads it as code; a faded hint keeps the grammar's colours and stays out of the problems list. Published as a diagnostic, it is versioned, kept across a change and cleared as every other finding is, and it is the design's, as which branch is taken depends on the build. A header's branch taken by one unit is code there. |
 | L33 | Inlay hints are the formal a positional argument lands on, what a `.*` connects, and a value that is not a literal where it is one for sure: in a package, at a file's top level, in a definition without parameters, or where the tops build the definition and every body agrees. A port's direction and type at a named connection is built but not answered. Only text written and used in the file is hinted; a label is cut at 32 characters, the whole in its tooltip | An editor switches hints on and off as a whole, so a kind that floods is worse than one missing: counted over the corpus, a port's type is six to eleven hints in a hundred lines, one at nearly every connection, and the others a few in a thousand. A value at a definition's defaults is what hover marks as the defaults', which a hint cannot; most instances override them. A macro's text stands for every expansion at one place. |
+| L34 | A waiver is offered as a code action for each lint finding the request names, fix or not, on the innermost node that takes an attribute and holds it, and not for one in a directive or a design unit's body; never preferred and never in fix all | A design rule's finding has no fix, and a waiver is the one thing an editor can do with it. It is a quick fix because an editor lists those beside the diagnostic, which is where a reader decides; not preferred, since it hides a finding rather than settling it, and an editor applies a preferred one without asking. The innermost node waives the least. No attribute reaches a directive, and the node around one is a body or a block, whose waiver would hide every finding of the rule in it for one line. Offered only for what the request names, it adds one action beside a diagnostic, not one per finding of the file. |
 
 ## Prior art
 

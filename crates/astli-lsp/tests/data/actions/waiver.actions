@@ -1,0 +1,18 @@
+waiver.sv 6:9-6:13 macro-name-style
+  nothing
+waiver.sv 12:11-12:21 macro-name-style
+  nothing
+waiver.sv 13:40-13:41 unused-signal
+  quickfix "Waive `unused-signal` here"
+    @@ -13 +13 @@
+    -  (* astli_allow = "forbid-reg" *) reg q;
+    +  (* astli_allow = "forbid-reg, unused-signal" *) reg q;
+waiver.sv 16:13-16:27 macro-name-style
+  nothing
+waiver.sv 17:9-17:11 always-comb-blocking
+  quickfix "Waive `always-comb-blocking` here"
+    @@ -17 +17 @@
+    -    b_o <= a_i;
+    +    (* astli_allow = "always-comb-blocking" *) b_o <= a_i;
+waiver.sv all
+  nothing

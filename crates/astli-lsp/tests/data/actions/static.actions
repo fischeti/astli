@@ -1,19 +1,36 @@
 static.sv 2:8-2:18 module-filename
-  nothing
+  quickfix "Waive `module-filename` here"
+    @@ -2 +2 @@
+    -module static_fix;
+    +(* astli_allow = "module-filename" *) module static_fix;
 static.sv 4:9-4:10 unused-signal
-  nothing
+  quickfix "Waive `unused-signal` here"
+    @@ -4 +4 @@
+    -    int a = 1;
+    +    (* astli_allow = "unused-signal" *) int a = 1;
 static.sv 4:9-4:14 explicit-static
   quickfix "Fix `explicit-static`"
     @@ -4 +4 @@
     -    int a = 1;
     +    static int a = 1;
+  quickfix "Waive `explicit-static` here"
+    @@ -4 +4 @@
+    -    int a = 1;
+    +    (* astli_allow = "explicit-static" *) int a = 1;
 static.sv 5:9-5:10 unused-signal
-  nothing
+  quickfix "Waive `unused-signal` here"
+    @@ -5 +5 @@
+    -    int b = 2;
+    +    (* astli_allow = "unused-signal" *) int b = 2;
 static.sv 5:9-5:14 explicit-static
   quickfix "Fix `explicit-static`"
     @@ -5 +5 @@
     -    int b = 2;
     +    static int b = 2;
+  quickfix "Waive `explicit-static` here"
+    @@ -5 +5 @@
+    -    int b = 2;
+    +    (* astli_allow = "explicit-static" *) int b = 2;
 static.sv all
   source.fixAll.astli "Fix all lint findings"
     @@ -4,2 +4,2 @@

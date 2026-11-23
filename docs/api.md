@@ -438,6 +438,7 @@ corpus, which is how the next rule is chosen.
 
 ```rust
 let (waivers, invalid) = Waivers::read(&tree);  // Waivers, Vec<Diagnostic>
+waivers.covers(rule, at)  // whether a finding of `rule` at bytes `at` is waived
 let found = astli_lint::lint(&tree, &waivers, &Config::default());  // Vec<Diagnostic>
 let fixes: Vec<&[Edit]> = found.iter().map(|it| it.fix.as_slice()).collect();
 let (fixed, applied) = astli_text::apply(tree.source(), &fixes);  // String, usize
@@ -479,6 +480,8 @@ no tree, so it is read off the tree as written in the parallel pass and
 used after every tree is gone. It is read apart from `lint`, and the
 waivers that do not parse come with it, so a file's are read once and
 what is wrong with them reported once, however many layers they waive.
+`covers` asks it of a place in the file as written, which is how the
+language server checks a waiver it is about to offer.
 
 ## What a build passes
 

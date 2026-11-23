@@ -1,19 +1,43 @@
 restriction.sv 3:8-3:18 module-filename
-  nothing
+  quickfix "Waive `module-filename` here"
+    @@ -3 +3 @@
+    -module restricted (
+    +(* astli_allow = "module-filename" *) module restricted (
 restriction.sv 4:16-4:17 port-name-suffix
-  nothing
+  quickfix "Waive `port-name-suffix` here"
+    @@ -4 +4 @@
+    -  input  logic a,
+    +  (* astli_allow = "port-name-suffix" *) input  logic a,
 restriction.sv 5:16-5:17 port-name-suffix
-  nothing
+  quickfix "Waive `port-name-suffix` here"
+    @@ -5 +5 @@
+    -  input  logic b,
+    +  (* astli_allow = "port-name-suffix" *) input  logic b,
 restriction.sv 6:16-6:17 port-name-suffix
-  nothing
+  quickfix "Waive `port-name-suffix` here"
+    @@ -6 +6 @@
+    -  input  logic c,
+    +  (* astli_allow = "port-name-suffix" *) input  logic c,
 restriction.sv 7:16-7:17 port-name-suffix
-  nothing
+  quickfix "Waive `port-name-suffix` here"
+    @@ -7 +7 @@
+    -  input  logic d,
+    +  (* astli_allow = "port-name-suffix" *) input  logic d,
 restriction.sv 8:16-8:17 port-name-suffix
-  nothing
+  quickfix "Waive `port-name-suffix` here"
+    @@ -8 +8 @@
+    -  output logic x,
+    +  (* astli_allow = "port-name-suffix" *) output logic x,
 restriction.sv 8:16-8:17 undriven-signal
-  nothing
+  quickfix "Waive `undriven-signal` here"
+    @@ -8 +8 @@
+    -  output logic x,
+    +  (* astli_allow = "undriven-signal" *) output logic x,
 restriction.sv 9:16-9:17 port-name-suffix
-  nothing
+  quickfix "Waive `port-name-suffix` here"
+    @@ -9 +9 @@
+    -  output logic y
+    +  (* astli_allow = "port-name-suffix" *) output logic y
 restriction.sv 12:1-12:24 inactive-code
   nothing
 restriction.sv 12:18-12:23 mixed-operator-parentheses
@@ -21,6 +45,10 @@ restriction.sv 12:18-12:23 mixed-operator-parentheses
     @@ -12 +12 @@
     -  assign x = a | b & c;
     +  assign x = a | (b & c);
+  quickfix "Waive `mixed-operator-parentheses` here"
+    @@ -12 +12 @@
+    -  assign x = a | b & c;
+    +  (* astli_allow = "mixed-operator-parentheses" *) assign x = a | b & c;
 restriction.sv 13:1-13:7 endif-comment
   quickfix "Fix `endif-comment`"
     @@ -13 +13 @@
@@ -32,16 +60,28 @@ restriction.sv 14:3-14:11 legacy-generate-region
     -  generate
     @@ -18 +16,0 @@
     -  endgenerate
+  quickfix "Waive `legacy-generate-region` here"
+    @@ -14 +14 @@
+    -  generate
+    +  (* astli_allow = "legacy-generate-region" *) generate
 restriction.sv 16:18-16:24 comparison-parentheses
   quickfix "Fix `comparison-parentheses`"
     @@ -16 +16 @@
     -      assign y = a == b && c || d;
     +      assign y = (a == b) && c || d;
+  quickfix "Waive `comparison-parentheses` here"
+    @@ -16 +16 @@
+    -      assign y = a == b && c || d;
+    +      (* astli_allow = "comparison-parentheses" *) assign y = a == b && c || d;
 restriction.sv 16:18-16:29 mixed-operator-parentheses
   quickfix "Fix `mixed-operator-parentheses`"
     @@ -16 +16 @@
     -      assign y = a == b && c || d;
     +      assign y = (a == b && c) || d;
+  quickfix "Waive `mixed-operator-parentheses` here"
+    @@ -16 +16 @@
+    -      assign y = a == b && c || d;
+    +      (* astli_allow = "mixed-operator-parentheses" *) assign y = a == b && c || d;
 restriction.sv all
   source.fixAll.astli "Fix all lint findings"
     @@ -12,3 +12,2 @@
