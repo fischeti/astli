@@ -1,0 +1,9 @@
+astli is licensed under either of
+
+- the Apache License, Version 2.0, in LICENSE-APACHE, or
+- the MIT license, in LICENSE-MIT,
+
+at your option.
+
+The TextMate grammars under syntaxes/ come from other projects, under the
+licences THIRD_PARTY_NOTICES.md gives.

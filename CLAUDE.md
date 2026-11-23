@@ -86,6 +86,11 @@ formatter.
 - `editors/zed/` — a Zed extension that starts `astli lsp`, installed as a
   dev extension. A crate of its own, outside the workspace, which Zed builds
   to WebAssembly.
+- `editors/vscode/` — the VS Code extension, a TypeScript client for `astli
+  lsp` with the SystemVerilog and Verilog grammars it needs, since VS Code
+  has none. The release packages it once per platform with that platform's
+  binary, and publishes it to the Marketplace and Open VSX at the command's
+  version, which the release-pr workflow writes.
 
 Under `reference/`, gitignored:
 

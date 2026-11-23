@@ -52,10 +52,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      # release-plz bumps only Cargo manifests. The plugin carries the
-      # command's version, since its users fetch a new skill only when that
-      # changes.
-      - name: Version the plugin
+      # release-plz bumps only Cargo manifests. The plugin and the VS Code
+      # extension carry the command's version: the plugin's users fetch a new
+      # skill only when that changes, and the extension ships the command.
+      - name: Version the plugin and the extension
         env:
           PR: ${{ steps.release-plz.outputs.pr }}
           TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
@@ -68,8 +68,9 @@ jobs:
           manifest=plugin/.claude-plugin/plugin.json
           jq --arg v "$version" '.version = $v' "$manifest" > "$manifest.new"
           mv "$manifest.new" "$manifest"
+          (cd editors/vscode && npm version "$version" --no-git-tag-version --allow-same-version)
           git diff --quiet && exit 0
           git -c user.name='github-actions[bot]' \
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-              commit -am "chore: version the plugin $version"
+              commit -am "chore: version the plugin and the extension $version"
           git push "https://x-access-token:$TOKEN@github.com/${{ github.repository }}.git" HEAD:"$branch"

@@ -34,7 +34,17 @@ The `verilog` extension opens `.sv`, `.svh`, `.v` and `.vh` files all as SystemV
 
 ## VS Code
 
-VS Code needs an extension to start a language server, and astli's is not published yet.
+Install [astli](https://marketplace.visualstudio.com/items?itemName=fischeti.astli) from the Marketplace, or from [Open VSX](https://open-vsx.org/extension/fischeti/astli) in VSCodium, Cursor and other editors built on VS Code. It brings the `astli` binary for Linux, macOS on Apple silicon and Windows on x64, and its own SystemVerilog and Verilog highlighting. An `astli` on `PATH` takes precedence over the one it brings, and the `astli.path` setting over both.
+
+With the [Verilog-HDL/SystemVerilog](https://marketplace.visualstudio.com/items?itemName=mshr-h.VerilogHDL) extension installed too, turn off its ctags, so that hover and go to definition come from astli alone, and format with astli:
+
+```json
+{
+  "verilog.ctags.enabled": false,
+  "[systemverilog]": { "editor.defaultFormatter": "fischeti.astli" },
+  "[verilog]": { "editor.defaultFormatter": "fischeti.astli" }
+}
+```
 
 ## Emacs
 

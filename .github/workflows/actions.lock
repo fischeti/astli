@@ -35,6 +35,8 @@ workflows:
         - 'actions/upload-pages-artifact@v5.0.0'
         - 'astral-sh/setup-uv@v10.3.3'
         - 'taiki-e/install-action@v2.90.4'
+    '.github/workflows/vscode.yml':
+        - 'actions/checkout@v7.0.1'
 dependencies:
     'actions/attest@v4.2.2':
         ref: 'v4.2.2'

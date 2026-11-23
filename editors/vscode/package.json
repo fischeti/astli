@@ -1,0 +1,108 @@
+{
+  "name": "astli",
+  "displayName": "astli",
+  "description": "SystemVerilog and Verilog through astli's language server: problems, formatting, navigation, hover and inlay hints",
+  "version": "0.6.1",
+  "publisher": "fischeti",
+  "license": "MIT OR Apache-2.0",
+  "homepage": "https://astli.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fischeti/astli",
+    "directory": "editors/vscode"
+  },
+  "bugs": "https://github.com/fischeti/astli/issues",
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters"
+  ],
+  "keywords": [
+    "systemverilog",
+    "verilog",
+    "lsp",
+    "formatter",
+    "linter"
+  ],
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "main": "./out/extension.js",
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "A workspace's `astli.path` is ignored until it is trusted, since it names a program to run.",
+      "restrictedConfigurations": [
+        "astli.path"
+      ]
+    }
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "systemverilog",
+        "aliases": [
+          "SystemVerilog",
+          "systemverilog"
+        ],
+        "extensions": [
+          ".sv",
+          ".svh"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "verilog",
+        "aliases": [
+          "Verilog",
+          "verilog"
+        ],
+        "extensions": [
+          ".v",
+          ".vh"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "systemverilog",
+        "scopeName": "source.systemverilog",
+        "path": "./syntaxes/systemverilog.tmLanguage.json"
+      },
+      {
+        "language": "verilog",
+        "scopeName": "source.verilog",
+        "path": "./syntaxes/verilog.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "astli",
+      "properties": {
+        "astli.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "The `astli` binary to start. Empty: the one on `PATH`, else the one the extension ships."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "bundle": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --minify --outfile=out/extension.js",
+    "vscode:prepublish": "npm run bundle"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "~1.91.0",
+    "@vscode/vsce": "^4.1.0",
+    "esbuild": "^0.28.0",
+    "ovsx": "^1.4.0",
+    "typescript": "^7.0.0"
+  }
+}

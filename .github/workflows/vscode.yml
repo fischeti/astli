@@ -1,0 +1,91 @@
+# The VS Code extension, packaged around the binaries a release holds: one
+# VSIX per platform dist builds for, and one with no binary for every other
+# platform, which then needs `astli` on PATH. Published to the Marketplace and
+# to Open VSX, unless the tag is a prerelease.
+#
+# A workflow of its own, run once dist's Release finishes, rather than a job
+# dist's release.yml calls: the Marketplace trusts a publish by the filename
+# of the workflow it comes from. To publish a release again, run this by hand
+# with its tag, which keeps the same file.
+name: VS Code extension
+
+on:
+  # Release runs only on a tag pushed to this repository, never for a fork's
+  # pull request, so what this checks out and runs is a released commit.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to package, such as v0.6.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  vsix:
+    # For a tag push, the run's head branch is the tag.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The Marketplace's trusted publishing.
+      id-token: write
+    defaults:
+      run:
+        working-directory: editors/vscode
+    env:
+      TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+      - run: npm ci
+      - run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'astli-cli-*.tar.xz' --pattern 'astli-cli-*.zip' --dir "$RUNNER_TEMP/archives"
+      # dist's archive for each target, and the VS Code platform it serves. A
+      # tarball holds the binary in a directory named after it; the zip holds
+      # it at the top.
+      - name: Package
+        run: |
+          out="$RUNNER_TEMP/vsix"
+          mkdir -p "$out"
+          while read -r triple platform; do
+            rm -rf bundled unpacked
+            mkdir bundled unpacked
+            case "$triple" in
+              *windows*)
+                unzip -q "$RUNNER_TEMP/archives/astli-cli-$triple.zip" -d unpacked
+                cp unpacked/astli.exe bundled/ ;;
+              *)
+                tar -xf "$RUNNER_TEMP/archives/astli-cli-$triple.tar.xz" -C unpacked --strip-components=1
+                install -m 755 unpacked/astli bundled/ ;;
+            esac
+            npx vsce package --target "$platform" --out "$out/astli-$platform.vsix"
+          done <<'EOF'
+          aarch64-apple-darwin darwin-arm64
+          x86_64-unknown-linux-gnu linux-x64
+          aarch64-unknown-linux-gnu linux-arm64
+          x86_64-unknown-linux-musl alpine-x64
+          aarch64-unknown-linux-musl alpine-arm64
+          x86_64-pc-windows-msvc win32-x64
+          EOF
+          rm -rf bundled unpacked
+          npx vsce package --out "$out/astli-universal.vsix"
+      - id: release
+        run: echo "prerelease=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" >> "$GITHUB_OUTPUT"
+      - if: ${{ steps.release.outputs.prerelease == 'false' }}
+        run: npx vsce publish --oidc --packagePath "$RUNNER_TEMP"/vsix/*.vsix
+      # Open VSX trusts a workflow only for an extension it already holds, so
+      # the first version goes out with a token. `ovsx` uses `OVSX_PAT` where
+      # it is set and trusted publishing where it is not, so once this file
+      # is registered as the extension's trusted publisher, deleting the
+      # secret is all it takes.
+      - if: ${{ steps.release.outputs.prerelease == 'false' }}
+        run: npx ovsx publish --packagePath "$RUNNER_TEMP"/vsix/*.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}

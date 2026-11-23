@@ -1,0 +1,52 @@
+{
+  "comments": {
+    "lineComment": "//",
+    "blockComment": ["/*", "*/"]
+  },
+  // Keyword pairs only where the opener always has its closer: `function`,
+  // `class`, `interface` and `property` also open prototypes, forward
+  // declarations, virtual interfaces and assertions that end at a `;`.
+  "brackets": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["begin", "end"],
+    ["case", "endcase"],
+    ["casex", "endcase"],
+    ["casez", "endcase"],
+    ["randcase", "endcase"],
+    ["fork", "join"],
+    ["fork", "join_any"],
+    ["fork", "join_none"],
+    ["generate", "endgenerate"],
+    ["module", "endmodule"],
+    ["macromodule", "endmodule"],
+    ["package", "endpackage"],
+    ["program", "endprogram"],
+    ["checker", "endchecker"],
+    ["covergroup", "endgroup"],
+    ["specify", "endspecify"],
+    ["primitive", "endprimitive"],
+    ["table", "endtable"],
+    ["config", "endconfig"]
+  ],
+  "autoClosingPairs": [
+    { "open": "(", "close": ")" },
+    { "open": "[", "close": "]" },
+    { "open": "{", "close": "}" },
+    { "open": "\"", "close": "\"", "notIn": ["string"] },
+    { "open": "/*", "close": " */", "notIn": ["string"] }
+  ],
+  "surroundingPairs": [
+    ["(", ")"],
+    ["[", "]"],
+    ["{", "}"],
+    ["\"", "\""]
+  ],
+  "folding": {
+    "markers": {
+      "start": "^\\s*//\\s*#?region\\b",
+      "end": "^\\s*//\\s*#?endregion\\b"
+    }
+  }
+}
