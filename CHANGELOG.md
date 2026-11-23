@@ -7,6 +7,316 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/fischeti/astli/compare/v0.6.1...v0.7.0) - 2026-11-23
+
+### ⚠️ Breaking
+
+- **package**: own runs enable the default features, and a top table names its own
+- **fmt**: leave it to the printer that nothing breaks inside brackets
+- **fmt**: align every broken list as a module's ports are
+- **package**: sources take glob patterns
+- **package**: feature and dev patterns add to the sources
+
+### ✨ Added
+
+#### cli
+
+- group the subcommands in help by what they are for
+- keep each unit's macro calls and skipped branches in the server's snapshot
+- hand the server what check and lint report of each unit, and whether the dependencies were read
+- keep each unit lowered across a design's loads, while what it read is unchanged
+- the loader reads through a `Reader` and hands its problems to its caller
+- list each lint rule's options under it
+- set a `-G` on the named tops that declare it
+
+#### lint
+
+- `unused-signal` and `unused-parameter` take the names they never report as `ignore`
+- drop a fix pass that groups an expression otherwise
+- a pattern takes any number of `*`
+- add comparison-parentheses
+- add mixed-operator-parentheses
+
+#### lsp
+
+- fix all runs every pass of `lint --fix`
+- keep the build each unit was expanded with in its snapshot
+- keep what a design's tops build in its snapshot, made once
+- go to definition, from a lookup of what stands at a position
+- publish each open file's diagnostics, from its buffer and from its design
+- watch the files a design is found from, and find it again
+- load the design each open file is in, as a snapshot swapped in whole
+- format a buffer under its package's `[fmt]`
+- the language server's loop, behind `astli lsp`
+- a code action that waives a lint finding
+- inlay hints
+- fade the branches the build did not take
+- semantic tokens say what each name is
+- find references and document highlights
+- lint fixes as code actions
+- hover lays out an expansion as a type, an expression, a statement or a list
+- hover writes a value by its type
+- hover, what the name or the macro call under the cursor is
+- workspace symbols from each loaded design's index
+- document symbols and folding ranges from the buffer's raw tree
+
+#### package
+
+- `dev-features` are on in a package's own runs alone
+
+#### preproc
+
+- list a file's expansions, what each call wrote, and the branches skipped
+
+#### sema
+
+- find what stands at a place of a file
+
+#### text
+
+- list every expansion an origins recorded
+- a text's line table, for a column counted in other units
+
+### 🐛 Fixed
+
+#### cli
+
+- start `git` without the repository a hook or `rebase --exec` names
+- fail `test --list` for a file it could not read
+- build a relative `-I` from where it was given
+- tell a problem once in test --list, whatever the tables define
+- repeat every flag of a failed test's run in the command that repeats it
+- keep a Code Quality record when it is told, not when rendered
+- write an include directory named twice once for files named too
+- end `files` at a one-file list's diagnostics, with no tally
+- write a placed problem's names in backticks, as a diagnostic does
+- say one way that the dependencies come from a Bender.yml
+- snapshot a package without `[dependencies]` unless a Bender.yml lists them
+- warn once of each list `build` and `test` read
+- warn in `check` in the order of the list
+- leave a stub's headers out of what `check` searches as the list
+- report a file's lint findings as one list in line order
+
+#### fmt
+
+- keep the space before a type argument's dimensions
+
+#### lint
+
+- size what a function's or a task's body holds
+- leave unsized what a constant condition rules out
+- size a parameter's default and an override of it
+- size what a function returns against its return type
+- size an argument against its subroutine's input
+- size a compound assignment's value
+- size what a body evaluates wherever it stands
+- count a name an opaque type spells as one another file may use
+
+#### package
+
+- mark a mirror's feature mistake as any other in its manifest
+- leave unread what only a root reads of a dependency
+
+#### parse
+
+- report a case item without its `:`
+- nest brackets and braces in an undefined macro's arguments
+- let a block comment spanning lines keep an undefined macro's arguments
+- report a second edge written as a pair at its `(`
+- one table says what opens and closes what
+- read `matches` inside a cross bin's selection
+
+#### preproc
+
+- say why an include that is there cannot be read
+- a token the lexer cannot read in an argument is reported
+- a name a paste joins nothing to is expanded first
+
+#### resolve
+
+- fail on missing credentials instead of prompting
+
+#### sema
+
+- bound the generate blocks a walk enters, not those built
+- check a design as deep as elab shows it
+- a named type with dimensions is as wide as both
+- an include before a definition stands in the scope around it
+- a struct's member through a type parameter is no name
+- type a connection by `.name` or `.*`
+- type what a body evaluates wherever it stands
+- find a handle's or a base's class through what a class inherits
+- bind into a definition, not a nested one spelled alike
+- hold a `bind`'s definition before `:` to be declared
+- give a parameter a run asks for a step budget of its own
+- step a genvar as a constant function's statement
+- say how an access writes, and report a package's net assigned
+
+### ♻️ Changed
+
+#### cli
+
+- a load writes to any writer, and a build compares and hashes
+- build the one top build names without a loop over several
+- pass the package a build is shown under to it
+- make test's points from the lists that build them
+- write test's JUnit report in a module of its own
+- declare the flags build, run and test build with once
+- read each file once to find the tests it marks
+- read test and sweep marks apart from a summary
+- split lockfile.rs into the package chosen and the lock's policy
+- ask loading whether a description applies in `tree`
+- render pickle's left includes against the origins it holds
+- write a marked span uncoloured as the library does
+- write every format --diag promises besides pretty in one module
+- ask whether files were named through Sources::named
+- merge the build flags in one place
+- edit a manifest through one type
+- say in one place which units each command reports
+- end a run with one tally, left out of a document in one place
+- carry what a file rendered and its errors as one `Report`
+- lint each file read on its own one way
+- make each file's lint levels once
+- write a design's filelist through one Listing
+- move what selects a design's files out of `files`
+- summarize a unit for a list in one function
+- check the tops a build lists through the same loop
+- analyse a package's designs through one loop
+- set `-G` one way, through `Flags`
+- choose a run's tops outside its `Plan`
+- model a chosen top once, as a `Top`
+- split several designs into its two meanings
+- keep what a run shares in a Run it passes
+- hand each command the package it acts on
+
+#### diag
+
+- give a problem's header the diagnostics' palette
+- a resolved diagnostic carries its place
+- resolve diagnostics through `resolve_all` alone
+
+#### fmt
+
+- headers that are not scopes write their own lists
+- a scope lays out its header from its parts
+- give a trailing comment a column of its own
+- write as inside brackets through one scoped helper
+- build the aligned-or-indented layout once
+- say once that an unlabelled block's end shares its line
+- scan a declaration's type and names once
+- wrap a node's comments around a rule once
+- tell a declarator and an assignment the column of their cell
+- break a scope's header where the scope lays it out
+- say once how a header lays out each of its lists
+- split the rules into a module per area
+
+#### index
+
+- `Summary::new` takes the origins, not the session
+- drop the test and sweep marks from `Declaration`
+
+#### lint
+
+- read a file's waivers once, apart from lint
+- Linter takes what is built, and runs the built rules too
+- a rule's layer is one enum, Layer
+- keep a fix's grouping by construction, not a check
+- drop `Config::level`, which nothing asks
+- the width rules size the conversions the list gives
+- the width rules recurse into what the HIR lists
+- read the package a member is declared in off its scope
+- share what the driver and use rules leave unjudged
+- run every kind of rule through one loop, and report one way
+
+#### package
+
+- load what a resolution chose in astli-resolve
+- walk what a design reaches in one place
+- name what a package requires directly apart from what it needs
+- fetch a mirror and read its manifests in one place each
+- give a repository's origin the commit chosen of it
+- resolve with the roots' pins and patches as one argument
+- keep a requirement's path as written, joined where used
+- check a manifest once, as a Manifest a Package holds
+- split what only a root reads off Package
+- keep what a run decides off Package
+- keep the patch file's name private
+- name the keys of a dependency's entry beside its reader
+- say which manifest lists a package's dependencies
+- carry a requirement's submodules and LFS as one Takes
+- say once what a manifest requires with features enabled
+
+#### parse
+
+- make enveloped one method, from a position
+- check the nesting once, in any
+- take a name and a label through Parser
+- put decline and terminated on Parser
+- move the checks of a finished tree to checks.rs
+- check a UDP table's symbols as its row is parsed
+- read the scope only to choose the rule for an entry
+
+#### preproc
+
+- find an include through one search over a reader
+- yield each include with its written name
+- export the raw scan the parser and the formatter read, and document it
+- remove the conditionals example and Session::expand_span
+- validate a directive apart from expanding it
+- carry whether a walk is defining on its frame
+- split a frame into the scope it resolves in and its placement
+
+#### resolve
+
+- check out through a resolution alone
+
+#### sema
+
+- check what the tops build in one call, check_built
+- say in children() whether an instance's definition is certain
+- say where an undeclared name was looked for
+- say how a parameter was declared in one kind
+- export what other crates use, and the HIR by name
+- typing checks the conversions the list gives
+- list each conversion in a frame once
+- typing recurses into what the HIR lists
+- access recurses into what the HIR lists
+- resolve recurses into what the HIR lists
+- the HIR lists what each statement and expression holds
+- mark the scope an include not followed stands in opaque
+- lowering marks a scope that may declare anything
+- give loose names an expression of their own
+- give each enum an id its members point at
+- file the instances `bind`s add with the elaboration
+- look a name up through scopes in one `Design` function
+- give a bound instance the scope holding its `bind`
+- decide a `bind`'s target once, in the design
+- take a literal at a type in one place
+- keep the string and bits conversions with the values
+- lower a literal to what it means, beside its text
+- split what passes to an instance or a top in one place
+- take a hierarchical name's head off in one place
+- add Cx::new for a context outside any run or walk
+- merge Queries into Elaboration
+- name a constant function's run Run, not Frame
+- type what no top reaches over a Built of its defaults
+- keep the frames Built makes in one list, each with its parent
+- record the scope a symbol is declared in
+- find what encloses a scope in one walk
+- store the parameters an instance may override
+
+#### syntax
+
+- export the lexer through `tokenize` alone
+
+#### text
+
+- drop `Severity::Help`, which nothing reports
+
+### 📚 Documentation
+
+- the README and the site say what the release brings
+
 ## [0.6.1](https://github.com/fischeti/astli/compare/v0.6.0...v0.6.1) - 2026-11-17
 
 ### ✨ Added

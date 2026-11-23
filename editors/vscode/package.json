@@ -2,7 +2,7 @@
   "name": "astli",
   "displayName": "astli",
   "description": "SystemVerilog and Verilog through astli's language server: problems, formatting, navigation, hover and inlay hints",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "fischeti",
   "license": "MIT OR Apache-2.0",
   "homepage": "https://astli.dev/",
