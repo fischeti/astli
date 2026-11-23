@@ -194,11 +194,11 @@ impl<'f> Frame<'f> {
         self.from.expect("only asked of substitution text")
     }
 
-    /// Whether a token the lexer cannot read is reported where its macro
-    /// is defined, rather than here, so that a body's is reported once.
-    /// The test is [`in_body`](Self::in_body)'s, so an argument a file
-    /// writes counts too, and one in it is reported nowhere.
-    fn reported_where_defined(&self) -> bool {
+    /// Whether a token the lexer cannot read is reported where its text
+    /// is written rather than here: a body's or a default's where the
+    /// macro is defined, and an argument's at the call, since its formal
+    /// may be substituted any number of times, or none.
+    fn reported_where_written(&self) -> bool {
         self.in_body()
     }
 }
@@ -798,6 +798,12 @@ impl<'a> Expander<'a> {
         let Some(bindings) = self.bind(&def, reference, &tokens, frame) else {
             return self.emit_verbatim(&tokens, reference, frame);
         };
+        if def.formals.is_some() && !frame.reported_where_written() {
+            let args = reference.name.index + 1..reference.tokens.end;
+            for at in reference.tokens.with(args).iter() {
+                self.check_token(&tokens, at);
+            }
+        }
 
         let defined_in = self.tokens(def.tokens.src_id);
         let name = self.placed(reference.name.span(), &tokens, frame);
@@ -1162,16 +1168,24 @@ impl<'a> Expander<'a> {
 
     fn emit(&mut self, tokens: &[Token], at: TokenId, frame: &Frame) {
         let token = tokens[at.index as usize];
-        if token.kind == LEX_ERROR && !frame.reported_where_defined() {
-            let text = token.text(self.origins.text(at.src_id)).to_string();
-            let span = Span::new(at.src_id, token.start, token.end);
-            self.report(diagnostics::not_a_token(&text, span));
+        if !frame.reported_where_written() {
+            self.check_token(tokens, at);
         }
         self.push(
             token.kind,
             Span::new(at.src_id, token.start, token.end),
             frame.from,
         );
+    }
+
+    /// Reports the token at `at` if the lexer could not read it.
+    fn check_token(&mut self, tokens: &[Token], at: TokenId) {
+        let token = tokens[at.index as usize];
+        if token.kind == LEX_ERROR {
+            let text = token.text(self.origins.text(at.src_id)).to_string();
+            let span = Span::new(at.src_id, token.start, token.end);
+            self.report(diagnostics::not_a_token(&text, span));
+        }
     }
 
     fn push(&mut self, kind: SyntaxKind, spelled: Span, from: Option<ExpansionId>) {
