@@ -60,7 +60,7 @@ pub fn lower(parsed: &Parsed) -> Hir {
                     | ast::Item::ProgramDecl(_)
                     | ast::Item::PackageDecl(_)
             ) {
-                definitions.push(item.syntax().text_range());
+                definitions.push(own_range(item.syntax()));
             }
             lower.member(root, item);
         }
@@ -645,7 +645,7 @@ impl Lower<'_> {
         let at = keyword.text_range().start();
         self.timescale = self.timescale_at(scope, at).declared(node);
         // What an include not followed would have declared is unknown.
-        let range = node.text_range();
+        let range = own_range(node);
         if self
             .directives
             .includes
@@ -2053,6 +2053,14 @@ impl Type {
             packed: 0,
         }
     }
+}
+
+/// From `node`'s first token on: a directive in the trivia before it stands
+/// in the scope around `node`, not in `node`.
+fn own_range(node: &SyntaxNode) -> rowan::TextRange {
+    let range = node.text_range();
+    let start = first_significant(node).map_or(range.start(), |it| it.text_range().start());
+    rowan::TextRange::new(start, range.end())
 }
 
 /// The directives sema reads, as directives in a raw tree or as the trivia
