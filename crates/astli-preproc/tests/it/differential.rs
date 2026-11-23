@@ -35,7 +35,7 @@ use std::process::Command;
 
 use astli_preproc::{Build, Session, render};
 use astli_syntax::SyntaxKind::{
-    self, DIRECTIVE_TRIVIA, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE,
+    self, BLOCK_COMMENT, DIRECTIVE_TRIVIA, EOF, LINE_COMMENT, STRING_LITERAL, WHITESPACE,
 };
 use astli_syntax::tokenize;
 use astli_testing::corpus;
@@ -46,7 +46,7 @@ use astli_testing::corpus;
 /// A floor rather than a target. Every compared file agrees, so a failure says
 /// so directly -- but a file that quietly stops being *compared* would pass in
 /// silence, and that is the way this test rots.
-const AGREED: usize = 1889;
+const AGREED: usize = 1940;
 
 /// Files compared at all: the ones that agreed, plus the ones that agreed
 /// except where `slang` is wrong.
@@ -54,7 +54,7 @@ const AGREED: usize = 1889;
 /// Both floors are asserted, so a file moving from the first count to the
 /// second shows up. A `slang` that fixes its defects moves them back, and both
 /// still hold.
-const COMPARED: usize = 2042;
+const COMPARED: usize = 2095;
 
 #[test]
 #[ignore]
@@ -141,23 +141,28 @@ enum Verdict {
     Different,
 }
 
-/// Compares the two streams, excusing `slang`'s two known defects.
+/// Compares the two streams, excusing where `slang` is known to be wrong.
 ///
 /// An oracle is not infallible, and pretending otherwise means either failing
-/// on its bugs or loosening the comparison until it proves nothing. Both of
-/// these are narrow, reproducible in three lines, and checked against a third
-/// preprocessor, which agrees with us:
+/// on its bugs or loosening the comparison until it proves nothing. Each of
+/// these is narrow and reproducible in three lines:
 ///
 /// * **Padded stringification.** Whitespace before a `\` continuation in a
 ///   macro body leaks into the *next* `` `" `` in that body, so a stringified
 ///   name comes back indented: `` `"__x`" `` yields `"         Name_A"`.
-/// * **Comments out of a continued body.** A `//` comment in a body that
-///   carries on past it survives into the expansion, line continuation and
-///   all. 22.5.1 says comments are not part of the substitution text.
+/// * **Comments out of a body.** A `//` comment in a body that carries on
+///   past it survives into the expansion, line continuation and all, and so
+///   does a block comment anywhere in a body. 22.5.1 says comments are not
+///   part of the substitution text.
+/// * **A header read once.** A header included again once its guard is
+///   defined is skipped whole, so the comments outside its guard, which each
+///   inclusion writes, are missing the second time.
 ///
-/// Anything else is a disagreement. Both are counted, so a defect that widens
-/// shows up as a number moving rather than as a test that quietly stops
-/// asking.
+/// A third preprocessor agrees with us on the first and the last, and on the
+/// `//` comment; asked to keep comments, it keeps a block comment in a body
+/// too, as `slang` does. Anything else is a disagreement. Each is counted, so
+/// a defect that widens shows up as a number moving rather than as a test
+/// that quietly stops asking.
 fn reconcile(ours: &[(SyntaxKind, &str)], theirs: &[(SyntaxKind, &str)]) -> Verdict {
     let (mut here, mut there) = (0, 0);
     let mut excused = false;
@@ -173,6 +178,9 @@ fn reconcile(ours: &[(SyntaxKind, &str)], theirs: &[(SyntaxKind, &str)]) -> Verd
         } else if continued_comment(theirs[there]) {
             excused = true;
             there += 1;
+        } else if repeated_comment(ours, here) {
+            excused = true;
+            here += 1;
         } else {
             return Verdict::Different;
         }
@@ -206,10 +214,20 @@ fn padded(ours: (SyntaxKind, &str), theirs: (SyntaxKind, &str)) -> bool {
     }
 }
 
-/// A `//` comment carrying the line continuation that ended it, which is what
-/// a comment in a continued macro body looks like once it has escaped.
+/// A comment as one escapes a macro body: a block comment, or a `//` one
+/// carrying the line continuation that ended it.
 fn continued_comment(token: (SyntaxKind, &str)) -> bool {
-    token.0 == LINE_COMMENT && token.1.trim_end().ends_with('\\')
+    match token.0 {
+        BLOCK_COMMENT => true,
+        LINE_COMMENT => token.1.trim_end().ends_with('\\'),
+        _ => false,
+    }
+}
+
+/// Whether `ours[at]` is a comment written before, as a header included
+/// again writes the comments outside its guard.
+fn repeated_comment(ours: &[(SyntaxKind, &str)], at: usize) -> bool {
+    matches!(ours[at].0, LINE_COMMENT | BLOCK_COMMENT) && ours[..at].contains(&ours[at])
 }
 
 /// `slang`'s preprocessed output, or `None` if it would not produce any -- most
