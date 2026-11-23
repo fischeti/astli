@@ -178,7 +178,13 @@ impl Writer<'_> {
             }
             Doc::concat(docs)
         });
-        Doc::concat([base, select])
+        let spaced = children[0].text_range().end() < children[1].text_range().start();
+        let gap = if spaced && is_type_argument(expr) {
+            Doc::Space
+        } else {
+            Doc::nil()
+        };
+        Doc::concat([base, gap, select])
     }
 
     /// A name or a literal, its tokens as they are, or the macro call that
@@ -426,4 +432,48 @@ fn link(expr: &SyntaxNode) -> (SyntaxNode, SyntaxToken, SyntaxNode) {
         ] => (lhs.clone(), token.clone(), rhs.clone()),
         _ => unreachable!("`operator` checked the shape"),
     }
+}
+
+/// Whether `select`, a name and a range, could be a type with packed
+/// dimensions, `nib_t [3:0]`, given as a parameter's value: there it
+/// parses as a part-select of the name, as only the name's declaration
+/// tells the two apart, and the space written before the `[` is all that
+/// says which it is.
+fn is_type_argument(select: &SyntaxNode) -> bool {
+    let ranged = |node: &SyntaxNode| {
+        let children = significant_children(node);
+        children.len() == 6 && children[3].kind() == COLON
+    };
+    let named = significant_children(select)
+        .first()
+        .is_some_and(|it| matches!(it.kind(), NAME_REF | SCOPE_EXPR));
+    if !named {
+        return false;
+    }
+    // Every dimension after the first is a select of the one before.
+    let mut value = select.clone();
+    loop {
+        if !ranged(&value) {
+            return false;
+        }
+        match value.parent() {
+            Some(parent)
+                if parent.kind() == INDEX_EXPR && parent.first_child().as_ref() == Some(&value) =>
+            {
+                value = parent;
+            }
+            _ => break,
+        }
+    }
+    let arg = match value.parent() {
+        Some(paren) if paren.kind() == PAREN_EXPR => paren.parent(),
+        parent => parent,
+    };
+    let list = arg.filter(|it| it.kind() == ARG).and_then(|it| it.parent());
+    list.filter(|it| it.kind() == ARG_LIST)
+        .and_then(|it| {
+            std::iter::successors(it.prev_sibling_or_token(), |it| it.prev_sibling_or_token())
+                .find(|it| !it.kind().is_trivia())
+        })
+        .is_some_and(|it| it.kind() == HASH)
 }

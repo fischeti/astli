@@ -162,9 +162,13 @@ buffers, or when the formatter shows it costing real input.
 Two names in a row are a declaration, and a `(` after the second makes it an
 instantiation, because nothing else in the language is written that way. So
 `nonexistent_t x;` parses silently, and `INSTANTIATION` does not say whether
-it is a module or an interface. **Revisit when** something needs to know what a
-name means. That is name resolution over a compilation unit.
-**Where** `astli-parse/src/decl.rs`
+it is a module or an interface. A name with ranges where a type or a value
+may stand, `.data_t(nib_t [3:0])`, is a part-select in the tree: sema reads it
+as a type once the name resolves to one, and `fmt`, which resolves nothing,
+keeps the space before the `[` as it was written, so `nib_t[3:0]` stays tight.
+**Revisit when** something needs to know what a name means. That is name
+resolution over a compilation unit. **Where** `astli-parse/src/decl.rs`,
+`astli-fmt/src/rules/expr.rs`
 
 ### Region classification leaves out the bodies the fallback guesses about
 

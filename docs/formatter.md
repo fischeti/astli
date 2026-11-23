@@ -126,6 +126,10 @@ We take the second, and the first only where the second cannot fit.
   `:`, 17732 to 72; `+:` and `-:` take one on either side, 927 to 618. A
   replication's count is written the same way (`{W-1{a}}`), since in
   `{W - 1{a}}` the `1` reads as the count; the corpus is split, 173 to 158.
+- **A parameter's value of a name and ranges keeps a space before them**
+  if it was written with one, `.data_t(nib_t [N-1:0])`, as a declaration's
+  type has it. It parses as a part-select, which takes none, and only the
+  name's declaration, which the formatter does not read, says it is a type.
 - **Breaks go after an operator or a comma**, never before. The corpus puts
   `&&` at the end of a line 2830 times and at the start 140.
 - **A chain of one operator is one group** (`a && b && c` breaks at every
