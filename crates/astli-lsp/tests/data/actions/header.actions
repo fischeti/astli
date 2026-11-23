@@ -5,6 +5,10 @@ header.svh 1:1-1:4 forbid-reg
     @@ -1 +1 @@
     -reg shared;
     +logic shared;
+  quickfix "Waive `forbid-reg` here"
+    @@ -1 +1 @@
+    -reg shared;
+    +(* astli_allow = "forbid-reg" *) reg shared;
 header.svh all
   source.fixAll.astli "Fix all lint findings"
     @@ -1 +1 @@

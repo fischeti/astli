@@ -1,0 +1,7 @@
+macro.sv 11:12-11:24 always-ff-registers-only
+  quickfix "Waive `always-ff-registers-only` here"
+    @@ -11 +11 @@
+    -    q_o <= `INVERT(d_i);
+    +    (* astli_allow = "always-ff-registers-only" *) q_o <= `INVERT(d_i);
+macro.sv all
+  nothing

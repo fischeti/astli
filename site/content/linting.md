@@ -110,6 +110,8 @@ end
 
 It takes a comma-separated list of rules and groups, such as `(* astli_allow = "lowrisc, unused-signal" *)`. A name that isn't a rule or a group is a warning.
 
+In an editor, the language server offers a finding's waiver as a quick fix, on the smallest construct around it.
+
 For code you can't annotate, such as vendored IP or generated files, `[lint.paths]` in `astli.toml` sets levels by path:
 
 ```toml

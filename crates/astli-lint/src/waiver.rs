@@ -8,6 +8,7 @@
 use astli_parse::SyntaxTree;
 use astli_syntax::SyntaxKind::{ATTRIBUTE_SPEC, IDENT, STRING_LITERAL};
 use astli_syntax::{SyntaxNode, significant_child_tokens, significant_tokens};
+use std::ops::Range;
 use std::path::PathBuf;
 
 use astli_text::{Code, Diagnostic, Origins, Span};
@@ -103,6 +104,13 @@ impl Waivers {
         if origins.path(at.src_id) != Some(self.path.as_path()) {
             return false;
         }
+        self.covers(rule, at.start..at.end)
+    }
+
+    /// Whether a finding of `rule` reported at `at`, bytes of this file as
+    /// written, is waived: it stands inside a node that waives the rule or
+    /// its group. An editor asks it of a waiver it is about to write.
+    pub fn covers(&self, rule: &Rule, at: Range<u32>) -> bool {
         let range = TextRange::new(at.start.into(), at.end.into());
         self.covered.iter().any(|(covered, names)| {
             covered.contains_range(range)

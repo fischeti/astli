@@ -1,11 +1,13 @@
-//! Code actions, the fixes of what the server published, asked of designs
-//! the support host lowers once each has loaded.
+//! Code actions, the fixes and waivers of what the server published, asked
+//! of designs the support host lowers once each has loaded.
 //!
 //! Every `tests/data/actions/*.sv` is a case, opened with the `.svh` beside
 //! it, if it has one, under UTF-16, by a client that takes versioned edits.
 //! For each diagnostic published for each file, the quick fixes asked for
 //! it are written, then what fixing all of the file gives: each action as
-//! its kind and title and the lines its edit changes, as a diff. A
+//! its kind and title and the lines its edit changes, as a diff. Each
+//! waiver is then applied to the buffer and the design loaded again, and
+//! must take a finding of its rule away without an `invalid-waiver`. A
 //! diagnostic is written as its range, each position `line:character` from
 //! 1, and its code. A case's text holding `restriction` is linted with that
 //! group's rules on too. Adding a case means writing the `.sv` and running
@@ -76,9 +78,12 @@ fn snapshots() {
         }
         client.logged(loaded);
         let mut out = String::new();
+        let mut waivers = Vec::new();
+        let mut version = 1;
         for (path, text) in &opened {
             let (file, uri) = (path.file_name().unwrap().to_string_lossy(), uri(path));
-            for diagnostic in published(&mut client, &uri) {
+            let found = published(&mut client, &uri);
+            for diagnostic in found.clone() {
                 let code = match &diagnostic.code {
                     Some(lsp_types::Code::String(code)) => code.clone(),
                     code => format!("{code:?}"),
@@ -92,12 +97,37 @@ fn snapshots() {
                     asked,
                     Some(&["quickfix"]),
                 );
-                written(&mut out, &uri, text, quick);
+                for (title, waived) in written(&mut out, &uri, text, quick) {
+                    if title.starts_with("Waive") {
+                        waivers.push((code.clone(), waived));
+                    }
+                }
             }
             writeln!(out, "{file} all").unwrap();
             let start = Range::default();
             let all = ask(&mut client, &uri, start, &[], Some(&["source.fixAll"]));
             written(&mut out, &uri, text, all);
+            // Each waiver, written and linted again with the design, takes
+            // a finding of its rule away and is not itself reported.
+            let count = |found: &[Diagnostic], code: &str| {
+                let codes = found.iter().filter_map(|it| match &it.code {
+                    Some(lsp_types::Code::String(it)) => Some(it.as_str()),
+                    _ => None,
+                });
+                let codes: Vec<&str> = codes.collect();
+                assert!(!codes.contains(&"invalid-waiver"), "{codes:?}");
+                codes.iter().filter(|it| **it == code).count()
+            };
+            let before: Vec<usize> = (waivers.iter())
+                .map(|(code, _)| count(&found, code))
+                .collect();
+            for ((code, waived), before) in waivers.drain(..).zip(before) {
+                version += 1;
+                client.change(&uri, version, json!([{ "text": waived }]));
+                client.logged(loaded);
+                let after = count(&published(&mut client, &uri), &code);
+                assert!(after < before, "{file}: `{code}` not waived by\n{waived}");
+            }
         }
         client.finish();
         out
@@ -105,8 +135,14 @@ fn snapshots() {
 }
 
 /// Writes each of `actions`, fixes of `text` at `uri`, to `out`, or that
-/// there are none.
-fn written(out: &mut String, uri: &str, text: &str, actions: Vec<CodeAction>) {
+/// there are none, and hands back each one's title and the text it gives.
+fn written(
+    out: &mut String,
+    uri: &str,
+    text: &str,
+    actions: Vec<CodeAction>,
+) -> Vec<(String, String)> {
+    let mut given = Vec::new();
     if actions.is_empty() {
         writeln!(out, "  nothing").unwrap();
     }
@@ -120,7 +156,9 @@ fn written(out: &mut String, uri: &str, text: &str, actions: Vec<CodeAction>) {
         for line in diff.unified_diff().context_radius(0).to_string().lines() {
             writeln!(out, "    {line}").unwrap();
         }
+        given.push((action.title, fixed));
     }
+    given
 }
 
 /// The version and the edits of `edit`, which changes `uri` alone.
@@ -201,9 +239,10 @@ fn without_only_both_kinds_are_offered_as_plain_changes() {
     let kinds: Vec<String> = (actions.iter())
         .map(|it| it.kind.clone().unwrap().to_string())
         .collect();
-    assert_eq!(kinds, ["quickfix", "source.fixAll.astli"]);
+    // The finding's fix and its waiver, then the whole file fixed.
+    assert_eq!(kinds, ["quickfix", "quickfix", "source.fixAll.astli"]);
     // A client that takes no versioned edits is given them by URI.
-    let edit = actions[1].edit.as_ref().unwrap();
+    let edit = actions[2].edit.as_ref().unwrap();
     let changes = edit.changes.as_ref().expect("changes");
     let edits = &changes[&uri.parse().unwrap()];
     assert_eq!(
@@ -219,7 +258,8 @@ fn without_only_both_kinds_are_offered_as_plain_changes() {
         Some(&["refactor"]),
     );
     assert!(refactors.is_empty(), "{refactors:?}");
-    // `quickfix` alone, for both diagnostics.
+    // `quickfix` alone, for every diagnostic: two fixes, and a waiver of
+    // each finding.
     let quick = ask(
         &mut client,
         &uri,
@@ -227,7 +267,9 @@ fn without_only_both_kinds_are_offered_as_plain_changes() {
         &found,
         Some(&["quickfix"]),
     );
-    assert_eq!(quick.len(), 2, "{quick:?}");
+    let fixes = quick.iter().filter(|it| it.is_preferred == Some(true));
+    assert_eq!(fixes.count(), 2, "{quick:?}");
+    assert_eq!(quick.len(), 2 + found.len(), "{quick:?}");
     client.finish();
 }
 
@@ -240,10 +282,13 @@ fn a_diagnostic_of_an_older_version_is_offered_nothing() {
     let quick = Some(&["quickfix"][..]);
     let stale = ask(&mut client, &uri, old[0].range, &old[..1], quick);
     assert!(stale.is_empty(), "{stale:?}");
+    // Its fix and its waiver.
     let current = ask(&mut client, &uri, new[0].range, &new[..1], quick);
-    assert_eq!(current.len(), 1, "{current:?}");
-    let (version, _) = versioned_edits(current[0].edit.clone().unwrap(), &uri);
-    assert_eq!(version, Some(2));
+    assert_eq!(current.len(), 2, "{current:?}");
+    for action in current {
+        let (version, _) = versioned_edits(action.edit.unwrap(), &uri);
+        assert_eq!(version, Some(2));
+    }
     client.finish();
 }
 
@@ -263,7 +308,7 @@ fn a_fix_is_offered_only_in_its_own_file() {
         .collect();
     assert_eq!(reg.len(), 1);
     // Asked of the unit that includes the header, the header's finding has
-    // nothing to offer; asked of the header, it is fixed there.
+    // nothing to offer; asked of the header, it is fixed or waived there.
     let asked = ask(&mut client, &uri, reg[0].range, &reg, None);
     assert!(asked.is_empty(), "{asked:?}");
     let asked = ask(
@@ -273,6 +318,6 @@ fn a_fix_is_offered_only_in_its_own_file() {
         &reg,
         Some(&["quickfix"]),
     );
-    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_eq!(asked.len(), 2, "{asked:?}");
     client.finish();
 }

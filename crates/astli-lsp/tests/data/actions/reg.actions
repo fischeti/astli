@@ -1,12 +1,22 @@
 reg.sv 3:8-3:15 module-filename
-  nothing
+  quickfix "Waive `module-filename` here"
+    @@ -3 +3 @@
+    -module reg_fix (
+    +(* astli_allow = "module-filename" *) module reg_fix (
 reg.sv 6:3-6:6 forbid-reg
   quickfix "Fix `forbid-reg`"
     @@ -6 +6 @@
     -  reg q;
     +  logic q;
+  quickfix "Waive `forbid-reg` here"
+    @@ -6 +6 @@
+    -  reg q;
+    +  (* astli_allow = "forbid-reg" *) reg q;
 reg.sv 6:7-6:8 unused-signal
-  nothing
+  quickfix "Waive `unused-signal` here"
+    @@ -6 +6 @@
+    -  reg q;
+    +  (* astli_allow = "unused-signal" *) reg q;
 reg.sv 7:12-7:19 undeclared-name
   nothing
 reg.sv all
