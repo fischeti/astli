@@ -272,6 +272,19 @@ fn text_the_lexer_cannot_read_is_reported_and_kept() {
     let (codes, text) = expand("x = \"cut off\ny = 1;\n");
     assert_eq!(codes, ["not-a-token"]);
     assert_eq!(text, "x = \"cut off y = 1;");
+
+    // Wherever it is written, once, however often a formal substitutes it:
+    // in an argument, at the call, and in a default, where it is defined.
+    for source in [
+        "`define ID(x) x\nwire `ID(a \u{1} b);\n",
+        "`define TWICE(x) x x\n`define NONE(x)\n`TWICE(\u{1}) `NONE(\u{1})\n",
+        "`define ID(x) x\n`ID(`ID(\u{1}))\n",
+        "`define D(x = \u{1}) x\n`D() `D()\n",
+    ] {
+        let (codes, _) = expand(source);
+        let once = source.matches('\u{1}').map(|_| "not-a-token");
+        assert_eq!(codes, once.collect::<Vec<_>>(), "{source:?}");
+    }
 }
 
 #[test]

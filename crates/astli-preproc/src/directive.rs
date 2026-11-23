@@ -388,10 +388,15 @@ pub(crate) fn problems(input: &Input, directive: &Directive) -> Vec<(TokenSpan, 
             if DirectiveType::lookup(&format!("`{name}")).is_some() {
                 found.push((def.name.span(), Problem::Directive(name.to_string())));
             }
-            for at in def.body.range() {
-                if input.kind(at) == LEX_ERROR {
-                    let text = input.text(at).to_string();
-                    found.push((def.body.with(at..at + 1), Problem::NotAToken(text)));
+            // A default is written here as much as the body is, and a call
+            // substituting it reports nothing, so it is checked with the body.
+            let defaults = (def.formals.iter().flatten()).filter_map(|formal| formal.default);
+            for text in defaults.chain([def.body]) {
+                for at in text.range() {
+                    if input.kind(at) == LEX_ERROR {
+                        let written = input.text(at).to_string();
+                        found.push((text.with(at..at + 1), Problem::NotAToken(written)));
+                    }
                 }
             }
         }
