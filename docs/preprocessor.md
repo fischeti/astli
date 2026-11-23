@@ -131,6 +131,8 @@ buffer (`Origins::add_synthesised`). A paste resolves against tokens already
 emitted, since either side may be a formal or a call, and is re-lexed. A
 `` `name `` a paste builds is looked up only once whole, with the argument
 list that follows it: UVM picks helpers as `` `m_uvm_``TYPE``_resize(ARG) ``.
+A `` `name `` the paste joins nothing to has ended, and is a reference of
+its own, so `` `UVM_NAME``-1 `` is `UVM-1`.
 A `/` pasted onto a `*` opens a block comment, which a `*` pasted onto a `/`
 closes, and onto a `/` a line comment to the end of the body's line: the
 standard leaves them two tokens, but the tools such code targets read a

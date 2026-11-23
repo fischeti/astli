@@ -498,6 +498,16 @@ fn a_pasted_macro_name_is_looked_up_once_whole() {
     // Without an argument list, too.
     let expanded = Expanded::new("`define W_8 8\n`define W(n) `W_``n\nx = `W(8);\n");
     assert_eq!(expanded.text(), "x = 8;");
+
+    // Where the paste builds no longer name, the name before it is a
+    // reference of its own: UVM's version string is pasted so.
+    let expanded = Expanded::new(
+        "`define NAME UVM\n`define MAJOR 1\n`define MINOR 2\n\
+         `define VERSION `\"`NAME``-```MAJOR``.```MINOR`\"\n\
+         `define BARE `NAME``-1 `NAME`` -1 `N``AME``-1\n\
+         s = `VERSION; `BARE\n",
+    );
+    assert_eq!(expanded.text(), "s = \"UVM-1.2\"; UVM-1 UVM -1 UVM-1");
 }
 
 #[test]
