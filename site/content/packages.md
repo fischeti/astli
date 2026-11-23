@@ -10,8 +10,8 @@ astli lint          # Lint package sources and dependencies
 astli check         # Semantically check the full design including dependencies
 ```
 
-!!! tip "Explicit files override package mode"
-    Passing individual files (such as `astli lint rtl/alu.sv`) or filelists (`astli check -f design.f`) on the command line disables automatic package discovery. In that mode, `astli` analyzes only the explicitly specified files.
+!!! tip "Named files replace the package"
+    Given files (`astli lint rtl/alu.sv`) or filelists (`astli check -f design.f`), a command reads those alone, not the rest of the package.
 
 ## Locating the package root
 
@@ -34,16 +34,16 @@ dev = ["hw/tb/**"]             # Testbenches used only within this package
 
 `dev` and a [feature](features.md)'s `sources` take precedence over `[package] sources`: they claim their files wherever they are below the root, so a `tb/` beside `sources = ["hw"]` needs naming only in `dev`, and a `hw/tb/` inside it is still a testbench. `sources` takes whatever neither claims: with its default, every other file is design.
 
-All three take glob patterns, and a pattern naming a directory names every file below it: `sources = ["rtl/*.sv"]` takes the files directly in `rtl/` and leaves `rtl/legacy/` out. A source whose directory does not exist, the part of its pattern before any wildcard, is an error. `exclude` removes a file whichever key names it.
+`sources`, `dev` and `exclude` take glob patterns, and a pattern naming a directory names every file below it: `sources = ["rtl/*.sv"]` takes the files directly in `rtl/` and leaves `rtl/legacy/` out. A source whose directory does not exist, the part of its pattern before any wildcard, is an error. `exclude` removes a file whichever key names it.
 
 ### Dev sources
 
-Files matched by the `dev` pattern are considered internal to the package—such as unit tests, testbenches, and verification harnesses. They are compiled and analyzed when working directly inside this package, but are automatically excluded when another package imports this project as an external dependency.
+The files `dev` matches are the package's own: its testbenches and verification harnesses. A command run in the package reads them, and a package that depends on this one never sees them.
 
 A `dev` pattern that matches no file is an error, so a typo cannot silently leave a testbench out or turn it into a design file.
 
 !!! note "Nested sub-packages"
-    Any subdirectory that contains its own `astli.toml` or `Bender.yml` is treated as an independent child package. Its files are excluded from the parent package's scope unless explicitly referenced as a dependency.
+    A directory with an `astli.toml` or a `Bender.yml` of its own is another package. Its files are not the parent's, and reach the parent's design only as a dependency.
 
     A directory with a `Bender.yml` is still scanned where a pattern of `sources`, `dev` or a feature names it or a path inside it before any wildcard, for a Bender package that lists a nested package's files as its own. Inside it, only such patterns select files; `**/*.sv` or the root does not reach it:
 
@@ -58,20 +58,20 @@ A repository holding several packages, such as an SoC and its IP blocks, can mak
 
 ## Headers and compilation units
 
-In `astli`, each non-included `.sv` or `.v` file is treated as its own independent compilation unit. Any file included via an `` `include `` directive is classified as a header, regardless of whether its extension is `.svh`, `.vh`, or `.sv`.
+Each `.sv` or `.v` file that nothing includes is a compilation unit of its own. A file that an `` `include `` names is a header, whatever its extension.
 
 ??? info "How `astli` resolves `` `include `` directives"
-    When expanding an `` `include "filename" `` directive, `astli` searches in the following order:
+    For `` `include "filename" ``, `astli` searches:
 
-    1. **Include search paths**: Within directories declared in `include-dirs` or provided via `-I` / `+incdir+`.
-    2. **Fuzzy package match**: If the file is still not found, `astli` searches across the package for any uniquely matching file whose path ends in that filename. If multiple candidates exist, `astli` raises an ambiguity error.
+    1. **The include directories**: those `include-dirs` declares, and those `-I` or `+incdir+` gives.
+    2. **The package**: failing those, the one file in the package whose path ends in the name. Two such files are an ambiguity error.
 
-You can run `astli files --emit incdirs` to output all resolved include directories needed by third-party EDA tools to find every header without relying on fallback searches.
+`astli files --emit incdirs` writes the include directories another tool needs to find every header without that second search.
 
 A tool searches those directories in order for every file in the list, while `astli` searches each package with its own. Where that would make a tool read a different header than `astli` did, for instance when two packages each hold a `defs.svh`, `astli files`, `astli build` and `astli check` warn with `include-differs`. Give one of the headers a more specific path, such as `` `include "ip/defs.svh" ``.
 
-## Duplicate symbols and name collisions
+## Two definitions of one name
 
-If two files within the design define a module, interface, or package with the exact same name, `astli` raises an error if that symbol is instantiated or used by the design.
+Two files of a design may declare a module, interface or package of the same name, and it is an error only once the design uses that name.
 
-If an external dependency provides multiple conflicting implementations of the same module (for instance, ASIC vs. FPGA variants), you can use [features and overrides](features.md) to select only the intended implementation.
+Where a dependency has several implementations of one module, such as an ASIC and an FPGA variant, [features and overrides](features.md) choose the one to build.

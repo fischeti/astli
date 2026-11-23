@@ -1,12 +1,10 @@
 # Features and overrides
 
-In hardware design, different build targets often require different source configurations—for example, switching between simulation verification models, FPGA prototypes, and ASIC foundry technology cells.
-
-`astli` expresses these with **features** and **overrides**.
+One design is often built several ways: with simulation models, for an FPGA prototype, or with a foundry's technology cells. `astli` expresses these with **features** and **overrides**.
 
 ## Features
 
-Much like Cargo features in Rust, an `astli` feature allows you to conditionally activate additional source files, include directories, optional dependencies, or downstream dependency features.
+As Cargo's features do for Rust, a feature turns on source files, include directories, optional dependencies, or features of a dependency.
 
 Features only add: enabling one adds files to the build and never removes any. Two features that declare the same module are alternatives, such as a behavioural memory model and the wrapper of an SRAM macro, and a design that enables both is an error naming both declarations.
 
@@ -23,13 +21,13 @@ vip = { sources = ["hw/vip/**"], include-dirs = ["hw/vip/include"], dependencies
 
 ### Controlling features on the command line
 
-When working inside a package directly, `astli` enables its `default` features, as a package depending on it would get them. You can fine-tune this on the command line:
+A command run in a package enables its `default` features, as a package depending on it would get them. Flags choose others:
 
 ```sh
 # Disable the default features
 astli files --no-features
 
-# Disable defaults and explicitly enable only the 'vip' feature
+# Enable only the 'vip' feature
 astli files --no-features --features vip
 
 # Enable every feature, alternatives together
@@ -74,7 +72,7 @@ A package depending on yours never enables them.
 
 ### Configuring dependency features
 
-When you declare a dependency in `[dependencies]`, it automatically activates that dependency's `default` features. You can request additional features or turn off defaults:
+A dependency comes with its `default` features. A requirement can ask for more, or turn the defaults off:
 
 ```toml
 [dependencies]
@@ -83,7 +81,7 @@ axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.39", feat
 
 ### Optional dependencies
 
-You can make an entire dependency conditional on a feature. When you reference a dependency name in a feature's `dependencies` list (e.g. `dependencies = ["tech_foundry"]`), that dependency is only pulled into the design when the feature is enabled:
+A dependency a feature's `dependencies` names, as `dependencies = ["tech_foundry"]`, is in the design only while the feature is on:
 
 ```toml
 [features]
@@ -94,20 +92,18 @@ tech_foundry = { git = "https://github.com/my-org/tech_foundry.git", version = "
 ```
 
 !!! tip "Development dependencies"
-    For packages only needed during internal verification (like UVM test harnesses or mock VIP), place them in `[dev-dependencies]`. Downstream dependents will never download or compile them.
+    A package only your own verification needs, such as a UVM harness or a VIP, goes in `[dev-dependencies]`. A package depending on yours never fetches it.
 
 ## Overrides
 
-In ASIC and FPGA development, high-level code often instantiates generic primitives (such as clock gates, reset synchronizers, or SRAM macros) that must be replaced by technology-specific macros in foundry builds.
-
-The `[overrides]` table allows a root package to substitute module, interface, or package implementations provided by a dependency:
+Generic code instantiates generic primitives, such as clock gates, reset synchronizers or SRAMs, which a technology's build replaces with its own cells. `[overrides]` lets the root package replace modules, interfaces or packages a dependency provides:
 
 ```toml
 [features]
 ihp13 = { sources = ["target/asic/ihp13/**"] }
 
 [overrides]
-# Instructs astli to replace matching modules in tech_cells_generic
+# Replace these modules of tech_cells_generic
 tech_cells_generic = ["tc_sram_impl", "tc_clk_*"]
 ```
 

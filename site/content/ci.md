@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: fischeti/astli-action@v0.5.0
+      - uses: fischeti/astli-action@v0.7.0
 
       - name: Format check
         run: astli fmt --check
@@ -51,7 +51,7 @@ The action sets `ASTLI_DIAGNOSTICS=github` for the rest of the job. Without the 
 ```yaml
 lint:
   script:
-    - uvx astli@0.5.0 lint --locked --diag gitlab 2> gl-code-quality-report.json
+    - uvx astli@0.7.0 lint --locked --diag gitlab 2> gl-code-quality-report.json
   artifacts:
     when: always
     reports:
@@ -65,9 +65,9 @@ lint:
 Run `astli` with `uvx` or `pipx`:
 
 ```sh
-uvx astli@0.5.0 fmt --check
-uvx astli@0.5.0 lint --locked
-uvx astli@0.5.0 check --locked --top soc_top
+uvx astli@0.7.0 fmt --check
+uvx astli@0.7.0 lint --locked
+uvx astli@0.7.0 check --locked --top soc_top
 ```
 
 To avoid cloning the dependencies on every run, cache the directory `ASTLI_CACHE_DIR` names, keyed on `astli.lock`. Its default differs by OS (see [environment variables](reference/environment.md)), so set it to a path of your own. `--diag short` gives one line per diagnostic, which suits a log other tools read.

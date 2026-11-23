@@ -119,7 +119,7 @@ The [pre-commit](https://pre-commit.com) hook runs `astli fmt` on the files a co
 ```yaml
 repos:
   - repo: https://github.com/fischeti/astli-pre-commit
-    rev: v0.5.0
+    rev: v0.7.0
     hooks:
       - id: astli-fmt
 ```
