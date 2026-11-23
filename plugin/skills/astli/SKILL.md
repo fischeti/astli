@@ -269,6 +269,22 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
 To move a project from `Bender.yml` to `astli.toml`, or to translate a
 Bender command, read [references/bender.md](references/bender.md) first.
 
+## Language server
+
+This plugin starts `astli lsp` for `.sv`, `.svh`, `.v` and `.vh` files when
+`astli` is on `PATH`. After each edit you are shown what `lint` and `check`
+report for the file in the design around it. That includes what the
+`[top.NAME]` tables' builds get wrong, so after an edit there is no need to
+run either command. Run them before finishing, since the server reports only
+the files that are open. The `LSP` tool answers from the same design:
+
+- go to definition and find references follow a name across the package and
+  its dependencies;
+- hover on a name gives its type and width as elaborated, a parameter's value
+  and what the tops set it to, a port's direction, and what a macro call
+  expands to;
+- document and workspace symbols list what files declare.
+
 ## Reading diagnostics
 
 `--diag short` prints one `file:line:col: severity[code]: message` line per

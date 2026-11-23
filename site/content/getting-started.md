@@ -166,7 +166,7 @@ For other CI systems, upgrades and pull request annotations, see the [CI Guide](
 
 ## AI agent integration
 
-A plugin for [Claude Code](https://code.claude.com), and any agent that reads [Agent Skills](https://agentskills.io), tells the agent how to use `astli`'s commands.
+A plugin for [Claude Code](https://code.claude.com), and any agent that reads [Agent Skills](https://agentskills.io), tells the agent how to use `astli`'s commands. In Claude Code it also starts the [language server](editors.md#claude-code), so the agent sees the problems in a file after each edit.
 
 To install the plugin in Claude Code:
 

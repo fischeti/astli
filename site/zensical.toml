@@ -25,6 +25,7 @@ nav = [
     { "Building" = "building.md" },
     { "Testing" = "testing.md" },
     { "CI" = "ci.md" },
+    { "Editors" = "editors.md" },
     { "Coming from bender" = "bender.md" },
   ] },
   { "Reference" = [
