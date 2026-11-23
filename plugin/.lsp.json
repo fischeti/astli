@@ -1,0 +1,12 @@
+{
+  "astli": {
+    "command": "astli",
+    "args": ["lsp"],
+    "extensionToLanguage": {
+      ".sv": "systemverilog",
+      ".svh": "systemverilog",
+      ".v": "verilog",
+      ".vh": "verilog"
+    }
+  }
+}

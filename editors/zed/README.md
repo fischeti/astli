@@ -12,14 +12,13 @@ through `rustup`.
 
 ## Settings
 
-Zed starts every server an extension names for a language, so say which one
-it is to be:
+The `verilog` extension opens `.sv`, `.svh`, `.v` and `.vh` files all as
+SystemVerilog, and names other servers for it, so say which one it is to be:
 
 ```json
 {
   "languages": {
-    "SystemVerilog": { "language_servers": ["astli"] },
-    "Verilog": { "language_servers": ["astli"] }
+    "SystemVerilog": { "language_servers": ["astli"] }
   }
 }
 ```
