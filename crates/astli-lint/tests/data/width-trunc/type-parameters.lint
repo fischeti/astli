@@ -1,0 +1,1 @@
+38:50: [width-trunc] `w_i` is 128 bits wide, and is truncated to the 64 of port `data_i` of `pass`

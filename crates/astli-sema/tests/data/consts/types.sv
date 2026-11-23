@@ -45,4 +45,6 @@ package p;
   // A bound is an `int`, so one an unsigned zero minus one gives is -1.
   localparam int unsigned None = 0;
   localparam logic [None-1:0] AB = '1;
+  // A typedef's name with packed dimensions, a packed array of it.
+  localparam AC = $bits(byte_t [3:0][1:0]);
 endpackage
