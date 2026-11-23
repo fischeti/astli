@@ -32,8 +32,9 @@ repos:
     hooks:
       - id: typos
         # What astli prints over real designs: commit ids and their
-        # identifiers, which are not words to correct.
-        exclude: ^scripts/corpus/
+        # identifiers, which are not words to correct. The VS Code grammars
+        # are copied verbatim, and their regexes are not words either.
+        exclude: ^(scripts/corpus/|editors/vscode/syntaxes/)
 
   # release-plz reads the type for the version bump and the changelog group. A
   # scope names the crate a change is in.

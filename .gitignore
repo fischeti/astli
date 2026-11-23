@@ -13,3 +13,9 @@
 /editors/zed/Cargo.lock
 /editors/zed/extension.wasm
 /editors/zed/grammars
+# Made when the VS Code extension is built and packaged; `bundled` is the
+# binary a release copies in for a platform's VSIX.
+/editors/vscode/node_modules
+/editors/vscode/out
+/editors/vscode/bundled
+/editors/vscode/*.vsix

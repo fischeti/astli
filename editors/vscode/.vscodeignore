@@ -1,0 +1,13 @@
+# The VSIX holds what VS Code loads, and the licences: the bundle has
+# vscode-languageclient inlined, so node_modules stays out.
+**
+!package.json
+!out/extension.js
+!syntaxes/*.tmLanguage.json
+!language-configuration.json
+!README.md
+!LICENSE
+!LICENSE-MIT
+!LICENSE-APACHE
+!THIRD_PARTY_NOTICES.md
+!bundled/**
