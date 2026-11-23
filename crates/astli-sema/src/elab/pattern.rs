@@ -178,7 +178,7 @@ impl Elaboration {
     }
 
     /// Whether `expr` is a value rather than a type.
-    fn is_value(&self, cx: Cx, expr: ExprId) -> bool {
+    pub(super) fn is_value(&self, cx: Cx, expr: ExprId) -> bool {
         let hir = &self.design[cx.file];
         match &hir[expr].kind {
             ExprKind::Type(_) | ExprKind::Keyword(_) => false,

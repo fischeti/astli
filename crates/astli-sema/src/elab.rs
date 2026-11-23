@@ -1026,8 +1026,44 @@ impl Elaboration {
                 },
                 _ => Ty::Unknown,
             },
+            ExprKind::Select { .. } => match self.dimensioned_type(cx, expr) {
+                Some(ty) => ty,
+                None => self.self_type(cx, expr),
+            },
             _ => self.self_type(cx, expr),
         }
+    }
+
+    /// The type `expr` names if it is a type with packed dimensions,
+    /// `nib_t [3:0]`: where a type or a value may stand, it reads as a
+    /// part-select of the name, as only the name's declaration tells them
+    /// apart. `None` if the name is not a type.
+    fn dimensioned_type(&self, cx: Cx, expr: ExprId) -> Option<Ty> {
+        let hir = &self.design[cx.file];
+        let mut dims = Vec::new();
+        let mut at = expr;
+        while let ExprKind::Select { base, index, range } = &hir[at].kind {
+            // A packed dimension is a range; `[i]` and `[i+:w]` select.
+            let Some((COLON, right)) = range else {
+                return None;
+            };
+            dims.push(Dim::Range(*index, *right));
+            at = *base;
+        }
+        if !matches!(hir[at].kind, ExprKind::Name(_) | ExprKind::Scoped { .. })
+            || self.is_value(cx, at)
+        {
+            return None;
+        }
+        // The innermost select is the first dimension written.
+        dims.reverse();
+        Some(match self.type_or_expr(cx, at) {
+            Ty::Packed(element) => match self.packed_array(cx, element, &dims) {
+                Some(array) => Ty::Packed(array),
+                None => Ty::Unknown,
+            },
+            _ => Ty::Unknown,
+        })
     }
 
     /// Whether `expr` is an unbased unsized literal, `'0` or `'1`.
