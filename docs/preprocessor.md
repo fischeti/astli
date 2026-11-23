@@ -237,10 +237,13 @@ In raw mode, an undefined macro is the normal case and is not reported.
 `astli-preproc/tests/it/differential.rs` compares token sequences against
 `slang -E --comments` over the corpus, comments included and whitespace
 dropped. Nothing is filtered out. Files `slang` declines for want of include
-paths or defines are counted, not skipped. 1843 files agree, and 153 differ
-only through two `slang` defects that a third preprocessor confirms: whitespace
-before a continuation leaking into a later `` `" ``, and a `//` comment
-surviving in a continued body. Widening the comparison found two real bugs that
+paths or defines are counted, not skipped. 1940 files agree, and 155 differ
+only where `slang` departs from the standard: whitespace before a
+continuation leaking into a later `` `" ``, a comment surviving in a macro
+body, and a header included again once its guard is defined skipped whole,
+the comments outside its guard with it. A third preprocessor agrees with us
+on all but a block comment in a body, which it keeps too when asked to keep
+comments. Widening the comparison found two real bugs that
 targeted tests had missed, which is the argument for running the oracle
 against everything.
 
