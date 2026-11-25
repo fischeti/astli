@@ -29,9 +29,9 @@ pub enum Tell {
 /// When a resolution may write the lock.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Write {
-    /// Only where the root has an `astli.toml`, so that a run in a project
-    /// only bender manages leaves no file behind. What a package command
-    /// does.
+    /// Only where the root has an `astli.toml` or the run names the lock,
+    /// so that a run in a project only bender manages leaves no file behind
+    /// that nobody asked for. What a package command does.
     Manifest,
     /// Always, as `astli update` was asked to.
     Always,
@@ -133,13 +133,16 @@ pub fn settle(
     for uncached in &resolution.uncached {
         term::warning(format!("{uncached}, so another version is locked")).report(run);
     }
-    if write == Write::Manifest && root.package.manifest_path.is_none() {
+    if write == Write::Manifest
+        && root.package.manifest_path.is_none()
+        && run.args.lockfile.is_none()
+    {
         return Ok(resolution);
     }
     for (verb, what) in old.unwrap_or_default().changes(&new) {
         status!(verb, "{what}");
     }
-    std::fs::write(&path, new.to_string()).map_err(|err| Error::io(&path, err))?;
+    std::fs::write(path, new.to_string()).map_err(|err| Error::io(path, err))?;
     // Every commit locked is one the requirements admit, so a resolution
     // preferring the lock written chooses them all again: the next
     // package's run, reading it, needs no resolution of its own.
@@ -155,7 +158,7 @@ pub fn resolved(
     overrides: &Overrides,
     kept: impl FnOnce(&Lock) -> Lock,
 ) -> Result<(Option<Lock>, Resolution)> {
-    let old = Lock::read(&here.lockfile())?;
+    let old = Lock::read(here.lockfile())?;
     let preferred = old.as_ref().map(kept).unwrap_or_default();
     let resolution = run.resolution(resolving(here, overrides, preferred), |it| {
         Ok(resolve(

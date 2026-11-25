@@ -135,7 +135,7 @@ fn a_package_command_reads_its_dependencies_and_writes_the_lock() {
 }
 
 #[test]
-fn a_package_only_bender_manages_gets_no_lock_unless_asked() {
+fn a_package_only_bender_manages_gets_no_lock_unless_asked_or_named() {
     let fixture = Fixture::new("bender-lock");
     let url = cells_repository(&fixture);
     fixture.file(
@@ -156,6 +156,19 @@ fn a_package_only_bender_manages_gets_no_lock_unless_asked() {
         .dir(&root)
         .cache()
         .args(["files", "--locked"]);
+    // A lock named outside the root, as for a checkout that is read-only,
+    // is written there, and read again from there.
+    let named = fixture.path().join("locks/root.lock");
+    fixture.file("locks/.keep", "");
+    let lockfile = named.to_str().unwrap();
+    let written = (driver(&fixture).dir(&root).cache()).args(["files", "--lockfile", lockfile]);
+    let read = (driver(&fixture).dir(&root).cache()).args([
+        "files",
+        "--locked",
+        "--offline",
+        "--lockfile",
+        lockfile,
+    ]);
 
     assert!(run.status.success(), "{}", stderr(&run));
     assert!(stdout(&run).contains("cells.sv"), "{}", stdout(&run));
@@ -165,6 +178,11 @@ fn a_package_only_bender_manages_gets_no_lock_unless_asked() {
         "{}",
         stderr(&refused)
     );
+    assert!(written.status.success(), "{}", stderr(&written));
+    assert!(named.is_file());
+    assert!(!root.join("astli.lock").exists());
+    assert!(read.status.success(), "{}", stderr(&read));
+    assert_eq!(stdout(&read), stdout(&run));
 }
 
 #[test]

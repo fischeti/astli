@@ -6,7 +6,7 @@
 //! longer admits that commit; with none named, the lock is set aside and
 //! every package takes the highest version admitted.
 
-use astli_resolve::{LOCKFILE, Lock};
+use astli_resolve::Lock;
 use usage_rs::{Args, RunWith};
 
 use astli_package::mark;
@@ -30,12 +30,13 @@ impl RunWith<Ctx<'_>> for Update {
     fn run_with(self, ctx: Ctx<'_>) -> Result {
         let run = ctx.run;
         let here = target::here(run)?;
-        if let Some(lock) = Lock::read(&here.lockfile())?
+        if let Some(lock) = Lock::read(here.lockfile())?
             && let Some(name) = self.names.iter().find(|it| lock.get(it).is_none())
         {
             return Err(Error::failed(format!(
-                "{} is not in {LOCKFILE}",
-                mark::name(name)
+                "{} is not in {}",
+                mark::name(name),
+                mark::path(here.lockfile().display())
             )));
         }
         let kept = |lock: &Lock| {

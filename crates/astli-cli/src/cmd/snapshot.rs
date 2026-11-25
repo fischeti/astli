@@ -13,7 +13,7 @@
 use std::collections::BTreeSet;
 
 use astli_package::{BENDER_MANIFEST, Package, Source, mark};
-use astli_resolve::{LOCKFILE, Lock};
+use astli_resolve::Lock;
 use usage_rs::{Args, RunWith};
 
 use crate::cmd::Ctx;
@@ -196,13 +196,14 @@ fn repository(here: &Here, ours: &[&Package], name: &str) -> Result<String> {
             return Ok(url.clone());
         }
     }
-    let lock = Lock::read(&here.lockfile())?.unwrap_or_default();
+    let lock = Lock::read(here.lockfile())?.unwrap_or_default();
     match lock.get(name) {
         Some(locked) => Ok(locked.source.clone()),
         None => Err(Error::failed(format!(
-            "{} comes from no repository that the workspace requires or {LOCKFILE} names, so \
-             there is no repository to require a commit of",
-            mark::name(name)
+            "{} comes from no repository that the workspace requires or {} names, so there is \
+             no repository to require a commit of",
+            mark::name(name),
+            mark::path(here.lockfile().display())
         ))),
     }
 }

@@ -4,7 +4,7 @@
 //! runs a command once for each package of a workspace.
 
 use std::cell::OnceCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use astli_package::{MANIFEST, Package, Patches, Root, Workspace, mark};
 use astli_resolve::{LOCKFILE, Overrides};
@@ -148,6 +148,8 @@ pub struct Here {
     /// Whether the package is in a workspace rather than one of its own,
     /// which a message about what the root holds says.
     pub in_workspace: bool,
+    /// The lock: the one the run names, or else the workspace root's.
+    lockfile: PathBuf,
 }
 
 impl Here {
@@ -169,16 +171,19 @@ impl Here {
             }
             None => Workspace::alone(package.clone())?,
         };
+        let lockfile = (run.args.lockfile.clone())
+            .unwrap_or_else(|| workspace.root.package.root.join(LOCKFILE));
         Ok(Here {
             package,
             workspace,
             in_workspace,
+            lockfile,
         })
     }
 
-    /// The workspace root's lockfile.
-    pub fn lockfile(&self) -> PathBuf {
-        self.workspace.root.package.root.join(LOCKFILE)
+    /// The lock the package resolves over.
+    pub fn lockfile(&self) -> &Path {
+        &self.lockfile
     }
 
     /// What a message calls `package`, the package or one of its
