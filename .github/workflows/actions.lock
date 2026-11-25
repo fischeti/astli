@@ -7,6 +7,7 @@ workflows:
         - 'actions/cache@v6.1.0'
         - 'actions/checkout@v7.0.1'
         - 'astral-sh/setup-uv@v10.3.3'
+        - 'samypr100/setup-dev-drive@v4.1.0'
         - 'swatinem/rust-cache@v2.9.3'
         - 'taiki-e/install-action@v2.90.4'
     '.github/workflows/codspeed.yml':
@@ -127,6 +128,11 @@ dependencies:
         commit: 'sha1-59144859caf016f8b817a2ac9b051578729173c4'
         owner_id: 188756284
         repo_id: 735058483
+    'samypr100/setup-dev-drive@v4.1.0':
+        ref: 'v4.1.0'
+        commit: 'sha1-562171fe8df7401fdf582d766cd3b6ab80d5b1a0'
+        owner_id: 3933065
+        repo_id: 799426064
     'swatinem/rust-cache@v2.9.3':
         ref: 'v2.9.3'
         commit: 'sha1-d1527c8f67ef9af357290475d4af4b0fab8f12e0'

@@ -140,18 +140,30 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+      # The build and the tests run from a copy on a Dev Drive. Trusted, it
+      # is one Defender scans asynchronously, where on the system drive each
+      # of a build's many small writes waits for the scan; the runner is
+      # thrown away with the job, so there is nothing to protect.
+      - uses: samypr100/setup-dev-drive@v4.1.0
+        with:
+          drive-size: 8GB
+          workspace-copy: true
+          trusted-dev-drive: true
       - run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       # Saved after a failure too, which is when the next push needs it.
       - uses: Swatinem/rust-cache@v2.9.3
         with:
+          workspaces: ${{ env.DEV_DRIVE_WORKSPACE }}
           cache-on-failure: true
       - uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
       # Every failure at once: one run should be enough to see what differs.
       - run: cargo nextest run --workspace --no-fail-fast
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
       # Windows verifies certificates through its own store.
       - run: cargo nextest run --workspace -P network
+        working-directory: ${{ env.DEV_DRIVE_WORKSPACE }}
 
   # release.yml is what dist generates from dist-workspace.toml. Dependabot
   # edits the workflow alone, and checked only at release, a mismatch would
