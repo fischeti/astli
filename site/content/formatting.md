@@ -28,7 +28,7 @@ exclude = ["hw/vendor", "hw/legacy/**/*.sv"]  # Files to leave as they are (defa
 
 A comment at the end of a line doesn't count towards `width`, so code that fits stays on one line and its comment runs past the margin.
 
-`astli fmt` reads the nearest `astli.toml` above the file, or the one `--config <path>` names. The layout has no command-line flags, so every machine, editor and CI job formats the same way.
+`astli fmt` reads the nearest `astli.toml` above the file, over the workspace root's in a [workspace](workspaces.md#one-style), or the one `--config <path>` names. The layout has no command-line flags, so every machine, editor and CI job formats the same way.
 
 ### Excluding files from formatting
 

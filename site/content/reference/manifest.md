@@ -211,7 +211,7 @@ See [Describing unmanifested dependencies](../dependencies.md#describing-unmanif
 
 ## `[workspace]`
 
-Makes the package the root of a workspace: every `astli.toml` below it in the same repository is a member, and they share one lock. The table may be empty. A manifest with `[workspace]` and no `[package]` is a virtual root, which holds no files of its own; of its other tables only `[resolve]`, `[described.NAME]`, `[build]` and `[profile.NAME]` are read.
+Makes the package the root of a workspace: every `astli.toml` below it in the same repository is a member, and they share one lock. The table may be empty. A manifest with `[workspace]` and no `[package]` is a virtual root, which holds no files of its own; of its other tables only `[resolve]`, `[described.NAME]`, `[build]`, `[profile.NAME]`, `[fmt]` and `[lint]` are read. A member's `[fmt]` and `[lint]` apply over the root's; see [One style](../workspaces.md#one-style).
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
@@ -221,7 +221,7 @@ See [Workspaces](../workspaces.md).
 
 ## `[fmt]`
 
-Sets automated code layout and formatting rules for `astli fmt`.
+Sets automated code layout and formatting rules for `astli fmt`. In a workspace member, each key it sets replaces the root's, and `exclude` adds to the root's.
 
 | Key | Default | Description |
 | :--- | :--- | :--- |
@@ -234,7 +234,7 @@ See [Formatting](../formatting.md#configuration) and [Excluding files](../format
 
 ## `[lint]`
 
-Configures project-wide lint rule severities and waivers.
+Configures project-wide lint rule severities and waivers. In a workspace member, its style and levels apply over the root's, and the root's `paths` over both, then its own.
 
 | Key | Description |
 | :--- | :--- |

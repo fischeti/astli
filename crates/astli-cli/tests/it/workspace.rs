@@ -362,8 +362,8 @@ fn check_workspace_checks_every_table_of_a_member_and_goes_on_past_it() {
 fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     let fixture = Fixture::new("workspace-virtual");
     let ws = workspace(&fixture);
-    // Neither is read: the dependency would not resolve, and the indent
-    // would fail `dma.sv`.
+    // The dependency is not read, or it would not resolve; the indent is
+    // the members' and the files named here's, and fails `dma.sv`.
     fixture.file(
         "ws/astli.toml",
         "[workspace]\n\n[dependencies]\ngone = { path = 'gone' }\n\n[fmt]\nindent = 4\n\n\
@@ -390,7 +390,7 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     assert!(
         stderr(&tree).contains(
             "a virtual workspace root is no design, so astli does not read its \
-             `[dependencies]`, `[fmt]`"
+             `[dependencies]`\n"
         ),
         "{}",
         stderr(&tree)
@@ -398,13 +398,18 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     assert!(!stderr(&tree).contains("[tool]"), "{}", stderr(&tree));
     assert!(!fmt.status.success());
     assert!(
+        slashed(&fmt).contains("ip/dma/dma.sv\n"),
+        "{}",
+        stdout(&fmt)
+    );
+    assert!(
         slashed(&fmt).ends_with("ip/other/bad.sv\n"),
         "{}",
         stdout(&fmt)
     );
     assert!(!slashed(&fmt).contains("soc.sv"), "{}", stdout(&fmt));
     assert!(
-        stderr(&fmt).contains("1 of 2 packages failed"),
+        stderr(&fmt).contains("2 of 2 packages failed"),
         "{}",
         stderr(&fmt)
     );
@@ -416,10 +421,117 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     );
     assert!(said.contains("`-p NAME`"), "{said}");
     assert_eq!(dma, ["cells.sv", "dma.sv"]);
-    assert!(named.status.success(), "{}", stderr(&named));
+    assert!(!named.status.success());
+    assert!(
+        slashed(&named).contains("ip/dma/dma.sv"),
+        "{}",
+        stdout(&named)
+    );
     // Every member's tests, as under `--workspace`.
     assert!(tests.status.success(), "{}", stderr(&tests));
     assert_eq!(stdout(&tests), "dma tb_dma\n");
+}
+
+/// A module `name` assigning blocking in `always_ff`, its body indented by
+/// `indent`.
+fn blocking_flop(name: &str, indent: &str) -> String {
+    format!(
+        "module {name} (\n{indent}input  logic clk_i,\n{indent}input  logic d_i,\n\
+         {indent}output logic q_o\n);\n{indent}always_ff @(posedge clk_i) q_o = d_i;\nendmodule\n"
+    )
+}
+
+#[test]
+fn a_member_formats_and_lints_over_the_workspace_roots_style() {
+    let fixture = Fixture::new("workspace-style");
+    let ws = workspace(&fixture);
+    fixture.file(
+        "ws/astli.toml",
+        "[package]\nname = 'soc'\n\n[workspace]\n\n[dependencies]\ndma = { path = 'ip/dma' }\n\n\
+         [fmt]\nwidth = 30\nindent = 4\nexclude = ['ip/dma/vendor']\n\n\
+         [lint]\ndeny = ['forbid-reg']\nwarn = ['always-ff-non-blocking']\n\n\
+         [lint.paths]\n'ip/*/legacy/**' = { allow = ['always-ff-non-blocking'] }\n",
+    );
+    fixture.file("ws/soc.sv", "module soc;\n    dma u_dma ();\nendmodule\n");
+    let manifest = std::fs::read_to_string(ws.join("ip/dma/astli.toml")).expect("the fixture's");
+    fixture.file(
+        "ws/ip/dma/astli.toml",
+        &format!(
+            "{manifest}\n[fmt]\nindent = 3\n\n[lint]\ndeny = ['always-ff-non-blocking']\n\n\
+             [lint.paths]\n'legacy/kept/**' = {{ deny = ['always-ff-non-blocking'] }}\n"
+        ),
+    );
+    // Indented by the member's 3, and wrapped at the root's width.
+    fixture.file(
+        "ws/ip/dma/dma.sv",
+        "module dma;\n   cells u_cells ();\nendmodule\n",
+    );
+    fixture.file(
+        "ws/ip/dma/w.sv",
+        "module w;\n   assign out = first &\n                second &\n                third;\n\
+         endmodule\n",
+    );
+    fixture.file("ws/ip/dma/old.sv", "module old;\n   reg r;\nendmodule\n");
+    fixture.file("ws/ip/dma/flop.sv", &blocking_flop("flop", "   "));
+    fixture.file(
+        "ws/ip/dma/legacy/old_flop.sv",
+        &blocking_flop("old_flop", "   "),
+    );
+    let kept = blocking_flop("kept_flop", "   ");
+    fixture.file("ws/ip/dma/legacy/kept/kept_flop.sv", &kept);
+    fixture.file("ws/ip/dma/vendor/v.sv", "module   v;\nendmodule\n");
+    let in_dma = |args: &[&str]| driver(&fixture).dir(ws.join("ip/dma")).cache().args(args);
+    let at_root = |args: &[&str]| driver(&fixture).dir(&ws).cache().args(args);
+
+    let fmt = [
+        in_dma(&["fmt", "--check"]),
+        at_root(&["fmt", "--check", "-p", "dma"]),
+        at_root(&["fmt", "--check", "--workspace"]),
+    ];
+    let fmt_alone = in_dma(&["fmt", "--check", "--config", "astli.toml"]);
+    let lint = [
+        in_dma(&["lint"]),
+        at_root(&["lint", "-p", "dma"]),
+        at_root(&["lint", "--workspace"]),
+    ];
+    let lint_alone = in_dma(&["lint", "--config", "astli.toml"]);
+
+    // The root's width and exclude, the member's indent.
+    for fmt in &fmt {
+        assert!(fmt.status.success(), "{}", stderr(fmt));
+    }
+    // Its own alone: the default width, and nothing excluded.
+    assert!(!fmt_alone.status.success());
+    let unformatted: Vec<String> = (slashed(&fmt_alone).lines())
+        .map(|line| line.rsplit("ip/dma/").next().unwrap_or(line).to_string())
+        .collect();
+    assert_eq!(unformatted, ["vendor/v.sv", "w.sv"]);
+    for lint in &lint {
+        let said = stderr(lint).replace('\\', "/");
+        assert!(!lint.status.success());
+        // The root's deny, and the member's over the root's warn.
+        assert!(said.contains("[forbid-reg] Error"), "{said}");
+        assert!(said.contains("ip/dma/flop.sv:"), "{said}");
+        // The root's waiver over the member's deny, and the member's
+        // pattern over the root's waiver.
+        assert!(!said.contains("old_flop.sv"), "{said}");
+        assert!(said.contains("legacy/kept/kept_flop.sv:"), "{said}");
+        assert!(said.contains("3 of 7 files have errors"), "{said}");
+    }
+    let said = stderr(&lint_alone).replace('\\', "/");
+    assert!(said.contains("[forbid-reg] Warning"), "{said}");
+    assert!(said.contains("legacy/old_flop.sv:"), "{said}");
+
+    // A mistake in the root's tables is the root's, in every member's run.
+    let root = std::fs::read_to_string(ws.join("astli.toml")).expect("the root's");
+    fixture.file(
+        "ws/astli.toml",
+        &format!("{root}\n[lint.rules.forbid-reg]\nignore = []\n"),
+    );
+    let broken = in_dma(&["lint"]);
+    assert!(!broken.status.success());
+    let said = said_in(&fixture, &broken);
+    assert!(said.contains("<dir>/ws/astli.toml: "), "{said}");
 }
 
 #[test]

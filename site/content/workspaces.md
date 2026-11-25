@@ -102,10 +102,44 @@ What has to be the same for the whole workspace lives in the root's manifest and
 | `[resolve] pinned` | `[dependencies]` and `[dev-dependencies]` |
 | patches, `.astli/patch.toml` | `[features]` and `[overrides]` |
 | `[described.NAME]` | `[top.NAME]` |
-| `[build]` and `[profile.NAME]` | `[fmt]` and `[lint]` |
+| `[build]` and `[profile.NAME]` | |
 | `.astli/build` | |
 
 A member's manifest holding one of the root's tables, or a member's own patches, gets a warning that they are not read: move what should count to the root.
+
+## One style
+
+A member formats and lints with the root's `[fmt]` and `[lint]`, and sets what it wants otherwise in its own, key by key: a member that sets only `indent` keeps the root's `width`. There is nothing to turn on, and nothing to turn off; a member restates what it wants different.
+
+```toml
+# astli.toml at the root
+[workspace]
+
+[fmt]
+width = 120
+exclude = ["ip/dma/vendor"]
+
+[lint]
+warn = ["restriction"]
+
+[lint.paths]
+"ip/*/vendor/**" = { allow = ["lowrisc"] }
+```
+
+```toml
+# ip/dma/astli.toml
+[package]
+name = "dma"
+
+[fmt]
+indent = 4                       # and the root's width
+```
+
+- **`exclude` adds up.** The root's patterns and the member's both apply, each relative to the `astli.toml` that writes it, so the root can name a member's vendored directory.
+- **Lint levels go root, then member.** The root's style (`extends`) and levels come first, then the member's style and levels over them.
+- **Path waivers come last.** The root's `[lint.paths]` apply after the member's own levels, so a member undoes one of them with a `[lint.paths]` pattern of its own, not with `deny`.
+
+`--config` names the whole configuration, and nothing is inherited then.
 
 ## One resolution
 
@@ -162,7 +196,7 @@ A repository of IP blocks often has no design at the top. Leave out `[package]`,
 pinned = ["common_cells"]
 ```
 
-A virtual root holds no files and depends on nothing. Of its tables, only `[workspace]`, `[resolve]`, `[described.NAME]`, `[build]` and `[profile.NAME]` are read; `[dependencies]`, `[features]`, `[top.NAME]`, `[test]`, `[fmt]`, `[lint]` and the like are warned of, and belong in a member.
+A virtual root holds no files and depends on nothing. Of its tables, only `[workspace]`, `[resolve]`, `[described.NAME]`, `[build]`, `[profile.NAME]`, and `[fmt]` and `[lint]`, which its members share, are read; `[dependencies]`, `[features]`, `[top.NAME]`, `[test]` and the like are warned of, and belong in a member. A virtual root has no dev-dependencies, so its `[lint] extends` is a path.
 
 Run at a virtual root, `fmt`, `lint`, `check`, `test`, `tree` and `bender export` act on every member, as `--workspace` does. `files`, `build`, `run`, `add` and `remove` there need `-p` to say which member.
 
@@ -197,4 +231,3 @@ Bender reads one block's `path` dependency on another from that block's own `Ben
 ## What a workspace does not do yet
 
 - **Other repositories require the root.** A `git` dependency is a repository's root package, so another repository cannot yet require a single member; it gets the members the root requires by `path`. A virtual root, which requires nothing, gives it nothing.
-- **Members do not inherit settings.** Each member has its own `[fmt]` and `[lint]`; the root's are not passed down.
