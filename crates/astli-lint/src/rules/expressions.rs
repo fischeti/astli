@@ -4,6 +4,7 @@ use astli_sema::{Literal, literal};
 use astli_syntax::SyntaxKind::{self, *};
 use astli_syntax::ast::{AstNode, BinExpr, Expr};
 use astli_syntax::significant_tokens;
+use astli_syntax::{SyntaxNode, SyntaxToken};
 use rowan::TextRange;
 
 use crate::rule::Cx;
@@ -99,16 +100,13 @@ fn parenthesize(cx: &mut Cx, mixed: impl Fn(SyntaxKind, SyntaxKind) -> bool) {
         // Only a direct operand: inside a call's or an index's brackets, the
         // grouping is plain.
         for operand in [outer.lhs(), outer.rhs()] {
-            let Some(Expr::BinExpr(inner)) = operand else {
-                continue;
-            };
-            let Some(inner_op) = inner.op() else {
+            let Some((inner, inner_op)) = operand.as_ref().and_then(operator) else {
                 continue;
             };
             if !mixed(outer_op.kind(), inner_op.kind()) {
                 continue;
             }
-            let range = Cx::range(inner.syntax());
+            let range = Cx::range(inner);
             let (outer_text, inner_text) = (outer_op.text(), inner_op.text());
             let diagnostic = cx
                 .diagnostic(
@@ -120,6 +118,17 @@ fn parenthesize(cx: &mut Cx, mixed: impl Fn(SyntaxKind, SyntaxKind) -> bool) {
                 .fix(cx.span(TextRange::empty(range.end())), ")");
             cx.report(diagnostic);
         }
+    }
+}
+
+/// An operand's node and its operator. `inside` has a node of its own, but
+/// it binds as a relational operator does, and is read with no more
+/// certainty.
+fn operator(operand: &Expr) -> Option<(&SyntaxNode, SyntaxToken)> {
+    match operand {
+        Expr::BinExpr(it) => Some((it.syntax(), it.op()?)),
+        Expr::InsideExpr(it) => Some((it.syntax(), it.inside_token()?)),
+        _ => None,
     }
 }
 
@@ -151,5 +160,6 @@ fn comparison(kind: SyntaxKind) -> bool {
             | LT_EQ
             | GT
             | GT_EQ
+            | INSIDE_KW
     )
 }

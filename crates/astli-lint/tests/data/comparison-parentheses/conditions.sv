@@ -1,7 +1,7 @@
-// A comparison inside `&&` or `||`, of any kind and on either side,
-// wherever it stands, is parenthesized; one already in parentheses, one
-// inside `&`, which `mixed-operator-parentheses` asks for, and an operand
-// that compares nothing pass.
+// A comparison inside `&&` or `||`, of any kind, `inside` among them, and
+// on either side, wherever it stands, is parenthesized; one already in
+// parentheses, one inside `&`, which `mixed-operator-parentheses` asks for,
+// and an operand that compares nothing pass.
 module conditions (
   input  logic [3:0] a_i,
   input  logic [3:0] b_i,
@@ -11,8 +11,11 @@ module conditions (
   assign y_o = a_i == 4'h1 && en_i;
   assign y_o = en_i || a_i != b_i;
   assign y_o = a_i < b_i && a_i >= 4'h2 || a_i === b_i;
+  assign y_o = en_i && a_i inside {4'h1, 4'h2};
+  assign y_o = a_i == 4'h0 || a_i inside {[4'h1:4'h3]};
 
   assign y_o = (a_i == 4'h1) && en_i;
+  assign y_o = (a_i inside {4'h1}) && en_i;
   assign y_o = en_i & a_i == 4'h1;
   assign y_o = en_i && !en_i || a_i[0];
 endmodule
