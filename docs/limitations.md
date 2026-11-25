@@ -706,16 +706,19 @@ anyway. **Revisit when** one compilation unit over all files is built.
 
 ## Packages
 
-### Only what the lock names is fetched in parallel
+### Only what the last lock names is fetched in parallel
 
-Before resolution, every repository the lock still reaches is fetched,
-eight at a time: cheshire's 26 take 12 seconds from a cold cache rather
-than 29, whatever the number of cores, since a fetch mostly waits on the
-network. A repository the lock does not name is fetched when resolution
-first needs it, in turn, so a run without a lock, or one that resolves
-past it to new packages, waits on each. **Revisit when** such runs matter:
-fetching a package's dependencies in parallel as soon as its manifest
-names them overlaps those waits too. **Where** `astli-resolve/src/resolve.rs`
+Before resolution, the roots' own repositories and every repository the
+last lock still reaches are fetched, eight at a time: cheshire's 26 take 12
+seconds from a cold cache rather than 29, whatever the number of cores,
+since a fetch mostly waits on the network. The last lock counts even where
+`astli update` sets it aside, since an update mostly reads again what the
+last resolution read. A repository it does not name is fetched when
+resolution first needs it, in turn, so a first run without a lock, or one
+that resolves past it to new packages, waits on each beyond the roots'.
+**Revisit when** such runs matter: fetching a package's dependencies in
+parallel as soon as its manifest names them overlaps those waits too.
+**Where** `astli-resolve/src/resolve.rs`
 
 ### A mirror `gix` opens reads the repository variables `git` sets
 

@@ -160,12 +160,15 @@ pub fn resolved(
 ) -> Result<(Option<Lock>, Resolution)> {
     let old = Lock::read(here.lockfile())?;
     let preferred = old.as_ref().map(kept).unwrap_or_default();
+    let none = Lock::default();
+    let last = old.as_ref().unwrap_or(&none);
     let resolution = run.resolution(resolving(here, overrides, preferred), |it| {
         Ok(resolve(
             &run.store()?,
             &it.roots,
             &it.overrides,
             &it.preferred,
+            last,
         )?)
     })?;
     Ok((old, resolution))

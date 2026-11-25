@@ -302,11 +302,18 @@ pub struct Overrides {
 /// Each is a root of the resolution, which requires all its features and
 /// its dev-dependencies: the first is the root, and the rest the members
 /// of a workspace it is the root of.
+///
+/// `last` is the lock as the last resolution wrote it, of which `lock` may
+/// keep only part, or none when every package resolves again. Nothing of it
+/// is preferred, but what it reached is likely to be read again, so those
+/// mirrors are opened together before resolution starts, with the roots'
+/// own repositories.
 pub fn resolve(
     store: &Store,
     roots: &[Package],
     overrides: &Overrides,
     lock: &Lock,
+    last: &Lock,
 ) -> Result<Resolution, Error> {
     let Overrides { pinned, patches } = overrides;
     if let Some(name) = pinned.iter().find(|it| {
@@ -335,7 +342,7 @@ pub fn resolve(
         state: RefCell::new(State::default()),
     };
     let trusting = provider(false);
-    let reached = reached(roots, patches, lock);
+    let reached = reached(roots, patches, last);
     trusting.prefetch(&reached);
     let solved = trusting.solve();
     let state = trusting.state.borrow();
@@ -1154,18 +1161,27 @@ fn named(root: &Package) -> String {
     }
 }
 
-/// The packages of `lock` the roots still reach, by name and URL: each one
-/// requires from the repository the lock holds it from, and what those
-/// depended on when locked. A package `patches` names is read from disk
-/// instead.
+/// The repositories resolution is likely to read, by package name and
+/// URL: each the roots require, and the packages of `lock` they still
+/// reach, each one required from the repository the lock holds it from,
+/// with what those depended on when locked. A package `patches` names is
+/// read from disk instead.
 fn reached(roots: &[Package], patches: &Patches, lock: &Lock) -> Vec<(String, String)> {
-    let required = (roots.iter()).flat_map(|it| {
-        it.manifest
-            .dependencies
-            .iter()
-            .chain(&it.manifest.dev_dependencies)
+    let required = || {
+        (roots.iter()).flat_map(|it| {
+            it.manifest
+                .dependencies
+                .iter()
+                .chain(&it.manifest.dev_dependencies)
+        })
+    };
+    let own = required().filter_map(|(name, requirement)| match &requirement.source {
+        Some(Source::Git { url, .. }) if !patches.0.contains_key(name) => {
+            Some((name.clone(), url.clone()))
+        }
+        _ => None,
     });
-    let from = required
+    let from = required()
         .filter(
             |(name, requirement)| match (&requirement.source, lock.get(name)) {
                 (Some(Source::Git { url, .. }), Some(locked)) => {
@@ -1179,10 +1195,10 @@ fn reached(roots: &[Package], patches: &Patches, lock: &Lock) -> Vec<(String, St
         true => None,
         false => lock.get(name).map(|it| &it.dependencies[..]),
     };
-    (reach(from, next).into_iter())
+    let locked = (reach(from, next).into_iter())
         .filter_map(|name| lock.get(name))
-        .map(|it| (it.name.clone(), it.source.clone()))
-        .collect()
+        .map(|it| (it.name.clone(), it.source.clone()));
+    own.chain(locked).collect()
 }
 
 /// Where `requirement` names `name`, from a manifest whose paths are

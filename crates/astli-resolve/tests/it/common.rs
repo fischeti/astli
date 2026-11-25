@@ -55,8 +55,14 @@ impl Fixture {
 /// What `root` requires, resolved and checked out into `store`, as a design
 /// that reads it is.
 pub fn checked_out(store: &Store, root: Package) -> Located {
-    let resolution = resolve(store, &[root], &Overrides::default(), &Lock::default())
-        .unwrap_or_else(|err| panic!("unresolved: {err}"));
+    let resolution = resolve(
+        store,
+        &[root],
+        &Overrides::default(),
+        &Lock::default(),
+        &Lock::default(),
+    )
+    .unwrap_or_else(|err| panic!("unresolved: {err}"));
     (resolution.packages[0].checkout(store)).expect("checked out")
 }
 

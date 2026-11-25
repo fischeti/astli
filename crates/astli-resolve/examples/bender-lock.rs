@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pinned,
         ..Overrides::default()
     };
-    let resolution = resolve(&Store::from_env()?, &[root], &overrides, &none)?;
+    let resolution = resolve(&Store::from_env()?, &[root], &overrides, &none, &none)?;
     println!(
         "{}: {} packages in {:.1?}, {} warnings",
         design.display(),

@@ -35,7 +35,14 @@ fn update_writes_the_lock_and_moves_only_what_it_names() {
             .cache()
             .args(["update"].iter().chain(args));
         assert!(output.status.success(), "{}", stderr(&output));
-        said_in(&fixture, &output)
+        // Mirrors are fetched at once, so their lines come in no set order.
+        let said = said_in(&fixture, &output);
+        let (mut fetched, rest): (Vec<&str>, Vec<&str>) =
+            (said.lines()).partition(|it| it.trim_start().starts_with("Fetching"));
+        fetched.sort();
+        (fetched.into_iter().chain(rest))
+            .map(|it| format!("{it}\n"))
+            .collect::<String>()
     };
 
     let first = update(&[]);
