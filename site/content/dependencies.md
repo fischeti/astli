@@ -135,6 +135,14 @@ astli check --locked --top soc_top
 
 If `astli.lock` is missing or out of sync with `astli.toml`, `astli` exits with an error instead of modifying the lockfile.
 
+### A lock outside the package
+
+`--lockfile PATH`, or `ASTLI_LOCKFILE`, reads and writes the lock at `PATH` instead of `astli.lock` in the package. It is written there for a package with only a `Bender.yml` too, which gets no lock otherwise. For a checkout that is read-only, keep its lock beside it:
+
+```sh
+astli check --lockfile ../locks/soc.lock --top soc_top
+```
+
 ## The shared cache
 
 `astli` checks dependencies out into one cache that every project on the machine shares.

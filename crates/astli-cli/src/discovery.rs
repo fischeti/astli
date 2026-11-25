@@ -456,6 +456,7 @@ impl Plan {
             package,
             workspace,
             in_workspace,
+            ..
         } = here;
         let walk = Walk {
             enabled: dependencies.select(&package.package, &again.selection)?,
