@@ -260,9 +260,12 @@ astli snapshot common_cells  # pin the pushed patch commit, drop the patch
   A root with `[workspace]` and no `[package]` is virtual: it holds no
   files and depends on nothing, `fmt`/`lint`/`check`/`test`/`tree`/`bender
   export` there act on every member, and `files`/`build`/`run`/`add`/`remove` there need `-p`.
-  Only its `[workspace]`, `[resolve]`, `[described]`, `[build]` and
-  `[profile]` are read; dependencies, tops, `[test]`, `[fmt]` and `[lint]` go
-  in a member.
+  Only its `[workspace]`, `[resolve]`, `[described]`, `[build]`,
+  `[profile]`, `[fmt]` and `[lint]` are read; dependencies, tops and
+  `[test]` go in a member.
+  Members format and lint with the root's `[fmt]` and `[lint]`, and set
+  only what differs in their own, key by key; put a repository's style at
+  its root, not in each member.
 
 ## Coming from Bender
 

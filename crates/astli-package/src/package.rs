@@ -277,16 +277,15 @@ pub struct Root {
 
 /// The tables of a virtual root's manifest that nothing reads, since it is
 /// no design: rather than resolved or applied to files named there alone,
-/// they are left out, a `Bender.yml`'s dependencies too.
-const DESIGN_TABLES: [&str; 8] = [
+/// they are left out, a `Bender.yml`'s dependencies too. Its `[fmt]` and
+/// `[lint]` are read, since a style is no design's: its members share it.
+const DESIGN_TABLES: [&str; 6] = [
     "dependencies",
     "dev-dependencies",
     "features",
     "overrides",
     "top",
     "test",
-    "fmt",
-    "lint",
 ];
 
 /// The tables of a member's manifest that nothing reads, since the
@@ -379,16 +378,20 @@ impl Root {
         let is_virtual = workspace.as_ref().is_some_and(|it| it.is_virtual);
         let section = package.unwrap_or_default();
         let default_top = section.default_top.clone();
-        let design = (!is_virtual).then_some(Design {
+        let design = (!is_virtual).then(|| Design {
             section,
             features,
             dependencies,
             dev_dependencies,
             overrides,
-            fmt,
-            lint,
+            fmt: toml::Table::new(),
+            lint: toml::Table::new(),
         });
-        let package = Package::read_design(path, design)?;
+        let mut package = Package::read_design(path, design)?;
+        // A style is no design's, so a virtual root's is read too: its
+        // members share it.
+        package.manifest.fmt = fmt;
+        package.manifest.lint = lint;
         let tables = RootTables {
             pinned: resolve.pinned,
             described,

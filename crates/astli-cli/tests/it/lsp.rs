@@ -84,18 +84,32 @@ fn format(fixture: &Fixture, files: &[(&Path, &str)]) -> (Vec<Value>, Vec<String
 #[test]
 fn the_packages_fmt_lays_out_what_the_server_formats() {
     let fixture = Fixture::new("lsp-fmt");
-    fixture.file("astli.toml", "[fmt]\nindent = 4\nexclude = [\"vendor\"]\n");
+    std::fs::create_dir_all(fixture.path().join(".git")).expect("a repository");
+    fixture.file(
+        "astli.toml",
+        "[workspace]\n\n[fmt]\nindent = 4\nexclude = [\"vendor\"]\n",
+    );
+    // A member, over the root's `[fmt]`.
+    fixture.file("ip/a/astli.toml", "[package]\nname = \"a\"\n");
     let unformatted = "module m;\nlogic q;\nendmodule\n";
     let own = fixture.file("rtl/m.sv", unformatted);
     let vendor = fixture.file("vendor/v.sv", unformatted);
+    let member = fixture.file("ip/a/m.sv", unformatted);
 
-    let (edits, shown) = format(&fixture, &[(&own, unformatted), (&vendor, unformatted)]);
+    let (edits, shown) = format(
+        &fixture,
+        &[
+            (&own, unformatted),
+            (&vendor, unformatted),
+            (&member, unformatted),
+        ],
+    );
 
     let indented = json!([{
         "range": { "start": { "line": 1, "character": 0 }, "end": { "line": 2, "character": 0 } },
         "newText": "    logic q;\n",
     }]);
-    assert_eq!(edits, [indented, json!([])]);
+    assert_eq!(edits, [indented.clone(), json!([]), indented]);
     assert!(shown.is_empty(), "{shown:?}");
 }
 

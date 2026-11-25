@@ -334,6 +334,13 @@ fn a_style_that_is_a_dependency_or_sets_paths_is_refused() {
     fixture.file("root/top.sv", PREFIXED_PORTS);
     fixture.file("other/astli.toml", "[lint]\nextends = \"../paths.toml\"\n");
     fixture.file("other/top.sv", PREFIXED_PORTS);
+    // A virtual root reads no dev-dependencies, so a name is no style.
+    std::fs::create_dir_all(fixture.path().join("virtual/.git")).expect("a repository");
+    fixture.file(
+        "virtual/astli.toml",
+        "[workspace]\n\n[lint]\nextends = \"style\"\n",
+    );
+    fixture.file("virtual/top.sv", PREFIXED_PORTS);
 
     let dependency = driver(&fixture)
         .dir(fixture.path().join("root"))
@@ -341,6 +348,9 @@ fn a_style_that_is_a_dependency_or_sets_paths_is_refused() {
         .args(["lint", "top.sv"]);
     let paths = driver(&fixture)
         .dir(fixture.path().join("other"))
+        .args(["lint", "top.sv"]);
+    let in_virtual = driver(&fixture)
+        .dir(fixture.path().join("virtual"))
         .args(["lint", "top.sv"]);
 
     assert!(!dependency.status.success());
@@ -354,6 +364,12 @@ fn a_style_that_is_a_dependency_or_sets_paths_is_refused() {
         stderr(&paths).contains("[lint.paths]"),
         "{}",
         stderr(&paths)
+    );
+    assert!(!in_virtual.status.success());
+    assert!(
+        stderr(&in_virtual).contains("a virtual workspace root has no dev-dependencies"),
+        "{}",
+        stderr(&in_virtual)
     );
 }
 

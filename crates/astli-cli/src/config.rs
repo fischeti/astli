@@ -2,10 +2,12 @@
 //! the options of its rules, and the layout its formatting takes and the
 //! files it leaves alone.
 //!
-//! One file serves a run: the one `--config` names, or else the manifest of
-//! the package the current directory is in. Paths in it are relative to it,
-//! so it can live at a repository's root and be run from anywhere below.
-//! Its `[lint]` may extend a style a team shares, which it then sets over.
+//! The file `--config` names serves a run alone. Without it, the manifest
+//! of the package the current directory is in does, over the workspace
+//! root's when the package is a member, so that a repository states its
+//! style once. Paths in each are relative to it, so it can live at a
+//! repository's root and be run from anywhere below. Each `[lint]` may
+//! extend a style a team shares, which it then sets over.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -85,99 +87,118 @@ struct Fmt {
 pub struct FmtConfig {
     /// The layout, over the defaults.
     pub options: Options,
-    /// The directory `exclude` is relative to.
-    root: PathBuf,
-    exclude: GlobSet,
+    /// Each manifest's `exclude`, with the directory it is relative to.
+    exclude: Vec<(PathBuf, GlobSet)>,
 }
 
 impl FmtConfig {
-    /// Reads `explicit`, or the manifest of the package `target` chose.
-    /// With neither, the defaults, and no file excluded.
+    /// Reads `explicit`, or the manifest of the package `target` chose,
+    /// over the workspace root's. With neither, the defaults, and no file
+    /// excluded.
     pub fn load(target: &Target, explicit: Option<&Path>) -> Result<FmtConfig> {
-        let read = read(target, explicit)?;
-        let Fmt {
-            width,
-            indent,
-            max_pad,
-            exclude,
-        } = read.table("fmt", |package| &package.manifest.fmt)?;
-        let default = Options::default();
-        let options = Options {
-            width: width.unwrap_or(default.width),
-            indent: indent.unwrap_or(default.indent),
-            max_pad: max_pad.unwrap_or(default.max_pad),
-        };
+        let mut options = Options::default();
+        let mut excludes = Vec::new();
+        for read in read(target, explicit)? {
+            let Fmt {
+                width,
+                indent,
+                max_pad,
+                exclude,
+            } = read.table("fmt", |package| &package.manifest.fmt)?;
+            // Key by key, so that a member changing one keeps the rest of
+            // the root's.
+            options = Options {
+                width: width.unwrap_or(options.width),
+                indent: indent.unwrap_or(options.indent),
+                max_pad: max_pad.unwrap_or(options.max_pad),
+            };
 
-        let wrong = |what: String| {
-            let key = mark::code("exclude");
-            Error::failed(format!("{}: [fmt]: {key}: {what}", read.name))
-        };
-        let mut set = GlobSetBuilder::new();
-        for pattern in &exclude {
-            let glob = GlobBuilder::new(pattern)
-                .literal_separator(true)
-                .build()
-                .map_err(|err| wrong(format!("{}: {err}", mark::code(pattern))))?;
-            set.add(glob);
+            let wrong = |what: String| {
+                let key = mark::code("exclude");
+                Error::failed(format!("{}: [fmt]: {key}: {what}", read.name))
+            };
+            let mut set = GlobSetBuilder::new();
+            for pattern in &exclude {
+                let glob = GlobBuilder::new(pattern)
+                    .literal_separator(true)
+                    .build()
+                    .map_err(|err| wrong(format!("{}: {err}", mark::code(pattern))))?;
+                set.add(glob);
+            }
+            let set = set.build().map_err(|err| wrong(err.to_string()))?;
+            excludes.push((read.root().to_path_buf(), set));
         }
-        let exclude = set.build().map_err(|err| wrong(err.to_string()))?;
 
         Ok(FmtConfig {
             options,
-            root: read.root(),
-            exclude,
+            exclude: excludes,
         })
     }
 
-    /// Whether `exclude` names `file` or a directory it is in, by its path
-    /// relative to the configuration, as a package's `exclude` does.
+    /// Whether an `exclude` names `file` or a directory it is in, by its
+    /// path relative to the manifest that wrote it, as a package's
+    /// `exclude` does.
     pub fn excludes(&self, file: &Path) -> bool {
         let Ok(absolute) = std::path::absolute(file) else {
             return false;
         };
-        let Ok(relative) = absolute.strip_prefix(&self.root) else {
-            return false;
-        };
-        (relative.ancestors())
-            .take_while(|it| !it.as_os_str().is_empty())
-            .any(|it| self.exclude.is_match(it))
+        self.exclude.iter().any(|(root, exclude)| {
+            let Ok(relative) = absolute.strip_prefix(root) else {
+                return false;
+            };
+            (relative.ancestors())
+                .take_while(|it| !it.as_os_str().is_empty())
+                .any(|it| exclude.is_match(it))
+        })
     }
 }
 
-/// A configuration as read, with what explains it.
+/// A manifest a configuration is read from, with what explains it.
 struct Read {
-    /// The package whose manifest it is, if any.
-    package: Option<Root>,
+    /// The package whose manifest it is.
+    package: Root,
     /// What a message about it calls it.
     name: String,
 }
 
-/// Reads `explicit`, or the manifest of the package `target` chose. With
-/// neither, every table is empty.
-fn read(target: &Target, explicit: Option<&Path>) -> Result<Read> {
-    let package = match explicit {
-        Some(path) => Some(Root::read(path)?),
-        None => target.package()?,
+/// The manifests the configuration is read from, each over the one before:
+/// `explicit` alone, or else the workspace root's, when the package
+/// `target` chose is a member of one, and then the package's. With
+/// neither, there are none, and every table is empty.
+fn read(target: &Target, explicit: Option<&Path>) -> Result<Vec<Read>> {
+    if let Some(path) = explicit {
+        return Ok(vec![Read::of(Root::read(path)?)]);
+    }
+    let Some(package) = target.package()? else {
+        return Ok(Vec::new());
     };
-    let name = (package.as_ref())
-        .and_then(|package| package.package.manifest_path.as_deref())
-        .unwrap_or(Path::new(astli_package::MANIFEST))
-        .display()
-        .to_string();
-    Ok(Read { package, name })
+    let mut read = Vec::new();
+    if let Some(workspace) = target.workspace()?
+        && workspace.root.package.root != package.package.root
+    {
+        read.push(Read::of(workspace.root));
+    }
+    read.push(Read::of(package));
+    Ok(read)
 }
 
 impl Read {
+    /// The manifest of `package`.
+    fn of(package: Root) -> Read {
+        let name = (package.package.manifest_path.as_deref())
+            .unwrap_or(Path::new(MANIFEST))
+            .display()
+            .to_string();
+        Read { package, name }
+    }
+
     /// The manifest's table `key`, which `table` picks, as `T`.
     fn table<T: DeserializeOwned + Default>(
         &self,
         key: &str,
         table: fn(&Package) -> &toml::Table,
     ) -> Result<T> {
-        let Some(package) = &self.package else {
-            return Ok(T::default());
-        };
-        toml::Value::Table(table(&package.package).clone())
+        toml::Value::Table(table(&self.package.package).clone())
             .try_into()
             // A TOML error ends in a newline, which a message does not.
             .map_err(|err| {
@@ -187,10 +208,8 @@ impl Read {
     }
 
     /// The directory paths in the manifest are relative to.
-    fn root(&self) -> PathBuf {
-        (self.package.as_ref())
-            .map(|package| package.package.root.clone())
-            .unwrap_or_default()
+    fn root(&self) -> &Path {
+        &self.package.package.root
     }
 
     /// The `[lint]` of the style `extends` names, and what a message about
@@ -200,7 +219,7 @@ impl Read {
     /// A style is a dev-dependency since only the root's `[lint]` is read: a
     /// dependent would fetch it for nothing.
     fn style(&self, run: &Run, extends: &str, plan: &Plan) -> Result<(String, Lint)> {
-        let root = (self.package.as_ref()).expect("`extends` is read from a package");
+        let root = &self.package;
         let package = &root.package;
         let (name, table) = if package.manifest.dev_dependencies.contains_key(extends) {
             let style = match plan.dependency(&package.root, extends) {
@@ -233,6 +252,16 @@ impl Read {
             let mut path = package.root.join(extends);
             if path.is_dir() {
                 path.push(MANIFEST);
+            }
+            // A virtual root has no dev-dependencies to name.
+            if !path.is_file() && root.is_virtual() {
+                return Err(Error::failed(format!(
+                    "{}: {} extends {}, which is no file, and a virtual workspace root has no \
+                     dev-dependencies",
+                    self.name,
+                    mark::code("[lint]"),
+                    mark::code(extends)
+                )));
             }
             if !path.is_file() {
                 return Err(Error::failed(format!(
@@ -306,20 +335,20 @@ pub struct LintConfig {
     all: Config,
     /// The command line's, which apply over the patterns.
     flags: Levels,
-    /// The directory paths are relative to.
-    root: PathBuf,
-    /// Each pattern's levels, which apply over `all`, in order.
-    paths: Vec<(GlobMatcher, Levels)>,
+    /// Each manifest's patterns, with the directory they are relative to,
+    /// in order, and each pattern's levels, which apply over `all`.
+    paths: Vec<(PathBuf, Vec<(GlobMatcher, Levels)>)>,
 }
 
 impl LintConfig {
     /// Reads `explicit`, or the manifest of the package `target` chose,
-    /// over the style it extends. `flags` apply last, over
-    /// each file's patterns. With no file, they apply over the defaults.
+    /// over the workspace root's, each over the style it extends. `flags`
+    /// apply last, over each file's patterns. With no file, they apply
+    /// over the defaults.
     ///
     /// A style that is a dev-dependency is found among those `plan`
     /// resolved, or resolved here when the plan's files are named rather
-    /// than its package's.
+    /// than its package's, or it is the workspace root's.
     pub fn load(
         run: &Run,
         target: &Target,
@@ -327,9 +356,63 @@ impl LintConfig {
         flags: &Levels,
         plan: &Plan,
     ) -> Result<LintConfig> {
-        let read = read(target, explicit)?;
-        let root = read.root();
-        let name = &read.name;
+        let mut all = Config::default();
+        let mut paths = Vec::new();
+        for read in read(target, explicit)? {
+            let matchers = read.lint(run, plan, &mut all)?;
+            paths.push((read.root().to_path_buf(), matchers));
+        }
+        // The flags apply per file, over its patterns; here they are only
+        // checked, so a name that is no rule fails the run before any file.
+        flags.apply(&mut all.clone()).map_err(|err| {
+            term::error(err.to_string()).help(format!("{} names every rule", mark::code("--list")))
+        })?;
+
+        Ok(LintConfig {
+            all,
+            flags: flags.clone(),
+            paths,
+        })
+    }
+
+    /// The levels for `file`: every pattern that matches its path relative
+    /// to the manifest that wrote it, in order, over those for all files,
+    /// then the flags.
+    pub fn for_file(&self, file: &Path) -> Config {
+        let mut config = self.all.clone();
+        if let Ok(absolute) = std::path::absolute(file) {
+            for (root, paths) in &self.paths {
+                // Outside the manifest's directory, none of its patterns
+                // apply.
+                let Ok(relative) = absolute.strip_prefix(root) else {
+                    continue;
+                };
+                for (glob, levels) in paths {
+                    if glob.is_match(relative) {
+                        // Over earlier patterns. Every name was checked
+                        // when the file was read.
+                        let _ = levels.apply(&mut config);
+                    }
+                }
+            }
+        }
+        // A flag is the run's own word, so it wins over a pattern: the run
+        // that wants to see everything, or to quiet one rule, says so.
+        let _ = self.flags.apply(&mut config);
+        config
+    }
+}
+
+impl Read {
+    /// Sets the manifest's `[lint]` in `config`, over the style it extends,
+    /// and its `[lint.paths]`, checked.
+    fn lint(
+        &self,
+        run: &Run,
+        plan: &Plan,
+        config: &mut Config,
+    ) -> Result<Vec<(GlobMatcher, Levels)>> {
+        let name = &self.name;
         let wrong = |what: String| Error::failed(format!("{name}: {what}"));
 
         let Lint {
@@ -339,11 +422,10 @@ impl LintConfig {
             deny,
             paths,
             rules,
-        } = read.table("lint", |package| &package.manifest.lint)?;
-        let mut all = Config::default();
-        // The style's levels and options, over the defaults.
+        } = self.table("lint", |package| &package.manifest.lint)?;
+        // The style's levels and options, over what came before.
         if let Some(extends) = &extends {
-            let (style, lint) = read.style(run, extends, plan)?;
+            let (style, lint) = self.style(run, extends, plan)?;
             let wrong = |what: String| Error::failed(format!("{style}: {what}"));
             if lint.extends.is_some() {
                 return Err(wrong(format!(
@@ -362,20 +444,15 @@ impl LintConfig {
                 allow, warn, deny, ..
             } = lint;
             Levels { allow, warn, deny }
-                .apply(&mut all)
+                .apply(config)
                 .map_err(|err| wrong(err.to_string()))?;
-            set_options(&lint.rules, &mut all).map_err(wrong)?;
+            set_options(&lint.rules, config).map_err(wrong)?;
         }
         // The project's levels and options, over the style's.
         Levels { allow, warn, deny }
-            .apply(&mut all)
+            .apply(config)
             .map_err(|err| wrong(err.to_string()))?;
-        set_options(&rules, &mut all).map_err(wrong)?;
-        // The flags apply per file, over its patterns; here they are only
-        // checked, so a name that is no rule fails the run before any file.
-        flags.apply(&mut all.clone()).map_err(|err| {
-            term::error(err.to_string()).help(format!("{} names every rule", mark::code("--list")))
-        })?;
+        set_options(&rules, config).map_err(wrong)?;
 
         let mut matchers = Vec::new();
         for (pattern, levels) in paths {
@@ -392,41 +469,6 @@ impl LintConfig {
                 .map_err(|err| wrong(format!("{}: {err}", mark::code(&pattern))))?;
             matchers.push((glob.compile_matcher(), levels));
         }
-
-        Ok(LintConfig {
-            all,
-            flags: flags.clone(),
-            root,
-            paths: matchers,
-        })
-    }
-
-    /// The levels for `file`: every pattern that matches its path relative
-    /// to the configuration, in order, over those for all files, then the
-    /// flags.
-    pub fn for_file(&self, file: &Path) -> Config {
-        let mut config = self.all.clone();
-        let relative = std::path::absolute(file).ok().and_then(|absolute| {
-            absolute
-                .strip_prefix(&self.root)
-                .map(Path::to_path_buf)
-                .ok()
-        });
-        let Some(relative) = relative else {
-            // Outside the configuration, no pattern applies, but the flags do.
-            let _ = self.flags.apply(&mut config);
-            return config;
-        };
-        for (glob, levels) in &self.paths {
-            if glob.is_match(&relative) {
-                // Over earlier patterns. Every name was checked when the
-                // file was read.
-                let _ = levels.apply(&mut config);
-            }
-        }
-        // A flag is the run's own word, so it wins over a pattern: the run
-        // that wants to see everything, or to quiet one rule, says so.
-        let _ = self.flags.apply(&mut config);
-        config
+        Ok(matchers)
     }
 }

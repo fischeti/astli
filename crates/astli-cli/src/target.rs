@@ -28,8 +28,10 @@ pub struct Target {
     dir: PathBuf,
     /// The package, once found: `None` if there is none.
     found: OnceCell<Option<Root>>,
-    /// The workspace the choice found the package in, if it looked.
-    workspace: Option<Workspace>,
+    /// The workspace the package is in, once found or as the choice found
+    /// it: `None` if it is in none. Kept, since finding it reads every
+    /// member's manifest, and a run asks for it more than once.
+    workspace: OnceCell<Option<Workspace>>,
 }
 
 impl Target {
@@ -38,7 +40,7 @@ impl Target {
         Target {
             dir,
             found: OnceCell::new(),
-            workspace: None,
+            workspace: OnceCell::new(),
         }
     }
 
@@ -47,7 +49,7 @@ impl Target {
         Target {
             dir: package.package.root.clone(),
             found: OnceCell::from(Some(package)),
-            workspace: Some(workspace),
+            workspace: OnceCell::from(Some(workspace)),
         }
     }
 
@@ -73,13 +75,14 @@ impl Target {
 
     /// The workspace the package is in, if any.
     pub fn workspace(&self) -> Result<Option<Workspace>> {
-        if let Some(workspace) = &self.workspace {
-            return Ok(Some(workspace.clone()));
+        if let Some(found) = self.workspace.get() {
+            return Ok(found.clone());
         }
-        Ok(match self.package()? {
+        let found = match self.package()? {
             Some(package) => Workspace::find(&package)?,
             None => None,
-        })
+        };
+        Ok(self.workspace.get_or_init(|| found).clone())
     }
 
     /// The package and its workspace, for a command that works on its
@@ -94,11 +97,7 @@ impl Target {
     /// `package`, as [`Target::package`] found it, and its workspace: the
     /// one the choice found, or else the one it is in.
     pub fn here_of(&self, run: &Run, package: Root) -> Result<Here> {
-        let workspace = match &self.workspace {
-            Some(workspace) => Some(workspace.clone()),
-            None => Workspace::find(&package)?,
-        };
-        Here::new(run, package, workspace)
+        Here::new(run, package, self.workspace()?)
     }
 }
 

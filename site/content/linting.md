@@ -123,7 +123,7 @@ warn = ["restriction"]
 "hw/dv/**/dv_macros.svh" = { allow = ["macro-name-style"] }
 ```
 
-Paths are relative to the directory that holds `astli.toml`.
+Paths are relative to the directory that holds `astli.toml`. In a [workspace](workspaces.md#one-style), a member's levels and waivers apply over the root's.
 
 ## Naming styles
 
