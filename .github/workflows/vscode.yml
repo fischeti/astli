@@ -6,7 +6,8 @@
 # A workflow of its own, run once dist's Release finishes, rather than a job
 # dist's release.yml calls: the Marketplace trusts a publish by the filename
 # of the workflow it comes from. To publish a release again, run this by hand
-# with its tag, which keeps the same file.
+# with its tag, which keeps the same file; a registry that already holds the
+# version is skipped, so a run that failed partway can simply be repeated.
 name: VS Code extension
 
 on:
@@ -79,13 +80,13 @@ jobs:
       - id: release
         run: echo "prerelease=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)" >> "$GITHUB_OUTPUT"
       - if: ${{ steps.release.outputs.prerelease == 'false' }}
-        run: npx vsce publish --oidc --packagePath "$RUNNER_TEMP"/vsix/*.vsix
+        run: npx vsce publish --oidc --skip-duplicate --packagePath "$RUNNER_TEMP"/vsix/*.vsix
       # Open VSX trusts a workflow only for an extension it already holds, so
       # the first version goes out with a token. `ovsx` uses `OVSX_PAT` where
       # it is set and trusted publishing where it is not, so once this file
       # is registered as the extension's trusted publisher, deleting the
       # secret is all it takes.
       - if: ${{ steps.release.outputs.prerelease == 'false' }}
-        run: npx ovsx publish --packagePath "$RUNNER_TEMP"/vsix/*.vsix
+        run: npx ovsx publish --skip-duplicate --packagePath "$RUNNER_TEMP"/vsix/*.vsix
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
