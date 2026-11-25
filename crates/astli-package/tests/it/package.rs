@@ -285,6 +285,30 @@ fn an_unknown_key_or_table_is_refused() {
 }
 
 #[test]
+fn a_tool_table_is_read_past_by_a_root_and_a_dependent() {
+    let fixture = Fixture::new("tool");
+    let manifest = fixture.file(
+        "astli.toml",
+        "[tool]\nversion = 3\n\n[tool.regtool]\nfiles = ['regs.hjson']\n\n\
+         [tool.ci.matrix]\nsimulators = [{ name = 'verilator' }]\n",
+    );
+    let virtual_root = fixture.file(
+        "ws/astli.toml",
+        "[workspace]\n\n[tool.ci]\nnightly = true\n",
+    );
+
+    let root = root_at(&manifest);
+    let dependency = Package::read(&manifest);
+    let workspace = root_at(&virtual_root);
+    let elsewhere = refusal(&fixture, "[tools.regtool]\nfiles = []\n");
+
+    assert!(!root.is_virtual());
+    assert!(dependency.is_ok(), "{dependency:?}");
+    assert!(workspace.unread.is_empty(), "{:?}", workspace.unread);
+    assert!(elsewhere.contains("unknown field `tools`"), "{elsewhere}");
+}
+
+#[test]
 fn a_build_takes_verilator_and_the_default_profiles() {
     let fixture = Fixture::new("build-defaults");
     let manifest = fixture.file("astli.toml", "");

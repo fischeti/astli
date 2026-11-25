@@ -1157,7 +1157,8 @@ fn add_requires_the_highest_version_a_repository_tags_and_locks_it() {
     );
     fixture.file(
         "root/astli.toml",
-        "[package]\nname = \"root\"\n\n[dependencies]\naxi = { path = \"../axi\" }\n",
+        "[package]\nname = \"root\"\n\n[dependencies]\naxi = { path = \"../axi\" }\n\n\
+         [tool.ci]\nnightly = true\n",
     );
     fixture.file("axi/axi.sv", "module axi;\nendmodule\n");
     let root = fixture.path().join("root");
@@ -1188,7 +1189,7 @@ fn add_requires_the_highest_version_a_repository_tags_and_locks_it() {
         manifest,
         format!(
             "[package]\nname = \"root\"\n\n[dependencies]\naxi = {{ path = \"../axi\" }}\n\
-             cells = {{ git = {}, version = \"1.1.0\" }}\n",
+             cells = {{ git = {}, version = \"1.1.0\" }}\n\n[tool.ci]\nnightly = true\n",
             quoted(&url)
         )
     );

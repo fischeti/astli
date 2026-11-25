@@ -69,6 +69,9 @@ warn = ["restriction"]
 
 [lint.paths]
 "hw/vendor/**" = { allow = ["lowrisc"] }
+
+[tool.regtool]
+files = ["hw/regs.hjson"]
 ```
 
 ## `[package]`
@@ -265,3 +268,16 @@ inout  = ["io_*"]
 | `ignore` | `unused-signal`, `unused-parameter` | Patterns of names never reported, matched ignoring case. An empty list reports every name. |
 
 See [Naming styles](../linting.md#naming-styles) for each rule's defaults.
+
+## `[tool]`
+
+Holds the configuration of other tools, so that a CI script, a generator or a wrapper around astli can keep its settings in the package's manifest. By convention each tool takes a table of its own name, `[tool.NAME]`.
+
+astli reads past the table: any keys and values are accepted, in any manifest, a dependency's or a workspace member's included, and none is checked or warned about. It is the only table astli accepts without knowing it, so a misspelt table such as `[lnit]` is still an error.
+
+```toml
+[tool.regtool]
+files = ["hw/regs.hjson"]
+```
+
+A tool reads `astli.toml` itself. To read a dependency's, find its checkout with [`astli path NAME`](cli.md#astli-path). astli does not pass a workspace root's `[tool]` tables on to its members; whether they apply there is the tool's to decide.

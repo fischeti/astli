@@ -44,7 +44,8 @@ fn a_member_shares_the_roots_patches_and_build_and_is_told_what_it_holds_unread(
     let ws = workspace(&fixture);
     fixture.file(
         "ws/ip/other/astli.toml",
-        "[package]\nname = 'other'\n\n[resolve]\npinned = ['nothing']\n\n[build]\n",
+        "[package]\nname = 'other'\n\n[resolve]\npinned = ['nothing']\n\n[build]\n\n\
+         [tool.regtool]\nfiles = []\n",
     );
     fixture.file("ws/ip/other/.astli/patch.toml", "[patch]\n");
     fixture.file("ws/.astli/build/verilator/dev/soc/tb/Vtb", "");
@@ -65,6 +66,7 @@ fn a_member_shares_the_roots_patches_and_build_and_is_told_what_it_holds_unread(
         ),
         "{said}"
     );
+    assert!(!said.contains("[tool]"), "{said}");
     assert!(
         said.contains("ws/ip/other/.astli/patch.toml` is not read"),
         "{said}"
@@ -364,7 +366,8 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
     // would fail `dma.sv`.
     fixture.file(
         "ws/astli.toml",
-        "[workspace]\n\n[dependencies]\ngone = { path = 'gone' }\n\n[fmt]\nindent = 4\n",
+        "[workspace]\n\n[dependencies]\ngone = { path = 'gone' }\n\n[fmt]\nindent = 4\n\n\
+         [tool.ci]\nnightly = true\n",
     );
     fixture.file("ws/soc.sv", "module   soc;\nendmodule\n");
     fixture.file("ws/ip/other/bad.sv", "module   bad;\nendmodule\n");
@@ -392,6 +395,7 @@ fn a_virtual_root_holds_no_files_and_stands_for_its_members() {
         "{}",
         stderr(&tree)
     );
+    assert!(!stderr(&tree).contains("[tool]"), "{}", stderr(&tree));
     assert!(!fmt.status.success());
     assert!(
         slashed(&fmt).ends_with("ip/other/bad.sv\n"),
