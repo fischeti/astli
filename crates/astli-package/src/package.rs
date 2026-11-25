@@ -369,6 +369,7 @@ impl Root {
             build,
             profile,
             workspace,
+            tool: _,
         } = File::deserialize(Deserializer::from(table))
             .map_err(|err| Error::unparsed(path, err))?;
         let workspace = workspace.map(|table| WorkspaceTable {
@@ -801,6 +802,9 @@ struct File {
     /// `None` when not written, since an empty table still makes a
     /// workspace.
     workspace: Option<WorkspaceSection>,
+    /// Other tools' configuration, which astli never reads, so it is never
+    /// checked, nor warned of where astli's own tables would be.
+    tool: IgnoredAny,
 }
 
 /// The manifest as a dependent reads it: what only a root reads is skipped
@@ -825,6 +829,7 @@ struct DependencyFile {
     /// Whether it is written, which without `[package]` makes a virtual
     /// root.
     workspace: Option<IgnoredAny>,
+    tool: IgnoredAny,
 }
 
 impl DependencyFile {
