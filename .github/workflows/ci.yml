@@ -18,6 +18,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Enough for a panic's backtrace to name the line. Full debuginfo only
+  # slows the link and fattens the caches.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   check:
@@ -72,10 +75,7 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
-      # The corpus job's release build, which shares its dependencies.
       - uses: Swatinem/rust-cache@v2.9.3
-        with:
-          shared-key: release
       - uses: astral-sh/setup-uv@v10.3.3
       - run: scripts/fetch-corpus.sh --sv-tests
       - run: cargo build --release -p astli-cli
@@ -96,9 +96,10 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      # Not the sv-tests job's cache: the dev-dependencies a workspace's tests
+      # bring change the features of shared dependencies, so its build of the
+      # binary alone would leave this job rebuilding them all.
       - uses: Swatinem/rust-cache@v2.9.3
-        with:
-          shared-key: release
       - uses: taiki-e/install-action@v2.90.4
         with:
           tool: nextest
@@ -108,7 +109,9 @@ jobs:
           path: ~/.cache/astli-corpus
           key: eda-benchmarks-${{ hashFiles('scripts/fetch-corpus.sh') }}
       - run: scripts/fetch-corpus.sh
-      - run: cargo nextest run --workspace --release -P corpus
+      # The gates live in each crate's `it` binary, so the unit tests' release
+      # binaries need not be built.
+      - run: cargo nextest run --workspace --release -P corpus --test it
 
   # The oldest toolchain `rust-version` promises. crates.io publishes it, and
   # nothing else would notice a newer feature creeping in. The promise is to
