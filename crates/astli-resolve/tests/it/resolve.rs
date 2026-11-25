@@ -44,7 +44,7 @@ fn locked(
         pinned,
         ..Overrides::default()
     };
-    resolve(&fixture.store(), &[root], &overrides, lock).map_err(|err| err.to_string())
+    resolve(&fixture.store(), &[root], &overrides, lock, lock).map_err(|err| err.to_string())
 }
 
 /// Each package and the version or commit chosen for it.
@@ -421,6 +421,7 @@ fn every_feature_of_the_root_is_resolved() {
         &[root],
         &Overrides::default(),
         &Lock::default(),
+        &Lock::default(),
     )
     .expect("resolved");
 
@@ -461,6 +462,7 @@ fn a_version_without_the_feature_asked_is_passed_over() {
         &[root],
         &Overrides::default(),
         &Lock::default(),
+        &Lock::default(),
     )
     .expect_err("a feature not declared");
     let said = err.message();
@@ -498,6 +500,7 @@ fn only_the_roots_dev_dependencies_are_resolved() {
         &[root],
         &Overrides::default(),
         &Lock::default(),
+        &Lock::default(),
     )
     .expect("resolved");
 
@@ -533,8 +536,14 @@ fn a_patch_meets_every_requirement_and_brings_its_own() {
         patches,
         ..Overrides::default()
     };
-    let resolution =
-        resolve(&fixture.store(), &[root], &overrides, &Lock::default()).expect("resolved");
+    let resolution = resolve(
+        &fixture.store(),
+        &[root],
+        &overrides,
+        &Lock::default(),
+        &Lock::default(),
+    )
+    .expect("resolved");
 
     assert_eq!(chosen(&resolution), ["axi on disk", "cells 2.0.0"]);
     assert_eq!(
@@ -576,7 +585,14 @@ fn workspace(
         pinned: root.tables.pinned.iter().cloned().collect(),
         ..Overrides::default()
     };
-    resolve(&fixture.store(), &roots, &overrides, &Lock::default()).map_err(|err| err.to_string())
+    resolve(
+        &fixture.store(),
+        &roots,
+        &overrides,
+        &Lock::default(),
+        &Lock::default(),
+    )
+    .map_err(|err| err.to_string())
 }
 
 #[test]
