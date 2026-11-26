@@ -53,3 +53,23 @@ updates:
     groups:
       pre-commit:
         patterns: ["*"]
+
+  # The VS Code extension. @types/vscode follows engines.vscode, which vsce
+  # holds it to, and @types/node the Node the bundle targets: both move by
+  # hand when those do.
+  - package-ecosystem: npm
+    directory: /editors/vscode
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+    groups:
+      vscode:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "@types/vscode"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
