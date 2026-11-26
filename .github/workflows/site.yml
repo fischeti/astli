@@ -32,10 +32,10 @@ jobs:
       - run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       # No caches: what this builds is deployed, and a cache another run saved
       # could change it. It builds once a release.
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           enable-cache: false
-      - uses: taiki-e/install-action@v2.90.4
+      - uses: taiki-e/install-action@v2.90.6
         with:
           tool: cargo-binstall
       - run: cargo binstall --no-confirm usage-cli

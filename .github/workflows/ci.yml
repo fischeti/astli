@@ -37,7 +37,7 @@ jobs:
       # failure in either.
       - run: rustup toolchain install stable --profile minimal --no-self-update --component rustfmt,clippy && rustup default stable
       - uses: Swatinem/rust-cache@v2.9.3
-      - uses: taiki-e/install-action@v2.90.4
+      - uses: taiki-e/install-action@v2.90.6
         with:
           tool: nextest
       - run: cargo fmt --all -- --check
@@ -59,7 +59,7 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - uses: Swatinem/rust-cache@v2.9.3
-      - uses: taiki-e/install-action@v2.90.4
+      - uses: taiki-e/install-action@v2.90.6
         with:
           tool: nextest
       - run: sudo apt-get update && sudo apt-get install -y verilator
@@ -76,7 +76,7 @@ jobs:
           persist-credentials: false
       - run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - uses: Swatinem/rust-cache@v2.9.3
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@v10.4.0
       - run: scripts/fetch-corpus.sh --sv-tests
       - run: cargo build --release -p astli-cli
       - run: scripts/sv-tests.py
@@ -100,7 +100,7 @@ jobs:
       # bring change the features of shared dependencies, so its build of the
       # binary alone would leave this job rebuilding them all.
       - uses: Swatinem/rust-cache@v2.9.3
-      - uses: taiki-e/install-action@v2.90.4
+      - uses: taiki-e/install-action@v2.90.6
         with:
           tool: nextest
       # The key moves with the script, and so with the pin.
@@ -155,7 +155,7 @@ jobs:
         with:
           workspaces: ${{ env.DEV_DRIVE_WORKSPACE }}
           cache-on-failure: true
-      - uses: taiki-e/install-action@v2.90.4
+      - uses: taiki-e/install-action@v2.90.6
         with:
           tool: nextest
       # Every failure at once: one run should be enough to see what differs.
