@@ -14,6 +14,9 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-unknown
 # Path that installers should place binaries in. Not `~/.cargo/bin`, which
 # someone without Rust has neither as a directory nor on their PATH.
 install-path = ["$XDG_BIN_HOME/", "$XDG_DATA_HOME/../bin", "~/.local/bin"]
+# A gzipped tarball, not dist's default xz: editors such as Zed unpack
+# a download themselves, and read no xz.
+unix-archive = ".tar.gz"
 # Where to host releases
 hosting = "github"
 # Sign each artifact with GitHub's build provenance, which `gh attestation

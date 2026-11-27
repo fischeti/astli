@@ -29,7 +29,7 @@
     Release archives on the [releases page](https://github.com/fischeti/astli/releases) include build provenance attestations, which can be verified with the [GitHub CLI](https://cli.github.com):
 
     ```sh
-    gh attestation verify astli-cli-x86_64-unknown-linux-gnu.tar.xz --repo fischeti/astli
+    gh attestation verify astli-cli-x86_64-unknown-linux-gnu.tar.gz --repo fischeti/astli
     ```
 
 === "uv"
