@@ -143,7 +143,7 @@ fn reset_ifs(hir: &Hir, stmt: StmtId, alone: bool, events: &[Event], ifs: &mut V
 
 /// The signal `condition` tests, and whether it tests it low: the signal
 /// alone, under `!` or `~`, or compared with 0 or 1.
-fn tested(hir: &Hir, condition: ExprId) -> Option<(ExprId, bool)> {
+pub(super) fn tested(hir: &Hir, condition: ExprId) -> Option<(ExprId, bool)> {
     match hir[condition].kind {
         ExprKind::Unary {
             op: BANG | TILDE,
@@ -186,12 +186,12 @@ fn bit(hir: &Hir, expr: ExprId) -> Option<bool> {
 
 /// Whether `a` and `b` name the same signal: a name, a member of one, or a
 /// select of one by the same index.
-fn same(hir: &Hir, a: ExprId, b: ExprId) -> bool {
+pub(super) fn same(hir: &Hir, a: ExprId, b: ExprId) -> bool {
     match (&hir[a].kind, &hir[b].kind) {
         (ExprKind::Name(a), ExprKind::Name(b))
         | (ExprKind::Literal { text: a, .. }, ExprKind::Literal { text: b, .. }) => a == b,
         (ExprKind::Member { base: a, name: x }, ExprKind::Member { base: b, name: y }) => {
-            x == y && same(hir, *a, *b)
+            x.text == y.text && same(hir, *a, *b)
         }
         (
             ExprKind::Select {

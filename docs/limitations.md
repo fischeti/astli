@@ -321,13 +321,23 @@ meaning. **Revisit when** someone asks, as a rule of its own.
 
 ### `always-ff-registers-only` judges a reset and an enable by their shape
 
-Nothing says which signal is a reset or an enable, so a condition of one
-signal passes, whatever that signal is, and so does a `?:` on one signal
-between values that compute nothing, which a synchronous reset is written
-as. An `if`/`else if` chain or a `?:` on single signals that picks between
-data values is a mux the rule lets through. A select's index is not judged
-either, so `q <= d[a + b]` passes too.
-**Revisit when** such muxes turn up in code that enables the rule.
+Nothing says which signal is a synchronous reset, a clear or an enable, so
+each is told by what it loads: a condition of one signal with constants on
+one side and no further condition is a reset or a clear, whatever the
+signal is, and one with data on one side and nothing on the other is an
+enable. So `if (en) q <= d; else q <= '0;` passes as a clear on `!en`. A
+synchronous reset and a clear look alike, so the first in a process that
+waits for its clock alone is its reset, and `clear = false` leaves such a
+process its one synchronous reset. A reset value that is not a constant
+reads as data, so a synchronous reset to an input is a mux; an
+asynchronous one is known from the process's events, and loads what it
+likes. A register two statements load is told apart from another
+by its members and its constant indices alone: `q[i] <= a; q[j] <= b;` is
+reported though `i` and `j` may differ, while a loop that loads one
+register on each pass, the last winning, is not. A select's index is not
+judged either, so `q <= d[a + b]` passes too.
+**Revisit when** a reset or an enable the rule misjudges turns up in code
+that enables the rule.
 **Where** `astli-lint/src/rules/registers.rs`
 
 ### `mixed-operator-parentheses` reads only binary operators, and no widths
