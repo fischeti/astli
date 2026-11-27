@@ -329,7 +329,7 @@ pub static RULES: &[Rule] = &[
     Rule {
         name: "always-ff-registers-only",
         group: Group::Restriction,
-        summary: "logic in `always_ff` beyond a reset and an enable: an operator, a function call, a `case`, or a condition of more than one signal",
+        summary: "logic in `always_ff` beyond what a flop takes, a reset, a clear and an enable: an operator, a function call, a `case`, a condition of more than one signal or past the enable, a second clear, a mux, or a register loaded twice",
         check: Check::Design(registers::always_ff_registers_only),
         options: &[],
     },
