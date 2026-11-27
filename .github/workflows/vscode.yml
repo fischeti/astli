@@ -47,7 +47,7 @@ jobs:
           ref: ${{ env.TAG }}
           persist-credentials: false
       - run: npm ci
-      - run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'astli-cli-*.tar.xz' --pattern 'astli-cli-*.zip' --dir "$RUNNER_TEMP/archives"
+      - run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'astli-cli-*.tar.gz' --pattern 'astli-cli-*.zip' --dir "$RUNNER_TEMP/archives"
       # dist's archive for each target, and the VS Code platform it serves. A
       # tarball holds the binary in a directory named after it; the zip holds
       # it at the top.
@@ -63,7 +63,7 @@ jobs:
                 unzip -q "$RUNNER_TEMP/archives/astli-cli-$triple.zip" -d unpacked
                 cp unpacked/astli.exe bundled/ ;;
               *)
-                tar -xf "$RUNNER_TEMP/archives/astli-cli-$triple.tar.xz" -C unpacked --strip-components=1
+                tar -xf "$RUNNER_TEMP/archives/astli-cli-$triple.tar.gz" -C unpacked --strip-components=1
                 install -m 755 unpacked/astli bundled/ ;;
             esac
             npx vsce package --target "$platform" --out "$out/astli-$platform.vsix"
