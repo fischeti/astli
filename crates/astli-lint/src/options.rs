@@ -1,5 +1,6 @@
 //! What a project may set of a rule beyond its level: the styles the
-//! naming rules hold names to, and the names the unused rules leave alone.
+//! naming rules hold names to, the names the unused rules leave alone, and
+//! what a restriction lets through.
 
 use std::fmt;
 
@@ -16,7 +17,7 @@ pub struct RuleOption {
     pub summary: &'static str,
 }
 
-/// What an option holds: a list of one of these.
+/// What an option holds: a list of one of these, or a flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptionKind {
     /// The cases a name may be in, any one of them.
@@ -26,6 +27,9 @@ pub enum OptionKind {
     /// The patterns of the names a rule leaves alone, any one of them,
     /// which may be none.
     Ignored,
+    /// Whether a rule lets something through: one value, `true` or
+    /// `false`.
+    Flag,
 }
 
 /// An option's value, parsed.
@@ -33,11 +37,19 @@ pub enum OptionKind {
 pub(crate) enum Value {
     Cases(Vec<Case>),
     Patterns(Vec<Pattern>),
+    Flag(bool),
 }
 
 impl Value {
     /// `values` as `kind` holds them.
     pub(crate) fn parse<S: AsRef<str>>(kind: OptionKind, values: &[S]) -> Result<Value, String> {
+        if kind == OptionKind::Flag {
+            return match values.iter().map(|it| it.as_ref()).collect::<Vec<_>>()[..] {
+                ["true"] => Ok(Value::Flag(true)),
+                ["false"] => Ok(Value::Flag(false)),
+                _ => Err("is `true` or `false`".to_string()),
+            };
+        }
         if values.is_empty() && kind != OptionKind::Ignored {
             return Err("names nothing, so that no name passes".to_string());
         }
@@ -50,6 +62,7 @@ impl Value {
             OptionKind::Patterns | OptionKind::Ignored => (values.map(Pattern::parse))
                 .collect::<Result<_, _>>()
                 .map(Value::Patterns),
+            OptionKind::Flag => unreachable!("a flag is parsed above"),
         }
     }
 }
@@ -212,7 +225,15 @@ impl<'a> Options<'a> {
     pub fn patterns(&self, key: &str) -> &'a [Pattern] {
         match self.value(key) {
             Value::Patterns(patterns) => patterns,
-            Value::Cases(_) => panic!("`{key}` of `{}` holds cases", self.rule.name),
+            _ => panic!("`{key}` of `{}` holds no patterns", self.rule.name),
+        }
+    }
+
+    /// Whether the flag `key` is set.
+    pub fn flag(&self, key: &str) -> bool {
+        match self.value(key) {
+            Value::Flag(flag) => *flag,
+            _ => panic!("`{key}` of `{}` is no flag", self.rule.name),
         }
     }
 
@@ -220,7 +241,7 @@ impl<'a> Options<'a> {
     pub fn style(&self) -> Style<'a> {
         let cases: &'a [Case] = match self.value("case") {
             Value::Cases(cases) => cases,
-            Value::Patterns(_) => panic!("`case` of `{}` holds patterns", self.rule.name),
+            _ => panic!("`case` of `{}` holds no cases", self.rule.name),
         };
         Style {
             cases,

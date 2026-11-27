@@ -331,7 +331,7 @@ pub static RULES: &[Rule] = &[
         group: Group::Restriction,
         summary: "logic in `always_ff` beyond what a flop takes, a reset, a clear and an enable: an operator, a function call, a `case`, a condition of more than one signal or past the enable, a second clear, a mux, or a register loaded twice",
         check: Check::Design(registers::always_ff_registers_only),
-        options: &[],
+        options: &[CLEAR],
     },
     Rule {
         name: "async-reset-style",
@@ -462,6 +462,15 @@ const IGNORE: RuleOption = RuleOption {
     kind: OptionKind::Ignored,
     default: &["*unused*"],
     summary: "the patterns of the names it never reports, matched ignoring case",
+};
+
+/// Whether `always-ff-registers-only` lets a flop take a synchronous clear
+/// besides its reset, as a load-enable flop with a clear does.
+const CLEAR: RuleOption = RuleOption {
+    key: "clear",
+    kind: OptionKind::Flag,
+    default: &["true"],
+    summary: "whether a flop may take a synchronous clear besides its reset",
 };
 
 /// The patterns a naming rule holds a name to.

@@ -457,8 +457,8 @@ returns one, reading and writing no file, so the server fixes a buffer
 with it. `RULES` lists every rule with its
 `Group`, which sets its default level, so `--list` is read off it, and the
 `RuleOption`s it takes. An option's values are strings, as configuration
-writes them, so a driver reading `astli.toml` needs to know no option's
-kind, and `astli-lint` no `serde`. A rule
+writes them, a flag's `true` or `false` too, so a driver reading
+`astli.toml` needs to know no option's kind, and `astli-lint` no `serde`. A rule
 reports through `SyntaxTree::span`, which gives a node's range in the file.
 
 ```rust

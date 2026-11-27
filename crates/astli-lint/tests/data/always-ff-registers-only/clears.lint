@@ -1,0 +1,1 @@
+28:11: [always-ff-registers-only] clear in `always_ff` (compute it in `always_comb`, and register the result)

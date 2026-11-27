@@ -310,17 +310,30 @@ struct Lint {
     /// Kept as a table so that the patterns apply in the order written.
     paths: toml::Table,
     /// Each rule's options, by its name, and each option's values by its
-    /// key.
-    rules: BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    /// key: a list of strings, or a flag.
+    rules: BTreeMap<String, BTreeMap<String, Setting>>,
+}
+
+/// An option's values as `astli.toml` writes them. A flag is passed on as
+/// the one string that spells it, as every option's values are strings.
+#[derive(Deserialize)]
+#[serde(untagged, expecting = "a list of strings, or `true` or `false`")]
+enum Setting {
+    Flag(bool),
+    Values(Vec<String>),
 }
 
 /// Sets each option `rules` holds in `config`, over what it was.
 fn set_options(
-    rules: &BTreeMap<String, BTreeMap<String, Vec<String>>>,
+    rules: &BTreeMap<String, BTreeMap<String, Setting>>,
     config: &mut Config,
 ) -> std::result::Result<(), String> {
     for (rule, options) in rules {
-        for (key, values) in options {
+        for (key, setting) in options {
+            let values = match setting {
+                Setting::Flag(flag) => &[flag.to_string()][..],
+                Setting::Values(values) => values,
+            };
             config
                 .set_option(rule, key, values)
                 .map_err(|err| format!("{}: {err}", mark::code(format!("[lint.rules.{rule}]"))))?;

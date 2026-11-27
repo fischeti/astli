@@ -266,6 +266,32 @@ fn astli_toml_sets_a_rules_options() {
 }
 
 #[test]
+fn astli_toml_sets_a_rules_flag() {
+    let fixture = Fixture::new("lint-config-flag");
+    fixture.file(
+        "top.sv",
+        "module top (\n  input  logic       clk_i,\n  input  logic       rst_ni,\n  input  logic       clear_i,\n  input  logic [7:0] d_i\n);\n  logic [7:0] q;\n  always_ff @(posedge clk_i or negedge rst_ni) begin\n    if (!rst_ni) q <= '0;\n    else if (clear_i) q <= '0;\n    else q <= d_i;\n  end\nendmodule\n",
+    );
+    let args = ["lint", "--deny", "always-ff-registers-only", "top.sv"];
+
+    let cleared = driver(&fixture).args(args);
+    let rule = "[lint.rules.always-ff-registers-only]\nclear = false\n";
+    fixture.file("astli.toml", rule);
+    let forbidden = driver(&fixture).args(args);
+
+    assert!(
+        !stderr(&cleared).contains("always-ff-registers-only"),
+        "{}",
+        stderr(&cleared)
+    );
+    assert!(
+        stderr(&forbidden).contains("clear in `always_ff`"),
+        "{}",
+        stderr(&forbidden)
+    );
+}
+
+#[test]
 fn a_style_a_dev_dependency_holds_is_extended() {
     let fixture = Fixture::new("lint-config-extends");
     fixture.file(
@@ -460,12 +486,17 @@ fn an_astli_toml_a_command_cannot_read_is_refused_with_its_path() {
         (
             lint,
             "[lint.rules.unused-signal]\nignore = \"*_nc\"\n",
-            "expected a sequence",
+            "a list of strings, or `true` or `false`",
         ),
         (
             lint,
             "[lint.rules.unused-parameter]\nignore = [1]\n",
-            "expected a string",
+            "a list of strings, or `true` or `false`",
+        ),
+        (
+            lint,
+            "[lint.rules.always-ff-registers-only]\nclear = [\"no\"]\n",
+            "`clear`: is `true` or `false`",
         ),
         (fmt, "[fmt]\ntabs = true\n", "tabs"),
         (fmt, "[fmt]\nexclude = [\"rtl/[ab\"]\n", "rtl/[ab"),

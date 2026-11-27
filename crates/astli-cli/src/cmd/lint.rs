@@ -32,7 +32,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use astli_lint::{Config, Layer, Level, Linter, RULES, RuleOption, Waivers, lint};
+use astli_lint::{Config, Layer, Level, Linter, OptionKind, RULES, RuleOption, Waivers, lint};
 use astli_parse::NOT_PARSED;
 use astli_sema::Built;
 use astli_text::{Diagnostic, Origins, Reader};
@@ -331,6 +331,9 @@ impl<'a> Read<'a> {
 /// writes it, and what the option is.
 fn list(out: &mut dyn Write) -> Result {
     let setting = |option: &RuleOption| {
+        if option.kind == OptionKind::Flag {
+            return format!("{} = {}", option.key, option.default.join(""));
+        }
         let values: Vec<String> = (option.default.iter())
             .map(|value| format!("{value:?}"))
             .collect();

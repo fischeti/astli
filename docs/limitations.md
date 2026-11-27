@@ -327,7 +327,8 @@ one side and no further condition is a reset or a clear, whatever the
 signal is, and one with data on one side and nothing on the other is an
 enable. So `if (en) q <= d; else q <= '0;` passes as a clear on `!en`. A
 synchronous reset and a clear look alike, so the first in a process that
-waits for its clock alone is its reset. A reset value that is not a constant
+waits for its clock alone is its reset, and `clear = false` leaves such a
+process its one synchronous reset. A reset value that is not a constant
 reads as data, so a synchronous reset to an input is a mux; an
 asynchronous one is known from the process's events, and loads what it
 likes. A register two statements load is told apart from another

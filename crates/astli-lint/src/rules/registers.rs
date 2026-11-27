@@ -19,7 +19,7 @@ use crate::rule::DesignCx;
 
 /// A register's next value computed in `always_comb` leaves `always_ff` a
 /// list of flops, each loaded from a name, as a library's flop takes it: a
-/// reset, a synchronous clear, and an
+/// reset, a synchronous clear unless the project forbids one, and an
 /// enable, in that order, at most one of each. It puts all of the logic
 /// where `always_comb` holds it to the rules of combinational logic.
 ///
@@ -54,6 +54,7 @@ pub(crate) fn always_ff_registers_only(cx: &mut DesignCx) {
                 elaboration: cx.elaboration,
                 body: definition_body(cx, scope),
                 resets,
+                clear: cx.options.flag("clear"),
                 found: Vec::new(),
             };
             walk.stmt(process.body, Path::default());
@@ -97,6 +98,8 @@ struct Walk<'a> {
     /// What the process waits for, if it waits for more than its clock:
     /// the signals it may reset on asynchronously.
     resets: &'a [Event],
+    /// Whether a flop may take a synchronous clear besides its reset.
+    clear: bool,
     found: Vec<(Span, &'static str, &'static str)>,
 }
 
@@ -246,8 +249,11 @@ impl<'a> Walk<'a> {
             },
             // A reset, or a clear, and what is loaded when it is not.
             _ => {
-                if path.resets > 1 {
-                    let message = "second clear in `always_ff`";
+                if path.resets > u8::from(self.clear) {
+                    let message = match self.clear {
+                        true => "second clear in `always_ff`",
+                        false => "clear in `always_ff`",
+                    };
                     self.found.push((at, message, REGISTER));
                 }
                 Path {
